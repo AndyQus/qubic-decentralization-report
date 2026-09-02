@@ -9,7 +9,9 @@ cluster** — built on Qubic's **self-reporting** anti-Sybil approach and extend
 on-chain and behavioral signals to quantify concentration/collusion among the 676
 Computors.
 
-> Full rationale and design: [`docs/CONCEPT.md`](docs/CONCEPT.md).
+> Full rationale and design: [`docs/CONCEPT.md`](docs/CONCEPT.md) (English) ·
+> [`docs/CONCEPT.de.md`](docs/CONCEPT.de.md) (Deutsch). Both versions are kept in sync —
+> any change to one is mirrored in the other.
 
 ## How the pieces fit together
 
