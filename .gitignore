@@ -1,0 +1,22 @@
+# Data caches (raw API pulls) — keep the registry, ignore bulk pulls
+data/raw/*
+!data/raw/.gitkeep
+
+# Node / build
+node_modules/
+dist/
+build/
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
