@@ -208,10 +208,13 @@ explorers may embed the static form.
    `/v1/dashboard-data` bundle and a static-sample fallback ✅
 6. **Dashboard** — self-contained SPA (`dashboard/index.html`): animated operator treemap,
    Nakamoto/Gini timeline, operator table, DE/EN + dark/light with localStorage ✅
-7. **Explorer integration** — embed format + first partner (next).
+7. **Explorer integration** — embed format shipped (widget + iframe + raw API,
+   `docs/EMBEDDING.md`, `dashboard/embed.js`); first-partner rollout pending 🔶
 
-Implemented so far: `qdr/` (client, metrics, clustering, report), a self-reporting
-registry (`data/self_reporting/`), tests (`tests/`, all passing), the API service
-(`api/`), and the reference dashboard (`dashboard/`). Live runs need network access to
-`rpc.qubic.org` (blocked in the current build environment); everything runs today on the
-generated sample data.
+Implemented so far: `qdr/` (client, metrics, clustering, report); a self-reporting
+registry with a validator (`data/self_reporting/`, `scripts/validate_registry.py`); tests
+(`tests/`, all passing); the API service (`api/`, which also serves the dashboard and
+examples); the reference dashboard (`dashboard/`); an embeddable widget (`dashboard/embed.js`);
+a live-pull CLI (`scripts/build_report.py`); and VS Code F5→Chrome configs (`.vscode/`).
+Live runs need network access to `rpc.qubic.org` (blocked in the Cowork sandbox, fine from a
+normal machine); everything else runs today on generated sample data.

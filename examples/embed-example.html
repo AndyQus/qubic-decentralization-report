@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>QDR embed example</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#0c141b;color:#e6eef2;margin:0;padding:40px}
+  h1{font-size:18px} p{color:#8aa0ab;max-width:640px}
+  .grid{display:flex;gap:24px;flex-wrap:wrap;margin-top:24px}
+  code{background:#16232e;padding:2px 6px;border-radius:5px;font-family:ui-monospace,monospace}
+</style>
+</head>
+<body>
+  <h1>Embedding the Qubic Decentralization Report</h1>
+  <p>An explorer includes <code>embed.js</code> and drops a container. Below: the dark
+     (English) and light (German) variants. Set <code>data-api</code> to the report host.
+     Here it points at the same origin, so serve this via the API
+     (<code>/dashboard/../examples/…</code>) or set <code>data-api</code> to your host.</p>
+
+  <div class="grid">
+    <div id="qdr-dark"  data-qdr-auto data-api="" data-lang="en" data-theme="dark"></div>
+    <div id="qdr-light" data-qdr-auto data-api="" data-lang="de" data-theme="light"></div>
+  </div>
+
+  <!-- one script tag; data-qdr-auto containers render automatically -->
+  <script src="../dashboard/embed.js"></script>
+</body>
+</html>

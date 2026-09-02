@@ -224,9 +224,13 @@ die Explorer auch die statische Form einbinden können.
    einem `/v1/dashboard-data`-Bundle und statischem Sample-Fallback ✅
 6. **Dashboard** — eigenständige SPA (`dashboard/index.html`): animierte Betreiber-Treemap,
    Nakamoto/Gini-Timeline, Betreiber-Tabelle, DE/EN + Dark/Light mit localStorage ✅
-7. **Explorer-Integration** — Einbettungsformat + erster Partner (als Nächstes).
+7. **Explorer-Integration** — Einbettungsformat fertig (Widget + iframe + rohe API,
+   `docs/EMBEDDING.md`, `dashboard/embed.js`); Rollout mit erstem Partner offen 🔶
 
-Bisher umgesetzt: `qdr/` (Client, Metrics, Clustering, Report), ein Self-Reporting-Registry
-(`data/self_reporting/`), Tests (`tests/`, alle grün), der API-Service (`api/`) und das
-Referenz-Dashboard (`dashboard/`). Live-Läufe brauchen Netzzugang zu `rpc.qubic.org` (in der
-aktuellen Build-Umgebung blockiert); alles läuft heute auf den generierten Beispieldaten.
+Bisher umgesetzt: `qdr/` (Client, Metrics, Clustering, Report); ein Self-Reporting-Registry
+mit Validator (`data/self_reporting/`, `scripts/validate_registry.py`); Tests (`tests/`, alle
+grün); der API-Service (`api/`, der auch Dashboard und Beispiele ausliefert); das
+Referenz-Dashboard (`dashboard/`); ein einbettbares Widget (`dashboard/embed.js`); eine
+Live-Pull-CLI (`scripts/build_report.py`); und VS-Code-F5→Chrome-Konfigs (`.vscode/`).
+Live-Läufe brauchen Netzzugang zu `rpc.qubic.org` (in der Cowork-Sandbox blockiert, von einem
+normalen Rechner aus problemlos); alles Übrige läuft heute auf den generierten Beispieldaten.

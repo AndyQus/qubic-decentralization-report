@@ -19,7 +19,10 @@ venv/
 .DS_Store
 Thumbs.db
 .idea/
-.vscode/
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
 
 # verification screenshots (scratch)
 scripts/shot_*.png

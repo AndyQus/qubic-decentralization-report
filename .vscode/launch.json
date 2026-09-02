@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Dashboard (Chrome · sample data)",
+      "type": "chrome",
+      "request": "launch",
+      "file": "${workspaceFolder}/dashboard/index.html",
+      "webRoot": "${workspaceFolder}/dashboard"
+    },
+    {
+      "name": "Dashboard + live API (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:8000/dashboard/",
+      "webRoot": "${workspaceFolder}/dashboard",
+      "preLaunchTask": "Start API"
+    },
+    {
+      "name": "Run tests (Python)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tests/test_report.py",
+      "console": "integratedTerminal"
+    }
+  ]
+}

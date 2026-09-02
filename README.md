@@ -56,14 +56,35 @@ pip install -r requirements.txt
 # 1) run the tests
 python3 tests/test_metrics.py && python3 tests/test_report.py
 
-# 2) generate sample data (no live RPC needed) -> api/sample/ + dashboard/data.js
+# 2) sample data (no live RPC needed) -> api/sample/ + dashboard/data.js
 python3 scripts/generate_sample.py
 
-# 3a) open the dashboard: just open dashboard/index.html in a browser
-# 3b) or run the API and point the dashboard at it:
+# 2b) LIVE data (run where rpc.qubic.org is reachable) -> real snapshots
+python3 scripts/build_report.py --check     # test connectivity first
+python3 scripts/build_report.py             # last 9 epochs
+
+# 3) view it
+#   a) just open dashboard/index.html  (bundled sample data)
+#   b) or serve API + dashboard together:
 uvicorn api.server:app --port 8000
-#     then open dashboard/index.html?api=http://localhost:8000
+#      then open http://localhost:8000/  (dashboard auto-fetches the live API)
 ```
+
+### In VS Code (F5)
+
+Press **F5** → *Dashboard (Chrome · sample data)* opens it in Chrome instantly (no setup).
+The *Dashboard + live API (Chrome)* config starts the API (`uvicorn`) first and opens the
+live dashboard. Tasks for install / tests / sample-data are in the Command Palette →
+*Run Task*. (Configs live in `.vscode/`.)
+
+> Note on live data: `rpc.qubic.org` must be reachable from wherever the API/`build_report`
+> runs. It is blocked inside the Cowork sandbox, but works from a normal machine — so live
+> pulls run fine in your own VS Code / on a server.
+
+### Embedding in an explorer
+
+A one-line widget, an iframe, or the raw JSON API — see [`docs/EMBEDDING.md`](docs/EMBEDDING.md)
+and the live demo at `examples/embed-example.html` (or `http://localhost:8000/examples/embed-example.html`).
 
 ![dashboard preview](docs/preview_dashboard.png)
 

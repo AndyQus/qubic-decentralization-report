@@ -521,9 +521,14 @@
     setTimeout(renderTreemap,60); // ensure layout width is measured
   }
 
-  // Data source: ?api=<base> (or window.QDR_API) fetches live; else the bundled data.js.
-  const apiBase = new URLSearchParams(location.search).get("api") || window.QDR_API;
-  if(apiBase){
+  // Data source:
+  //   ?api=<base> or window.QDR_API  -> fetch that API
+  //   served over http(s) with neither -> fetch same-origin (the API serves this page)
+  //   opened as a file:// with neither -> bundled data.js
+  let apiBase = new URLSearchParams(location.search).get("api");
+  if(apiBase==null && typeof window.QDR_API!=="undefined") apiBase=window.QDR_API;
+  if(apiBase==null && location.protocol.indexOf("http")===0) apiBase="";  // same origin
+  if(apiBase!=null){
     fetch(apiBase.replace(/\/$/,"")+"/v1/dashboard-data")
       .then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); })
       .then(d=>{ loadData(d); startUI(); })

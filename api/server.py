@@ -19,7 +19,8 @@ from pathlib import Path
 try:
     from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse, RedirectResponse
+    from fastapi.staticfiles import StaticFiles
 except ImportError as e:  # pragma: no cover
     raise SystemExit("Install deps first: pip install -r requirements.txt") from e
 
@@ -58,6 +59,12 @@ def _live_or_sample_latest() -> dict:
 
 @app.get("/")
 def root():
+    # convenience: send humans to the bundled dashboard, which will fetch the API
+    return RedirectResponse(url="/dashboard/")
+
+
+@app.get("/api")
+def api_index():
     return {
         "service": "Qubic Decentralization Report API",
         "version": app.version,
@@ -67,7 +74,9 @@ def root():
             "/v1/clusters/{epoch}",
             "/v1/metrics/timeseries",
             "/v1/report/{epoch}/snapshot.json",
+            "/v1/dashboard-data",
         ],
+        "dashboard": "/dashboard/",
         "docs": "/docs",
     }
 
@@ -111,6 +120,9 @@ def snapshot(epoch: int):
     return JSONResponse(report_epoch(epoch))
 
 
+DASHBOARD_DIR = ROOT / "dashboard"
+
+
 @app.get("/v1/dashboard-data")
 def dashboard_data():
     """One bundle for the SPA: latest report + timeseries + per-epoch bubbles."""
@@ -129,3 +141,14 @@ def dashboard_data():
             ec = {"epochs": []}
         return {"report": rep, "timeseries": {"series": ts.get("series", [])},
                 "epoch_clusters": {"epochs": ec.get("epochs", [])}, "sample": True}
+
+
+# Serve the reference dashboard as static files at /dashboard (mounted last so the
+# /v1 API routes above always take precedence). When opened via http the dashboard
+# fetches this same origin's /v1/dashboard-data automatically.
+if DASHBOARD_DIR.exists():
+    app.mount("/dashboard", StaticFiles(directory=str(DASHBOARD_DIR), html=True), name="dashboard")
+
+_EXAMPLES = ROOT / "examples"
+if _EXAMPLES.exists():
+    app.mount("/examples", StaticFiles(directory=str(_EXAMPLES), html=True), name="examples")

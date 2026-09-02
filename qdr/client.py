@@ -74,11 +74,17 @@ class CachedClient:
         if dt < self.min_interval_s:
             time.sleep(self.min_interval_s - dt)
         url = f"{self.base_url}{path}"
-        resp = requests.get(url, timeout=self.timeout)
+        try:
+            resp = requests.get(url, timeout=self.timeout)
+        except requests.RequestException as e:
+            raise QubicRPCError(f"GET {path} failed: {e}") from e
         self._last_call = time.time()
         if resp.status_code != 200:
             raise QubicRPCError(f"GET {path} -> {resp.status_code}: {resp.text[:200]}")
-        data = resp.json()
+        try:
+            data = resp.json()
+        except ValueError as e:
+            raise QubicRPCError(f"GET {path}: invalid JSON ({e})") from e
         cache_file.write_text(json.dumps(data, indent=2))
         return data
 
