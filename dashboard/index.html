@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Qubic Decentralization Report</title>
+<style>
+  :root{
+    --bg:#0c141b; --bg2:#101820; --surface:#16232e; --surface2:#1b2c38;
+    --border:#263846; --text:#e6eef2; --muted:#8aa0ab; --faint:#5c7180;
+    --accent:#22d3a6; --accent2:#3b9dff; --warn:#f5a623; --danger:#ff5c7a;
+    --declared:#22d3a6; --unattributed:#5c7180; --linked:#f5a623; --flagged:#ff5c7a;
+    --shadow:0 6px 24px rgba(0,0,0,.35);
+    --radius:14px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  :root[data-theme="light"]{
+    --bg:#eef3f6; --bg2:#f6f9fb; --surface:#ffffff; --surface2:#f1f5f8;
+    --border:#d8e2e8; --text:#132430; --muted:#546773; --faint:#8698a2;
+    --accent:#0aa17e; --accent2:#1f7fe0; --warn:#c9820f; --danger:#e0435f;
+    --declared:#0aa17e; --unattributed:#93a6b0; --linked:#c9820f; --flagged:#e0435f;
+    --shadow:0 6px 20px rgba(20,40,55,.10);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;line-height:1.45}
+  a{color:var(--accent2);text-decoration:none}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 20px 64px}
+
+  /* header */
+  header.top{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,var(--bg2),var(--bg2) 70%,transparent);
+    border-bottom:1px solid var(--border);backdrop-filter:blur(6px)}
+  .top-inner{max-width:1160px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px;min-width:0}
+  .logo{width:34px;height:34px;border-radius:9px;flex:0 0 auto;
+    background:radial-gradient(circle at 30% 30%,var(--accent),#0b7d63);
+    box-shadow:0 0 0 1px rgba(255,255,255,.08) inset}
+  .brand h1{font-size:16px;margin:0;font-weight:650;letter-spacing:.2px;white-space:nowrap}
+  .brand .sub{font-size:12px;color:var(--muted);margin-top:1px}
+  .spacer{flex:1 1 auto}
+  .controls{display:flex;align-items:center;gap:8px}
+  .seg{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden;background:var(--surface)}
+  .seg button{background:transparent;border:0;color:var(--muted);padding:7px 11px;font-size:12.5px;
+    font-weight:600;cursor:pointer;font-family:var(--sans)}
+  .seg button.active{background:var(--accent);color:#04231b}
+  :root[data-theme="light"] .seg button.active{color:#fff}
+  .icon-btn{width:38px;height:34px;border:1px solid var(--border);border-radius:9px;background:var(--surface);
+    color:var(--text);cursor:pointer;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
+
+  .sample-badge{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--warn);
+    border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);background:color-mix(in srgb,var(--warn) 12%,transparent);
+    padding:4px 10px;border-radius:999px;margin:16px 0 0}
+  .sample-badge .dot{width:7px;height:7px;border-radius:50%;background:var(--warn)}
+
+  .lead{margin:18px 0 6px;font-size:14.5px;color:var(--muted);max-width:760px}
+
+  /* kpi grid */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:14px;margin:20px 0 8px}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:15px 16px;
+    box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .kpi .k-label{font-size:12px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px}
+  .kpi .k-val{font-size:29px;font-weight:720;margin-top:8px;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+  .kpi .k-sub{font-size:11.5px;color:var(--faint);margin-top:3px}
+  .kpi.accent .k-val{color:var(--accent)}
+  .kpi.warn .k-val{color:var(--warn)}
+  .kpi::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);opacity:.0}
+  .kpi.accent::after{opacity:.9}
+  .kpi.warn::after{background:var(--warn);opacity:.9}
+
+  /* panels */
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    box-shadow:var(--shadow);margin-top:22px;overflow:hidden}
+  .panel-head{padding:16px 18px 4px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+  .panel-head h2{font-size:15px;margin:0;font-weight:650}
+  .panel-head p{margin:4px 0 0;font-size:12.5px;color:var(--muted);max-width:640px}
+  .panel-body{padding:14px 18px 20px}
+
+  /* epoch controls */
+  .epoch-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-left:auto}
+  .epoch-bar .play{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--surface2);
+    color:var(--accent);font-size:14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+  .epoch-bar input[type=range]{width:190px;accent-color:var(--accent)}
+  .epoch-bar .ep-label{font-family:var(--mono);font-size:13px;color:var(--text);min-width:96px}
+  .epoch-bar .ep-label b{color:var(--accent)}
+
+  /* treemap */
+  .treemap{position:relative;width:100%;height:340px;margin-top:6px;border-radius:10px;overflow:hidden;
+    background:var(--bg2);border:1px solid var(--border)}
+  .tile{position:absolute;border-radius:7px;overflow:hidden;cursor:default;
+    transition:left .7s cubic-bezier(.4,.05,.2,1),top .7s cubic-bezier(.4,.05,.2,1),
+      width .7s cubic-bezier(.4,.05,.2,1),height .7s cubic-bezier(.4,.05,.2,1),background .4s;
+    padding:8px 9px;color:#04231b}
+  .tile .t-label{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tile .t-meta{font-size:11px;opacity:.85;margin-top:2px;font-variant-numeric:tabular-nums}
+  .tile.small .t-meta{display:none}
+  .tile.tiny .t-label{font-size:10px}
+  .tile.hide-text *{display:none}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+  /* timeline chart */
+  .chart{position:relative;width:100%;height:260px;margin-top:4px}
+  svg{width:100%;height:100%;overflow:visible}
+  .axis text{fill:var(--faint);font-size:10px;font-family:var(--mono)}
+  .grid line{stroke:var(--border);stroke-dasharray:2 4;opacity:.6}
+  .thr line{stroke:var(--danger);stroke-dasharray:5 4;opacity:.55}
+  .thr text{fill:var(--danger);font-size:10px}
+  .series-nak{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+  .series-gini{fill:none;stroke:var(--accent2);stroke-width:2;stroke-dasharray:4 3;opacity:.9}
+  .cursor{stroke:var(--muted);stroke-width:1;opacity:.55}
+  .dot{fill:var(--accent);stroke:var(--bg2);stroke-width:2}
+  .chart-legend{display:flex;gap:18px;font-size:12px;color:var(--muted);margin-top:6px}
+  .chart-legend b{font-weight:600}
+  .chart-legend .sw{display:inline-block;width:16px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+
+  /* table */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border)}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:650}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px}
+  .pill i{width:8px;height:8px;border-radius:50%}
+  .pill.declared{color:var(--declared);background:color-mix(in srgb,var(--declared) 14%,transparent)}
+  .pill.unattributed{color:var(--unattributed);background:color-mix(in srgb,var(--unattributed) 16%,transparent)}
+  .pill.linked{color:var(--linked);background:color-mix(in srgb,var(--linked) 14%,transparent)}
+  .bar-cell{position:relative}
+  .bar-cell .bar{position:absolute;left:0;top:0;bottom:0;background:color-mix(in srgb,var(--accent) 16%,transparent);border-radius:4px}
+  .bar-cell span{position:relative}
+
+  footer{margin-top:34px;font-size:12px;color:var(--faint);border-top:1px solid var(--border);padding-top:16px}
+  footer code{font-family:var(--mono);color:var(--muted)}
+  @media (max-width:560px){.kpi .k-val{font-size:24px}.epoch-bar input[type=range]{width:130px}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+      <div>
+        <h1 data-i18n="title">Qubic Decentralization Report</h1>
+        <div class="sub"><span data-i18n="epochLabel">Epoch</span> <b id="hdr-epoch">–</b> · <span id="hdr-tagline" data-i18n="tagline">how decentralized Qubic really is</span></div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="controls">
+      <div class="seg" id="lang-seg">
+        <button data-lang="en">EN</button><button data-lang="de">DE</button>
+      </div>
+      <button class="icon-btn" id="theme-btn" title="Theme">🌙</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="sample-badge" class="sample-badge" hidden><span class="dot"></span><span data-i18n="sample">Sample data — not live yet</span></div>
+  <p class="lead" data-i18n="lead">Qubic runs on 676 computor slots. On paper that looks like 676 independent operators — but a single operator can hold many slots at once. This report groups slots by operator (self-reported first, on-chain-linked next) and measures how concentrated revenue and control really are.</p>
+
+  <!-- KPIs -->
+  <div class="kpis" id="kpis"></div>
+
+  <!-- Cluster map -->
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2 data-i18n="clusterMapTitle">Operator map</h2>
+        <p data-i18n="clusterMapDesc">Each tile is one operator; area = share of the epoch. Declared operators are self-reported; “unattributed” are slots with no proven owner.</p>
+      </div>
+      <div class="epoch-bar">
+        <div class="seg" id="size-seg">
+          <button data-size="revenue" class="active" data-i18n="byRevenue">By revenue</button>
+          <button data-size="slots" data-i18n="bySlots">By slots</button>
+        </div>
+        <button class="play" id="play-btn" title="Play">▶</button>
+        <input type="range" id="epoch-range" min="0" max="0" step="1" value="0" />
+        <div class="ep-label"><span data-i18n="epochLabel">Epoch</span> <b id="ep-cur">–</b></div>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="treemap" id="treemap"></div>
+      <div class="legend">
+        <span><i style="background:var(--declared)"></i><span data-i18n="declared">Declared (self-reported)</span></span>
+        <span><i style="background:var(--unattributed)"></i><span data-i18n="unattributed">Unattributed</span></span>
+        <span><i style="background:var(--linked)"></i><span data-i18n="linked">On-chain linked</span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Timeline -->
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2 data-i18n="timelineTitle">Concentration over time</h2>
+        <p data-i18n="timelineDesc">The Nakamoto coefficient is how many operators must collude to control one third of revenue — lower means more centralized. Gini measures revenue inequality (0 = even, 1 = one operator takes all).</p>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="chart"><svg id="chart" viewBox="0 0 720 260" preserveAspectRatio="none"></svg></div>
+      <div class="chart-legend">
+        <span><span class="sw" style="background:var(--accent)"></span><b data-i18n="nakamotoShort">Nakamoto (⅓)</b></span>
+        <span><span class="sw" style="background:var(--accent2)"></span><b data-i18n="giniShort">Gini ×10</b></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Operator table -->
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2 data-i18n="tableTitle">Operators this epoch</h2>
+        <p data-i18n="tableDesc">Sorted by revenue share. Slots = number of computors the operator controls.</p>
+      </div>
+    </div>
+    <div class="panel-body" style="padding-top:4px">
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th data-i18n="thOperator">Operator</th>
+            <th data-i18n="thConfidence">Basis</th>
+            <th class="num" data-i18n="thSlots">Slots</th>
+            <th class="num" data-i18n="thShare">Revenue share</th>
+          </tr></thead>
+          <tbody id="op-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span data-i18n="footer">Reproducible from public Qubic RPC data + a self-reporting registry.</span>
+    <span> · <span data-i18n="codeVersion">code</span> <code id="code-ver">–</code> · <a href="https://github.com" id="repo-link" data-i18n="repo">source</a></span>
+  </footer>
+</div>
+
+<script src="data.js"></script>
+<script>
+(function(){
+  "use strict";
+  const LS_THEME="qdr.theme", LS_LANG="qdr.lang";
+  const root=document.documentElement;
+
+  /* ---------- i18n ---------- */
+  const I18N={
+    en:{
+      title:"Qubic Decentralization Report", tagline:"how decentralized Qubic really is",
+      epochLabel:"Epoch", sample:"Sample data — not live yet",
+      lead:"Qubic runs on 676 computor slots. On paper that looks like 676 independent operators — but a single operator can hold many slots at once. This report groups slots by operator (self-reported first, on-chain-linked next) and measures how concentrated revenue and control really are.",
+      clusterMapTitle:"Operator map", clusterMapDesc:"Each tile is one operator; area = share of the epoch. Declared operators are self-reported; “unattributed” are slots with no proven owner.",
+      byRevenue:"By revenue", bySlots:"By slots",
+      declared:"Declared (self-reported)", unattributed:"Unattributed", linked:"On-chain linked",
+      timelineTitle:"Concentration over time", timelineDesc:"The Nakamoto coefficient is how many operators must collude to control one third of revenue — lower means more centralized. Gini measures revenue inequality (0 = even, 1 = one operator takes all).",
+      nakamotoShort:"Nakamoto (⅓)", giniShort:"Gini ×10",
+      tableTitle:"Operators this epoch", tableDesc:"Sorted by revenue share. Slots = number of computors the operator controls.",
+      thOperator:"Operator", thConfidence:"Basis", thSlots:"Slots", thShare:"Revenue share",
+      footer:"Reproducible from public Qubic RPC data + a self-reporting registry.", codeVersion:"code", repo:"source",
+      kOperators:"Operators", kOperatorsSub:"from 676 computor slots",
+      kDeclared:"Declared operators", kDeclaredSub:"self-reported",
+      kNak13:"Nakamoto ⅓", kNak13Sub:"operators to control ⅓",
+      kNak12:"Nakamoto ½", kNak12Sub:"operators to control ½",
+      kGini:"Gini (revenue)", kGiniSub:"0 even · 1 concentrated",
+      kTop1:"Top operator", kTop1Sub:"share of revenue"
+    },
+    de:{
+      title:"Qubic Dezentralisierungs-Report", tagline:"wie dezentral Qubic wirklich ist",
+      epochLabel:"Epoche", sample:"Beispieldaten — noch nicht live",
+      lead:"Qubic läuft auf 676 Computor-Slots. Auf dem Papier wirkt das wie 676 unabhängige Betreiber — aber ein einzelner Betreiber kann viele Slots gleichzeitig halten. Dieser Report gruppiert Slots nach Betreiber (zuerst self-reported, dann on-chain verknüpft) und misst, wie konzentriert Umsatz und Kontrolle wirklich sind.",
+      clusterMapTitle:"Betreiber-Karte", clusterMapDesc:"Jede Kachel ist ein Betreiber; Fläche = Anteil der Epoche. Deklarierte Betreiber sind self-reported; „unattributed“ sind Slots ohne nachgewiesenen Eigentümer.",
+      byRevenue:"Nach Umsatz", bySlots:"Nach Slots",
+      declared:"Deklariert (self-reported)", unattributed:"Nicht zugeordnet", linked:"On-chain verknüpft",
+      timelineTitle:"Konzentration über Zeit", timelineDesc:"Der Nakamoto-Koeffizient sagt, wie viele Betreiber kolludieren müssen, um ein Drittel des Umsatzes zu kontrollieren — niedriger heißt zentraler. Gini misst die Umsatz-Ungleichheit (0 = gleich, 1 = ein Betreiber bekommt alles).",
+      nakamotoShort:"Nakamoto (⅓)", giniShort:"Gini ×10",
+      tableTitle:"Betreiber dieser Epoche", tableDesc:"Sortiert nach Umsatzanteil. Slots = Anzahl der Computors des Betreibers.",
+      thOperator:"Betreiber", thConfidence:"Basis", thSlots:"Slots", thShare:"Umsatzanteil",
+      footer:"Reproduzierbar aus öffentlichen Qubic-RPC-Daten + einem Self-Reporting-Registry.", codeVersion:"Code", repo:"Quelle",
+      kOperators:"Betreiber", kOperatorsSub:"aus 676 Computor-Slots",
+      kDeclared:"Deklarierte Betreiber", kDeclaredSub:"self-reported",
+      kNak13:"Nakamoto ⅓", kNak13Sub:"Betreiber für ⅓-Kontrolle",
+      kNak12:"Nakamoto ½", kNak12Sub:"Betreiber für ½-Kontrolle",
+      kGini:"Gini (Umsatz)", kGiniSub:"0 gleich · 1 konzentriert",
+      kTop1:"Top-Betreiber", kTop1Sub:"Umsatzanteil"
+    }
+  };
+  let lang = safeGet(LS_LANG) || "en";
+  if(!I18N[lang]) lang="en";
+  function t(k){ return (I18N[lang]&&I18N[lang][k])||I18N.en[k]||k; }
+
+  /* ---------- storage helpers (safe) ---------- */
+  function safeGet(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
+  function safeSet(k,v){ try{localStorage.setItem(k,v);}catch(e){} }
+
+  /* ---------- data (mutable: filled from data.js or the API) ---------- */
+  let DATA={}, report={}, series=[], epochClusters=[], clByEpoch={}, epochs=[], isSample=false;
+  let idx=0;                               // current epoch index (default latest)
+  let sizeBy = "revenue";                  // "revenue" | "slots"
+  let playing = false, playTimer=null;
+
+  function loadData(d){
+    DATA=d||{}; report=DATA.report||{};
+    series=(DATA.timeseries&&DATA.timeseries.series)||[];
+    epochClusters=(DATA.epoch_clusters&&DATA.epoch_clusters.epochs)||[];
+    isSample=!!DATA.sample || !!report._sample;
+    clByEpoch={}; epochClusters.forEach(e=>clByEpoch[e.epoch]=e);
+    epochs=series.map(s=>s.epoch);
+    idx=Math.max(0,epochs.length-1);
+  }
+
+  /* ---------- theme ---------- */
+  function applyTheme(th){ root.setAttribute("data-theme",th);
+    document.getElementById("theme-btn").textContent = th==="dark"?"🌙":"☀️"; }
+  let theme = safeGet(LS_THEME) || "dark";
+  applyTheme(theme);
+  document.getElementById("theme-btn").addEventListener("click",()=>{
+    theme = theme==="dark"?"light":"dark"; safeSet(LS_THEME,theme); applyTheme(theme);
+    drawChart(); // colors are CSS vars but the chart caches none; redraw for crispness
+  });
+
+  /* ---------- language ---------- */
+  function applyLang(){
+    root.setAttribute("lang",lang);
+    document.querySelectorAll("[data-i18n]").forEach(el=>{ el.textContent=t(el.getAttribute("data-i18n")); });
+    document.querySelectorAll("#lang-seg button").forEach(b=>b.classList.toggle("active",b.dataset.lang===lang));
+    renderAll();
+  }
+  document.querySelectorAll("#lang-seg button").forEach(b=>{
+    b.addEventListener("click",()=>{ lang=b.dataset.lang; safeSet(LS_LANG,lang); applyLang(); });
+  });
+
+  /* ---------- size toggle ---------- */
+  document.querySelectorAll("#size-seg button").forEach(b=>{
+    b.addEventListener("click",()=>{
+      sizeBy=b.dataset.size;
+      document.querySelectorAll("#size-seg button").forEach(x=>x.classList.toggle("active",x===b));
+      renderTreemap(); renderTable();
+    });
+  });
+
+  /* ---------- epoch controls ---------- */
+  const range=document.getElementById("epoch-range");
+  range.addEventListener("input",()=>{ idx=+range.value; stopPlay(); renderEpoch(); });
+  document.getElementById("play-btn").addEventListener("click",togglePlay);
+  function togglePlay(){ playing?stopPlay():startPlay(); }
+  function startPlay(){ playing=true; document.getElementById("play-btn").textContent="⏸";
+    if(idx>=epochs.length-1) idx=0;
+    playTimer=setInterval(()=>{ idx++; if(idx>=epochs.length){idx=epochs.length-1; stopPlay(); return;}
+      range.value=String(idx); renderEpoch(); }, 1100); renderEpoch(); }
+  function stopPlay(){ playing=false; document.getElementById("play-btn").textContent="▶";
+    if(playTimer){clearInterval(playTimer);playTimer=null;} }
+
+  /* ---------- colors ---------- */
+  function confColor(c){ const m={declared:"--declared",unattributed:"--unattributed",linked:"--linked",flagged:"--flagged"};
+    return getComputedStyle(root).getPropertyValue(m[c]||"--accent").trim(); }
+
+  /* ---------- KPIs ---------- */
+  function renderKpis(){
+    const s=series[idx]||{};
+    const cards=[
+      {cls:"accent",label:t("kOperators"),val:fmtInt(s.operators),sub:t("kOperatorsSub")},
+      {cls:"",label:t("kDeclared"),val:fmtInt(s.declared_operators),sub:t("kDeclaredSub")},
+      {cls:"warn",label:t("kNak13"),val:fmtInt(s.nakamoto_one_third_revenue),sub:t("kNak13Sub")},
+      {cls:"warn",label:t("kNak12"),val:fmtInt(s.nakamoto_half_revenue),sub:t("kNak12Sub")},
+      {cls:"",label:t("kGini"),val:(s.gini_revenue!=null?s.gini_revenue.toFixed(2):"–"),sub:t("kGiniSub")},
+      {cls:"accent",label:t("kTop1"),val:(s.top1_share!=null?(s.top1_share*100).toFixed(1)+"%":"–"),sub:t("kTop1Sub")},
+    ];
+    document.getElementById("kpis").innerHTML=cards.map(c=>
+      `<div class="kpi ${c.cls}"><div class="k-label">${c.label}</div><div class="k-val">${c.val}</div><div class="k-sub">${c.sub}</div></div>`).join("");
+  }
+
+  /* ---------- treemap (squarified) ---------- */
+  function currentBubbles(){
+    const ec=clByEpoch[epochs[idx]]; if(!ec) return [];
+    let arr=ec.bubbles.map(b=>({...b, value: sizeBy==="slots"?b.slots:(b.revenue_share||0)}));
+    const tot=arr.reduce((a,b)=>a+b.value,0)||1;
+    arr.forEach(b=>b.frac=b.value/tot);
+    return arr.filter(b=>b.frac>0).sort((a,b)=>b.value-a.value);
+  }
+  function squarify(items,x,y,w,h){
+    // Standard squarified treemap -> list of {item,x,y,w,h}. Rows are laid along
+    // the shorter side of the remaining rectangle to keep tiles close to square.
+    const out=[]; let rx=x, ry=y, rw=w, rh=h;
+    const total=items.reduce((a,b)=>a+b.frac,0)||1;
+    const scale=(w*h)/total;
+    const worst=(row,len)=>{
+      const s=row.reduce((a,b)=>a+b.area,0);
+      const mx=Math.max(...row.map(r=>r.area)), mn=Math.min(...row.map(r=>r.area));
+      return Math.max((len*len*mx)/(s*s),(s*s)/(len*len*mn));
+    };
+    const q=items.map(it=>({item:it,area:it.frac*scale}));
+    while(q.length){
+      const shorter=Math.min(rw,rh);
+      const row=[];
+      while(q.length){
+        if(row.length && worst(row,shorter)<worst(row.concat([q[0]]),shorter)) break;
+        row.push(q.shift());
+      }
+      const s=row.reduce((a,b)=>a+b.area,0), thick=s/shorter;
+      const horizontalRows=(rw>=rh);           // stack cells along the shorter side
+      let pos = horizontalRows?ry:rx;
+      row.forEach(r=>{ const cell=r.area/thick;
+        if(horizontalRows){ out.push({item:r.item,x:rx,y:pos,w:thick,h:cell}); }
+        else { out.push({item:r.item,x:pos,y:ry,w:cell,h:thick}); }
+        pos+=cell;
+      });
+      if(horizontalRows){ rx+=thick; rw-=thick; } else { ry+=thick; rh-=thick; }
+    }
+    return out;
+  }
+  const tileEls={};
+  function renderTreemap(){
+    const host=document.getElementById("treemap");
+    const W=host.clientWidth||900, H=host.clientHeight||340;
+    const items=currentBubbles();
+    const laid=squarify(items,0,0,W,H);
+    const seen={};
+    laid.forEach(cell=>{
+      const b=cell.item; seen[b.id]=1;
+      let el=tileEls[b.id];
+      if(!el){ el=document.createElement("div"); el.className="tile"; host.appendChild(el); tileEls[b.id]=el; }
+      el.style.background=confColor(b.confidence);
+      el.style.left=cell.x+"px"; el.style.top=cell.y+"px";
+      el.style.width=Math.max(0,cell.w-3)+"px"; el.style.height=Math.max(0,cell.h-3)+"px";
+      const area=cell.w*cell.h;
+      el.classList.toggle("small",cell.h<34||cell.w<70);
+      el.classList.toggle("tiny",cell.w<46||cell.h<24);
+      el.classList.toggle("hide-text",cell.w<26||cell.h<16);
+      const pct=(b.revenue_share*100);
+      el.innerHTML=`<div class="t-label">${escapeHtml(b.label)}</div>`+
+        `<div class="t-meta">${b.slots} slots · ${pct<0.1?"<0.1":pct.toFixed(1)}%</div>`;
+      el.title=`${b.label} — ${b.slots} slots — ${pct.toFixed(2)}% revenue`;
+    });
+    // remove tiles no longer present
+    Object.keys(tileEls).forEach(id=>{ if(!seen[id]){ tileEls[id].remove(); delete tileEls[id]; } });
+  }
+
+  /* ---------- timeline chart ---------- */
+  function drawChart(){
+    const svg=document.getElementById("chart");
+    const W=720,H=260,pad={l:34,r:14,t:16,b:24};
+    const iw=W-pad.l-pad.r, ih=H-pad.t-pad.b;
+    const nak=series.map(s=>s.nakamoto_one_third_revenue);
+    const gini=series.map(s=>s.gini_revenue*10); // scale gini to same axis (0..10)
+    const maxY=Math.max(5, Math.max(...nak,...gini)+1);
+    const xat=i=>pad.l+(series.length<=1?iw/2:iw*i/(series.length-1));
+    const yat=v=>pad.t+ih-(v/maxY)*ih;
+    let g="";
+    // grid + y ticks
+    g+='<g class="grid">';
+    for(let v=0;v<=maxY;v+=Math.ceil(maxY/5)){ g+=`<line x1="${pad.l}" y1="${yat(v)}" x2="${W-pad.r}" y2="${yat(v)}"/>`; }
+    g+='</g><g class="axis">';
+    for(let v=0;v<=maxY;v+=Math.ceil(maxY/5)){ g+=`<text x="${pad.l-6}" y="${yat(v)+3}" text-anchor="end">${v}</text>`; }
+    series.forEach((s,i)=>{ if(i%Math.ceil(series.length/8||1)===0||i===series.length-1)
+      g+=`<text x="${xat(i)}" y="${H-8}" text-anchor="middle">${s.epoch}</text>`; });
+    g+='</g>';
+    // threshold-ish reference: highlight Nakamoto=1 danger line
+    g+=`<g class="thr"><line x1="${pad.l}" y1="${yat(1)}" x2="${W-pad.r}" y2="${yat(1)}"/><text x="${W-pad.r}" y="${yat(1)-4}" text-anchor="end">Nakamoto=1</text></g>`;
+    // lines
+    const nakPath=series.map((s,i)=>`${i?'L':'M'}${xat(i)},${yat(nak[i])}`).join("");
+    const giniPath=series.map((s,i)=>`${i?'L':'M'}${xat(i)},${yat(gini[i])}`).join("");
+    g+=`<path class="series-gini" d="${giniPath}"/>`;
+    g+=`<path class="series-nak" d="${nakPath}" id="nakline"/>`;
+    // point markers on the nakamoto series (so a flat line still reads clearly)
+    series.forEach((s,i)=>{ g+=`<circle cx="${xat(i)}" cy="${yat(nak[i])}" r="3" fill="var(--accent)" opacity="${i===idx?0:.9}"/>`; });
+    // cursor + highlighted dot at current idx
+    g+=`<line class="cursor" x1="${xat(idx)}" y1="${pad.t}" x2="${xat(idx)}" y2="${pad.t+ih}"/>`;
+    g+=`<circle class="dot" cx="${xat(idx)}" cy="${yat(nak[idx])}" r="5"/>`;
+    svg.innerHTML=g;
+    // draw-in animation only on the very first render (not on every epoch scrub)
+    if(!drawChart._done){
+      const p=document.getElementById("nakline");
+      if(p&&p.getTotalLength){ const L=p.getTotalLength();
+        p.style.strokeDasharray=L; p.style.strokeDashoffset=L;
+        p.getBoundingClientRect(); p.style.transition="stroke-dashoffset 1s ease"; p.style.strokeDashoffset="0"; }
+      drawChart._done=true;
+    }
+  }
+
+  /* ---------- table ---------- */
+  function renderTable(){
+    const ec=clByEpoch[epochs[idx]]; if(!ec) return;
+    const rows=ec.bubbles.slice().sort((a,b)=>(b.revenue_share||0)-(a.revenue_share||0));
+    const maxShare=Math.max(...rows.map(r=>r.revenue_share||0))||1;
+    const confLabel={declared:t("declared"),unattributed:t("unattributed"),linked:t("linked")};
+    document.getElementById("op-table").innerHTML=rows.map(r=>{
+      const cls=r.confidence==="declared"?"declared":(r.confidence==="linked"?"linked":"unattributed");
+      const pct=(r.revenue_share*100);
+      const w=((r.revenue_share||0)/maxShare*100).toFixed(1);
+      return `<tr>
+        <td>${escapeHtml(r.label)}</td>
+        <td><span class="pill ${cls}"><i style="background:${confColor(r.confidence)}"></i>${(confLabel[cls]||cls)}</span></td>
+        <td class="num">${r.slots}</td>
+        <td class="num bar-cell"><div class="bar" style="width:${w}%"></div><span>${pct<0.1?"<0.1":pct.toFixed(1)}%</span></td>
+      </tr>`;
+    }).join("");
+  }
+
+  /* ---------- orchestration ---------- */
+  function renderEpoch(){
+    const ep=epochs[idx];
+    document.getElementById("ep-cur").textContent=ep;
+    document.getElementById("hdr-epoch").textContent=ep;
+    renderKpis(); renderTreemap(); renderTable(); drawChart();
+  }
+  function renderAll(){ renderEpoch(); }
+
+  function fmtInt(n){ return n==null?"–":(""+n).replace(/\B(?=(\d{3})+(?!\d))/g," "); }
+  function escapeHtml(s){ return (s==null?"":""+s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+  /* ---------- boot ---------- */
+  window.addEventListener("resize",()=>{ renderTreemap(); drawChart(); });
+
+  function startUI(){
+    document.getElementById("sample-badge").hidden=!isSample;
+    document.getElementById("code-ver").textContent=report.code_version||"–";
+    range.max=String(Math.max(0,epochs.length-1)); range.value=String(idx);
+    if(!series.length){
+      document.getElementById("kpis").innerHTML="<div class='kpi'><div class='k-label'>No data</div><div class='k-sub'>Load data.js or add ?api=&lt;base-url&gt;.</div></div>";
+      applyLang();
+      return;
+    }
+    applyLang();                 // sets text + calls renderAll (renderEpoch)
+    setTimeout(renderTreemap,60); // ensure layout width is measured
+  }
+
+  // Data source: ?api=<base> (or window.QDR_API) fetches live; else the bundled data.js.
+  const apiBase = new URLSearchParams(location.search).get("api") || window.QDR_API;
+  if(apiBase){
+    fetch(apiBase.replace(/\/$/,"")+"/v1/dashboard-data")
+      .then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); })
+      .then(d=>{ loadData(d); startUI(); })
+      .catch(()=>{ loadData(window.QDR_DATA||{}); startUI(); }); // fall back to bundled data
+  } else {
+    loadData(window.QDR_DATA||{}); startUI();
+  }
+})();
+</script>
+</body>
+</html>

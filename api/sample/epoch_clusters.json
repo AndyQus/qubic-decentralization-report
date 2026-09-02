@@ -1,0 +1,446 @@
+{
+  "_sample": true,
+  "epochs": [
+    {
+      "epoch": 220,
+      "nakamoto_one_third": 2,
+      "gini": 0.675668,
+      "bubbles": [
+        {
+          "id": "jetski",
+          "label": "JetSki Pool",
+          "confidence": "declared",
+          "slots": 150,
+          "revenue_share": 0.22192
+        },
+        {
+          "id": "qubic.li",
+          "label": "Qubic.li Pool",
+          "confidence": "declared",
+          "slots": 120,
+          "revenue_share": 0.176303
+        },
+        {
+          "id": "apool",
+          "label": "Apool",
+          "confidence": "declared",
+          "slots": 90,
+          "revenue_share": 0.133198
+        },
+        {
+          "id": "minerlab",
+          "label": "MinerLab",
+          "confidence": "declared",
+          "slots": 60,
+          "revenue_share": 0.088736
+        },
+        {
+          "id": "solutions",
+          "label": "Solutions",
+          "confidence": "declared",
+          "slots": 45,
+          "revenue_share": 0.0666
+        },
+        {
+          "id": "unattributed",
+          "label": "Unattributed",
+          "confidence": "unattributed",
+          "slots": 211,
+          "revenue_share": 0.313243
+        }
+      ]
+    },
+    {
+      "epoch": 221,
+      "nakamoto_one_third": 2,
+      "gini": 0.686626,
+      "bubbles": [
+        {
+          "id": "jetski",
+          "label": "JetSki Pool",
+          "confidence": "declared",
+          "slots": 156,
+          "revenue_share": 0.229659
+        },
+        {
+          "id": "qubic.li",
+          "label": "Qubic.li Pool",
+          "confidence": "declared",
+          "slots": 118,
+          "revenue_share": 0.174981
+        },
+        {
+          "id": "apool",
+          "label": "Apool",
+          "confidence": "declared",
+          "slots": 93,
+          "revenue_share": 0.138173
+        },
+        {
+          "id": "minerlab",
+          "label": "MinerLab",
+          "confidence": "declared",
+          "slots": 60,
+          "revenue_share": 0.088568
+        },
+        {
+          "id": "solutions",
+          "label": "Solutions",
+          "confidence": "declared",
+          "slots": 45,
+          "revenue_share": 0.067609
+        },
+        {
+          "id": "unattributed",
+          "label": "Unattributed",
+          "confidence": "unattributed",
+          "slots": 204,
+          "revenue_share": 0.301009
+        }
+      ]
+    },
+    {
+      "epoch": 222,
+      "nakamoto_one_third": 2,
+      "gini": 0.695821,
+      "bubbles": [
+        {
+          "id": "jetski",
+          "label": "JetSki Pool",
+          "confidence": "declared",
+          "slots": 162,
+          "revenue_share": 0.238905
+        },
+        {
+          "id": "qubic.li",
+          "label": "Qubic.li Pool",
+          "confidence": "declared",
+          "slots": 116,
+          "revenue_share": 0.171615
+        },
+        {
+          "id": "apool",
+          "label": "Apool",
+          "confidence": "declared",
+          "slots": 96,
+          "revenue_share": 0.142672
+        },
+        {
+          "id": "minerlab",
+          "label": "MinerLab",
+          "confidence": "declared",
+          "slots": 60,
+          "revenue_share": 0.089538
+        },
+        {
+          "id": "solutions",
+          "label": "Solutions",
+          "confidence": "declared",
+          "slots": 45,
+          "revenue_share": 0.066229
+        },
+        {
+          "id": "unattributed",
+          "label": "Unattributed",
+          "confidence": "unattributed",
+          "slots": 197,
+          "revenue_share": 0.291042
+        }
+      ]
+    },
+    {
+      "epoch": 223,
+      "nakamoto_one_third": 2,
+      "gini": 0.705267,
+      "bubbles": [
+        {
+          "id": "jetski",
+          "label": "JetSki Pool",
+          "confidence": "declared",
+          "slots": 168,
+          "revenue_share": 0.249864
+        },
+        {
+          "id": "qubic.li",
+          "label": "Qubic.li Pool",
+          "confidence": "declared",
+          "slots": 114,
+          "revenue_share": 0.167113
+        },
+        {
+          "id": "apool",
+          "label": "Apool",
+          "confidence": "declared",
+          "slots": 99,
+          "revenue_share": 0.146937
+        },
+        {
+          "id": "minerlab",
+          "label": "MinerLab",
+          "confidence": "declared",
+          "slots": 60,
+          "revenue_share": 0.088934
+        },
+        {
+          "id": "solutions",
+          "label": "Solutions",
+          "confidence": "declared",
+          "slots": 45,
+          "revenue_share": 0.065954
+        },
+        {
+          "id": "unattributed",
+          "label": "Unattributed",
+          "confidence": "unattributed",
+          "slots": 190,
+          "revenue_share": 0.281197
+        }
+      ]
+    },
+    {
+      "epoch": 224,
+      "nakamoto_one_third": 2,
+      "gini": 0.714272,
+      "bubbles": [
+        {
+          "id": "jetski",
+          "label": "JetSki Pool",
+          "confidence": "declared",
+          "slots": 174,
+          "revenue_share": 0.257588
+        },
+        {
+          "id": "qubic.li",
+          "label": "Qubic.li Pool",
+          "confidence": "declared",
+          "slots": 112,
+          "revenue_share": 0.16479
+        },
+        {
+          "id": "apool",
+          "label": "Apool",
+          "confidence": "declared",
+          "slots": 102,
+          "revenue_share": 0.15107
+        },
+        {
+          "id": "minerlab",
+          "label": "MinerLab",
+          "confidence": "declared",
+          "slots": 60,
+          "revenue_share": 0.089303
+        },
+        {
+          "id": "solutions",
+          "label": "Solutions",
+          "confidence": "declared",
+          "slots": 45,
+          "revenue_share": 0.066039
+        },
+        {
+          "id": "unattributed",
+          "label": "Unattributed",
+          "confidence": "unattributed",
+          "slots": 183,
+          "revenue_share": 0.271209
+        }
+      ]
+    },
+    {
+      "epoch": 225,
+      "nakamoto_one_third": 2,
+      "gini": 0.723998,
+      "bubbles": [
+        {
+          "id": "jetski",
+          "label": "JetSki Pool",
+          "confidence": "declared",
+          "slots": 180,
+          "revenue_share": 0.266329
+        },
+        {
+          "id": "qubic.li",
+          "label": "Qubic.li Pool",
+          "confidence": "declared",
+          "slots": 110,
+          "revenue_share": 0.162715
+        },
+        {
+          "id": "apool",
+          "label": "Apool",
+          "confidence": "declared",
+          "slots": 105,
+          "revenue_share": 0.155112
+        },
+        {
+          "id": "minerlab",
+          "label": "MinerLab",
+          "confidence": "declared",
+          "slots": 60,
+          "revenue_share": 0.088731
+        },
+        {
+          "id": "solutions",
+          "label": "Solutions",
+          "confidence": "declared",
+          "slots": 45,
+          "revenue_share": 0.066714
+        },
+        {
+          "id": "unattributed",
+          "label": "Unattributed",
+          "confidence": "unattributed",
+          "slots": 176,
+          "revenue_share": 0.2604
+        }
+      ]
+    },
+    {
+      "epoch": 226,
+      "nakamoto_one_third": 2,
+      "gini": 0.733,
+      "bubbles": [
+        {
+          "id": "jetski",
+          "label": "JetSki Pool",
+          "confidence": "declared",
+          "slots": 186,
+          "revenue_share": 0.273195
+        },
+        {
+          "id": "apool",
+          "label": "Apool",
+          "confidence": "declared",
+          "slots": 108,
+          "revenue_share": 0.1599
+        },
+        {
+          "id": "qubic.li",
+          "label": "Qubic.li Pool",
+          "confidence": "declared",
+          "slots": 108,
+          "revenue_share": 0.159215
+        },
+        {
+          "id": "minerlab",
+          "label": "MinerLab",
+          "confidence": "declared",
+          "slots": 60,
+          "revenue_share": 0.089696
+        },
+        {
+          "id": "solutions",
+          "label": "Solutions",
+          "confidence": "declared",
+          "slots": 45,
+          "revenue_share": 0.067524
+        },
+        {
+          "id": "unattributed",
+          "label": "Unattributed",
+          "confidence": "unattributed",
+          "slots": 169,
+          "revenue_share": 0.250471
+        }
+      ]
+    },
+    {
+      "epoch": 227,
+      "nakamoto_one_third": 2,
+      "gini": 0.74225,
+      "bubbles": [
+        {
+          "id": "jetski",
+          "label": "JetSki Pool",
+          "confidence": "declared",
+          "slots": 192,
+          "revenue_share": 0.282165
+        },
+        {
+          "id": "apool",
+          "label": "Apool",
+          "confidence": "declared",
+          "slots": 111,
+          "revenue_share": 0.164614
+        },
+        {
+          "id": "qubic.li",
+          "label": "Qubic.li Pool",
+          "confidence": "declared",
+          "slots": 106,
+          "revenue_share": 0.158114
+        },
+        {
+          "id": "minerlab",
+          "label": "MinerLab",
+          "confidence": "declared",
+          "slots": 60,
+          "revenue_share": 0.088996
+        },
+        {
+          "id": "solutions",
+          "label": "Solutions",
+          "confidence": "declared",
+          "slots": 45,
+          "revenue_share": 0.066046
+        },
+        {
+          "id": "unattributed",
+          "label": "Unattributed",
+          "confidence": "unattributed",
+          "slots": 162,
+          "revenue_share": 0.240066
+        }
+      ]
+    },
+    {
+      "epoch": 228,
+      "nakamoto_one_third": 2,
+      "gini": 0.752804,
+      "bubbles": [
+        {
+          "id": "jetski",
+          "label": "JetSki Pool",
+          "confidence": "declared",
+          "slots": 198,
+          "revenue_share": 0.293851
+        },
+        {
+          "id": "apool",
+          "label": "Apool",
+          "confidence": "declared",
+          "slots": 114,
+          "revenue_share": 0.16917
+        },
+        {
+          "id": "qubic.li",
+          "label": "Qubic.li Pool",
+          "confidence": "declared",
+          "slots": 104,
+          "revenue_share": 0.153515
+        },
+        {
+          "id": "minerlab",
+          "label": "MinerLab",
+          "confidence": "declared",
+          "slots": 60,
+          "revenue_share": 0.088255
+        },
+        {
+          "id": "solutions",
+          "label": "Solutions",
+          "confidence": "declared",
+          "slots": 45,
+          "revenue_share": 0.066443
+        },
+        {
+          "id": "unattributed",
+          "label": "Unattributed",
+          "confidence": "unattributed",
+          "slots": 155,
+          "revenue_share": 0.228767
+        }
+      ]
+    }
+  ]
+}

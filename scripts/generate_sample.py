@@ -91,17 +91,59 @@ def main():
         })
     timeseries = {"_sample": True, "series": points}
 
+    # per-epoch cluster snapshots (for the animated bubble view). Keep it compact:
+    # named clusters in full, the unattributed tail folded into one summary bubble.
+    epoch_clusters = []
+    for e in epochs:
+        rep = build_epoch_report(client, e, revenue=revenue_by_epoch[e], registry=registries[e])
+        named = [c for c in rep["clusters"] if c["confidence"] != "unattributed"]
+        tail = [c for c in rep["clusters"] if c["confidence"] == "unattributed"]
+        tail_slots = sum(c["computor_count"] for c in tail)
+        tail_rev = sum(c["revenue"] for c in tail)
+        total_rev = rep["totals"]["total_revenue"]
+        bubbles = [
+            {
+                "id": c["cluster_id"], "label": c["label"], "confidence": c["confidence"],
+                "slots": c["computor_count"], "revenue_share": c["revenue_share"],
+            }
+            for c in named
+        ]
+        if tail_slots:
+            bubbles.append({
+                "id": "unattributed", "label": "Unattributed", "confidence": "unattributed",
+                "slots": tail_slots,
+                "revenue_share": round(tail_rev / total_rev, 6) if total_rev else 0.0,
+            })
+        epoch_clusters.append({
+            "epoch": e,
+            "nakamoto_one_third": rep["concentration_by_revenue"]["nakamoto_one_third"],
+            "gini": rep["concentration_by_revenue"]["gini"],
+            "bubbles": bubbles,
+        })
+
     out = ROOT / "api" / "sample"
     out.mkdir(parents=True, exist_ok=True)
     (out / "report_latest.json").write_text(json.dumps(latest_report, indent=2))
     (out / "timeseries.json").write_text(json.dumps(timeseries, indent=2))
+    (out / "epoch_clusters.json").write_text(json.dumps({"_sample": True, "epochs": epoch_clusters}, indent=2))
+
+    # dashboard bootstrap: a JS file the SPA can load over file:// (fetch is blocked there)
+    dash = ROOT / "dashboard"
+    dash.mkdir(parents=True, exist_ok=True)
+    bootstrap = "window.QDR_DATA = " + json.dumps({
+        "report": latest_report,
+        "timeseries": timeseries,
+        "epoch_clusters": {"epochs": epoch_clusters},
+        "sample": True,
+    }) + ";\n"
+    (dash / "data.js").write_text(bootstrap)
 
     print("epoch", latest, "operators:", latest_report["totals"]["operators"],
           "declared:", latest_report["totals"]["declared_operators"],
           "unattributed slots:", latest_report["totals"]["unattributed_slots"])
     print("nakamoto(1/3) by revenue:", latest_report["concentration_by_revenue"]["nakamoto_one_third"])
     print("top1 share:", latest_report["concentration_by_revenue"]["top1_share"])
-    print("wrote", out / "report_latest.json", "and", out / "timeseries.json")
+    print("wrote sample JSON + dashboard/data.js")
 
 
 if __name__ == "__main__":

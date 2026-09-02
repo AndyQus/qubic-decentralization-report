@@ -67,6 +67,68 @@ def build_epoch_report(
     }
 
 
+def _bubbles_from_report(rep: dict) -> list[dict]:
+    """Compact per-operator bubbles for the dashboard: named clusters in full, the
+    unattributed tail folded into a single summary bubble."""
+    named = [c for c in rep["clusters"] if c["confidence"] != "unattributed"]
+    tail = [c for c in rep["clusters"] if c["confidence"] == "unattributed"]
+    total_rev = rep["totals"]["total_revenue"] or 1
+    bubbles = [
+        {"id": c["cluster_id"], "label": c["label"], "confidence": c["confidence"],
+         "slots": c["computor_count"], "revenue_share": c["revenue_share"]}
+        for c in named
+    ]
+    tail_slots = sum(c["computor_count"] for c in tail)
+    if tail_slots:
+        tail_rev = sum(c["revenue"] for c in tail)
+        bubbles.append({"id": "unattributed", "label": "Unattributed",
+                        "confidence": "unattributed", "slots": tail_slots,
+                        "revenue_share": round(tail_rev / total_rev, 6)})
+    return bubbles
+
+
+def build_dashboard_bundle(
+    client: CachedClient,
+    epochs: list[int],
+    registry: Optional[dict] = None,
+    revenue_by_epoch: Optional[dict[int, dict[str, int]]] = None,
+) -> dict:
+    """Everything the dashboard needs in one payload: latest report, the
+    concentration timeseries, and per-epoch operator bubbles for the animated map.
+    The API serves this and the static SPA can fetch it directly.
+    """
+    if registry is None:
+        registry = load_registry()
+    reports = {}
+    for e in epochs:
+        rev = (revenue_by_epoch or {}).get(e)
+        reports[e] = build_epoch_report(client, e, revenue=rev, registry=registry)
+
+    latest = max(epochs)
+    series, epoch_clusters = [], []
+    for e in epochs:
+        rep = reports[e]
+        cbr = rep["concentration_by_revenue"]
+        series.append({
+            "epoch": e,
+            "operators": rep["totals"]["operators"],
+            "declared_operators": rep["totals"]["declared_operators"],
+            "unattributed_slots": rep["totals"]["unattributed_slots"],
+            "gini_revenue": cbr["gini"], "hhi_revenue": cbr["hhi_normalized"],
+            "nakamoto_one_third_revenue": cbr["nakamoto_one_third"],
+            "nakamoto_half_revenue": cbr["nakamoto_half"], "top1_share": cbr["top1_share"],
+        })
+        epoch_clusters.append({
+            "epoch": e, "nakamoto_one_third": cbr["nakamoto_one_third"],
+            "gini": cbr["gini"], "bubbles": _bubbles_from_report(rep),
+        })
+    return {
+        "report": reports[latest],
+        "timeseries": {"series": series},
+        "epoch_clusters": {"epochs": epoch_clusters},
+    }
+
+
 def build_timeseries(
     client: CachedClient,
     epochs: list[int],

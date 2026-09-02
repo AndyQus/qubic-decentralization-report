@@ -20,3 +20,6 @@ venv/
 Thumbs.db
 .idea/
 .vscode/
+
+# verification screenshots (scratch)
+scripts/shot_*.png

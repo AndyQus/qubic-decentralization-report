@@ -220,11 +220,13 @@ die Explorer auch die statische Form einbinden können.
    (`qdr/metrics.py`) ✅
 4. **Clustering-Engine** — self-reported Registry + On-chain-Verknüpfungs-Hook
    implementiert + getestet (`qdr/clustering.py`); On-chain-Ebene wird noch angereichert 🔶
-5. **API** — den berechneten Report ausliefern (als Nächstes).
-6. **Dashboard** — statische Ansichten, dann die animierten (DE/EN, Dark/Light).
-7. **Explorer-Integration** — Einbettungsformat + erster Partner.
+5. **API** — FastAPI-Service, der den Report ausliefert (`api/server.py`), CORS-offen, mit
+   einem `/v1/dashboard-data`-Bundle und statischem Sample-Fallback ✅
+6. **Dashboard** — eigenständige SPA (`dashboard/index.html`): animierte Betreiber-Treemap,
+   Nakamoto/Gini-Timeline, Betreiber-Tabelle, DE/EN + Dark/Light mit localStorage ✅
+7. **Explorer-Integration** — Einbettungsformat + erster Partner (als Nächstes).
 
 Bisher umgesetzt: `qdr/` (Client, Metrics, Clustering, Report), ein Self-Reporting-Registry
-(`data/self_reporting/`), Tests (`tests/`, alle grün) und ein Beispiel-Report + Zeitreihe
-fürs Dashboard (`api/sample/`). Live-Läufe brauchen Netzzugang zu `rpc.qubic.org` (in der
-aktuellen Build-Umgebung blockiert).
+(`data/self_reporting/`), Tests (`tests/`, alle grün), der API-Service (`api/`) und das
+Referenz-Dashboard (`dashboard/`). Live-Läufe brauchen Netzzugang zu `rpc.qubic.org` (in der
+aktuellen Build-Umgebung blockiert); alles läuft heute auf den generierten Beispieldaten.

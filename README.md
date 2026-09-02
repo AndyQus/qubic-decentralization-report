@@ -48,9 +48,31 @@ dashboard/    Reference front-end: charts, animations, DE/EN i18n, dark/light
 - Animations only where motion carries meaning (cluster evolution, Nakamoto timeline,
   fund-flow graph) — see `docs/CONCEPT.md` §6.
 
+## Quickstart
+
+```
+pip install -r requirements.txt
+
+# 1) run the tests
+python3 tests/test_metrics.py && python3 tests/test_report.py
+
+# 2) generate sample data (no live RPC needed) -> api/sample/ + dashboard/data.js
+python3 scripts/generate_sample.py
+
+# 3a) open the dashboard: just open dashboard/index.html in a browser
+# 3b) or run the API and point the dashboard at it:
+uvicorn api.server:app --port 8000
+#     then open dashboard/index.html?api=http://localhost:8000
+```
+
+![dashboard preview](docs/preview_dashboard.png)
+
 ## Status
 
-Early — concept stage. See the roadmap in [`docs/CONCEPT.md`](docs/CONCEPT.md) §9.
+Working end-to-end on sample data: research + core engine + API + dashboard are in place.
+Remaining for production: live RPC pulls (needs network access to `rpc.qubic.org`),
+filling the self-reporting registry with real pool declarations, and enriching the
+on-chain-linkage layer. See the roadmap in [`docs/CONCEPT.md`](docs/CONCEPT.md) §9.
 
 ## Bounty
 
