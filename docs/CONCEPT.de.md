@@ -214,10 +214,17 @@ die Explorer auch die statische Form einbinden können.
 ## 9. Roadmap
 
 1. **Konzept** (dieses Dokument) ✅
-2. **Data Mapping** — Endpoints bestätigen, eine Beispiel-Epoche ziehen, in
-   `DATA_SOURCES.md` dokumentieren.
-3. **Revenue-Engine** — Indizes für eine Epoche rechnen, dann die Zeitreihe.
-4. **Clustering-Engine** — zuerst das self-reported Registry, dann On-chain-Verknüpfung.
-5. **API** — den berechneten Report ausliefern.
-6. **Dashboard** — statische Ansichten, dann die animierten.
+2. **Data Mapping** — Endpoints gegen die Live-RPC bestätigt, in `docs/DATA_SOURCES.md`
+   dokumentiert ✅
+3. **Revenue-Engine** — Gini / HHI / Top-N / Nakamoto implementiert + Unit-getestet
+   (`qdr/metrics.py`) ✅
+4. **Clustering-Engine** — self-reported Registry + On-chain-Verknüpfungs-Hook
+   implementiert + getestet (`qdr/clustering.py`); On-chain-Ebene wird noch angereichert 🔶
+5. **API** — den berechneten Report ausliefern (als Nächstes).
+6. **Dashboard** — statische Ansichten, dann die animierten (DE/EN, Dark/Light).
 7. **Explorer-Integration** — Einbettungsformat + erster Partner.
+
+Bisher umgesetzt: `qdr/` (Client, Metrics, Clustering, Report), ein Self-Reporting-Registry
+(`data/self_reporting/`), Tests (`tests/`, alle grün) und ein Beispiel-Report + Zeitreihe
+fürs Dashboard (`api/sample/`). Live-Läufe brauchen Netzzugang zu `rpc.qubic.org` (in der
+aktuellen Build-Umgebung blockiert).

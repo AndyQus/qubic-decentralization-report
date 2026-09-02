@@ -1,0 +1,104 @@
+{
+  "_sample": true,
+  "series": [
+    {
+      "epoch": 220,
+      "operators": 216,
+      "declared_operators": 5,
+      "unattributed_slots": 211,
+      "gini_revenue": 0.675668,
+      "hhi_revenue": 0.106713,
+      "nakamoto_one_third_revenue": 2,
+      "nakamoto_half_revenue": 3,
+      "top1_share": 0.22192
+    },
+    {
+      "epoch": 221,
+      "operators": 209,
+      "declared_operators": 5,
+      "unattributed_slots": 204,
+      "gini_revenue": 0.686626,
+      "hhi_revenue": 0.111061,
+      "nakamoto_one_third_revenue": 2,
+      "nakamoto_half_revenue": 3,
+      "top1_share": 0.229659
+    },
+    {
+      "epoch": 222,
+      "operators": 202,
+      "declared_operators": 5,
+      "unattributed_slots": 197,
+      "gini_revenue": 0.695821,
+      "hhi_revenue": 0.115337,
+      "nakamoto_one_third_revenue": 2,
+      "nakamoto_half_revenue": 3,
+      "top1_share": 0.238905
+    },
+    {
+      "epoch": 223,
+      "operators": 195,
+      "declared_operators": 5,
+      "unattributed_slots": 190,
+      "gini_revenue": 0.705267,
+      "hhi_revenue": 0.120113,
+      "nakamoto_one_third_revenue": 2,
+      "nakamoto_half_revenue": 3,
+      "top1_share": 0.249864
+    },
+    {
+      "epoch": 224,
+      "operators": 188,
+      "declared_operators": 5,
+      "unattributed_slots": 183,
+      "gini_revenue": 0.714272,
+      "hhi_revenue": 0.124411,
+      "nakamoto_one_third_revenue": 2,
+      "nakamoto_half_revenue": 3,
+      "top1_share": 0.257588
+    },
+    {
+      "epoch": 225,
+      "operators": 181,
+      "declared_operators": 5,
+      "unattributed_slots": 176,
+      "gini_revenue": 0.723998,
+      "hhi_revenue": 0.129367,
+      "nakamoto_one_third_revenue": 2,
+      "nakamoto_half_revenue": 3,
+      "top1_share": 0.266329
+    },
+    {
+      "epoch": 226,
+      "operators": 174,
+      "declared_operators": 5,
+      "unattributed_slots": 169,
+      "gini_revenue": 0.733,
+      "hhi_revenue": 0.13355,
+      "nakamoto_one_third_revenue": 2,
+      "nakamoto_half_revenue": 3,
+      "top1_share": 0.273195
+    },
+    {
+      "epoch": 227,
+      "operators": 167,
+      "declared_operators": 5,
+      "unattributed_slots": 162,
+      "gini_revenue": 0.74225,
+      "hhi_revenue": 0.139199,
+      "nakamoto_one_third_revenue": 2,
+      "nakamoto_half_revenue": 3,
+      "top1_share": 0.282165
+    },
+    {
+      "epoch": 228,
+      "operators": 160,
+      "declared_operators": 5,
+      "unattributed_slots": 155,
+      "gini_revenue": 0.752804,
+      "hhi_revenue": 0.145737,
+      "nakamoto_one_third_revenue": 2,
+      "nakamoto_half_revenue": 3,
+      "top1_share": 0.293851
+    }
+  ]
+}

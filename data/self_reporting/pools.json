@@ -1,0 +1,31 @@
+{
+  "$schema": "./pools.schema.json",
+  "note": "Self-reporting registry. Each pool/operator declares the computor identities it controls. computors lists are intentionally EMPTY until backed by a real self-report (a pool disclosure or a signed statement) — do not guess which slots belong to whom. Pools add/update their entries via pull request; git history is the audit trail.",
+  "updated": "2026-09-02",
+  "pools": [
+    {
+      "id": "qubic.li",
+      "label": "Qubic.li Pool",
+      "url": "https://qubic.li",
+      "source": "public pool site",
+      "verified": false,
+      "computors": []
+    },
+    {
+      "id": "apool",
+      "label": "Apool",
+      "url": "https://apool.io",
+      "source": "public pool site",
+      "verified": false,
+      "computors": []
+    },
+    {
+      "id": "minerlab-solutions",
+      "label": "MinerLab / Solutions",
+      "url": "",
+      "source": "community disclosure",
+      "verified": false,
+      "computors": []
+    }
+  ]
+}

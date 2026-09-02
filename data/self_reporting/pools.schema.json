@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Qubic self-reporting registry",
+  "type": "object",
+  "required": ["pools"],
+  "properties": {
+    "updated": { "type": "string", "description": "ISO date of last change" },
+    "pools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "computors"],
+        "properties": {
+          "id": { "type": "string", "description": "stable operator slug" },
+          "label": { "type": "string" },
+          "url": { "type": "string" },
+          "source": { "type": "string", "description": "where the declaration comes from" },
+          "verified": { "type": "boolean", "description": "confirmed against an on-chain or signed proof" },
+          "computors": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^[A-Z]{60}$" },
+            "description": "computor identities (60-char Qubic IDs) this operator declares"
+          }
+        }
+      }
+    }
+  }
+}
