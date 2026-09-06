@@ -28,7 +28,13 @@ from typing import Any, Optional
 import requests
 
 BASE_URL = os.environ.get("QUBIC_RPC_BASE", "https://rpc.qubic.org")
-DEFAULT_CACHE = Path(__file__).resolve().parent.parent / "data" / "raw"
+# DATA_DIR lets a container point the RPC cache at a writable volume; without it
+# the cache stays inside the repo checkout (data/raw), which is what local runs want.
+_DATA_DIR = os.environ.get("DATA_DIR")
+DEFAULT_CACHE = (
+    Path(_DATA_DIR) / "raw" if _DATA_DIR
+    else Path(__file__).resolve().parent.parent / "data" / "raw"
+)
 
 
 class QubicRPCError(RuntimeError):

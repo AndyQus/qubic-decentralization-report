@@ -75,10 +75,18 @@ def api_index():
             "/v1/metrics/timeseries",
             "/v1/report/{epoch}/snapshot.json",
             "/v1/dashboard-data",
+            "/health",
         ],
         "dashboard": "/dashboard/",
         "docs": "/docs",
     }
+
+
+@app.get("/health")
+def health():
+    """Liveness probe for Docker/orchestrators. Deliberately does no RPC call —
+    it answers whether the process serves, not whether upstream data is fresh."""
+    return {"status": "ok", "version": app.version, "sample_available": SAMPLE.exists()}
 
 
 @app.get("/v1/report/latest")

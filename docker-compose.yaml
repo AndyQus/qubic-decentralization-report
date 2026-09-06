@@ -1,0 +1,23 @@
+services:
+  qubic_decentralization_report:
+    image: andyqus/qubic_decentralization_report:latest
+    container_name: qubic_decentralization_report
+    environment:
+      # Public Qubic RPC endpoint the report is built from.
+      - QUBIC_RPC_BASE=${QUBIC_RPC_BASE:-https://rpc.qubic.org}
+      # RPC response cache (and any derived artefacts) live in the volume.
+      - DATA_DIR=/data
+      # Optional: mount your own registry over the bundled one, see volumes below.
+      # - QDR_REGISTRY=/data/pools.json
+    ports:
+      - "8000:8000"
+    volumes:
+      # Named volume: Docker creates it with the right ownership for the
+      # container's non-root user. A host bind mount would need a manual chown.
+      - qdr-data:/data
+      # Optional: serve a self-maintained pool registry without rebuilding.
+      # - /root/qdr/pools.json:/data/pools.json:ro
+    restart: unless-stopped
+
+volumes:
+  qdr-data:

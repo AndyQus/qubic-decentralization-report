@@ -1,0 +1,11 @@
+# Shell scripts must keep LF, otherwise the shebang breaks on Linux.
+*.sh text eol=lf
+
+# Docker + compose are read by Linux tooling — LF only.
+Dockerfile text eol=lf
+docker-compose.yaml text eol=lf
+.dockerignore text eol=lf
+.env.example text eol=lf
+
+# Screenshots are binary — no EOL conversion, no text diff.
+*.png binary

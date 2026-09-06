@@ -12,11 +12,19 @@ about what is declared vs. inferred.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 
-DEFAULT_REGISTRY = Path(__file__).resolve().parent.parent / "data" / "self_reporting" / "pools.json"
+# QDR_REGISTRY lets an operator mount their own pools.json over the bundled one
+# (e.g. a Docker volume) without rebuilding the image.
+DEFAULT_REGISTRY = Path(
+    os.environ.get(
+        "QDR_REGISTRY",
+        Path(__file__).resolve().parent.parent / "data" / "self_reporting" / "pools.json",
+    )
+)
 
 
 @dataclass

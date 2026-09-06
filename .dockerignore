@@ -1,0 +1,15 @@
+.git
+.github
+.vscode
+docs
+tests
+data/raw
+**/__pycache__
+**/*.pyc
+.venv
+venv
+.env
+.env.*
+*.md
+!api/README.md
+scripts/shot_*.png
