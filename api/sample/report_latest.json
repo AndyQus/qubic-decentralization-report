@@ -1,7 +1,7 @@
 {
   "epoch": 228,
   "generated_at": 1788353087,
-  "code_version": "0.1.0",
+  "code_version": "0.1.1",
   "reproducible": true,
   "data_sources": {
     "computors": "/v1/epochs/228/computors",

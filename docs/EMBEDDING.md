@@ -44,6 +44,9 @@ versioned under `/v1`, and every response names its inputs so you can show prove
 | `GET /v1/dashboard-data` | one bundle: report + timeseries + per-epoch operator bubbles |
 | `GET /v1/report/{epoch}/snapshot.json` | frozen archivable snapshot |
 
+Interactive docs ship with the service: **Swagger UI at `/docs`**, ReDoc at `/redoc`, and the
+raw OpenAPI spec at `/openapi.json` (import it into Postman/Insomnia or generate a client).
+
 ### Cluster object
 
 ```jsonc

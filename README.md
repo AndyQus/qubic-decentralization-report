@@ -97,6 +97,17 @@ live dashboard. Tasks for install / tests / sample-data are in the Command Palet
 > runs. It is blocked inside the Cowork sandbox, but works from a normal machine — so live
 > pulls run fine in your own VS Code / on a server.
 
+### API reference (Swagger)
+
+The API is FastAPI, so the interactive docs come with it — no extra setup:
+
+| URL | What |
+|---|---|
+| `http://localhost:8000/docs` | **Swagger UI** — every endpoint with *Try it out* |
+| `http://localhost:8000/redoc` | ReDoc — the same spec, easier to read |
+| `http://localhost:8000/openapi.json` | OpenAPI spec (import into Postman/Insomnia, generate clients) |
+| `http://localhost:8000/api` | plain JSON index of the endpoints |
+
 ### Embedding in an explorer
 
 A one-line widget, an iframe, or the raw JSON API — see [`docs/EMBEDDING.md`](docs/EMBEDDING.md)

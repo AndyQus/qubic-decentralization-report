@@ -7,4 +7,4 @@ Modules:
   report      Assemble the decentralization report for one epoch / a range.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

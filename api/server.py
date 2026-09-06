@@ -24,6 +24,7 @@ try:
 except ImportError as e:  # pragma: no cover
     raise SystemExit("Install deps first: pip install -r requirements.txt") from e
 
+from qdr import __version__ as QDR_VERSION
 from qdr.client import CachedClient, derive_computor_revenue, QubicRPCError
 from qdr.report import build_epoch_report, build_timeseries, build_dashboard_bundle
 from qdr.clustering import load_registry
@@ -31,7 +32,22 @@ from qdr.clustering import load_registry
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLE = ROOT / "api" / "sample"
 
-app = FastAPI(title="Qubic Decentralization Report API", version="0.1.0")
+app = FastAPI(
+    title="Qubic Decentralization Report API",
+    version=QDR_VERSION,
+    description=(
+        "Read-only JSON API measuring how decentralized Qubic's 676 Computors are.\n\n"
+        "CORS is open, everything is versioned under `/v1`, and every response names its "
+        "inputs so consumers can show provenance. When `rpc.qubic.org` is unreachable the "
+        "service falls back to bundled sample snapshots (`sample: true`).\n\n"
+        "The reference dashboard is served at [`/dashboard/`](/dashboard/)."
+    ),
+    openapi_tags=[
+        {"name": "report", "description": "Per-epoch decentralization reports and snapshots."},
+        {"name": "metrics", "description": "Concentration indices over time, for charts."},
+        {"name": "service", "description": "Index and health probes."},
+    ],
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -57,13 +73,13 @@ def _live_or_sample_latest() -> dict:
         return _sample("report_latest.json")
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def root():
     # convenience: send humans to the bundled dashboard, which will fetch the API
     return RedirectResponse(url="/dashboard/")
 
 
-@app.get("/api")
+@app.get("/api", tags=["service"], summary="Endpoint index")
 def api_index():
     return {
         "service": "Qubic Decentralization Report API",
@@ -82,19 +98,19 @@ def api_index():
     }
 
 
-@app.get("/health")
+@app.get("/health", tags=["service"], summary="Liveness probe")
 def health():
     """Liveness probe for Docker/orchestrators. Deliberately does no RPC call —
     it answers whether the process serves, not whether upstream data is fresh."""
     return {"status": "ok", "version": app.version, "sample_available": SAMPLE.exists()}
 
 
-@app.get("/v1/report/latest")
+@app.get("/v1/report/latest", tags=["report"], summary="Report for the current epoch")
 def report_latest():
     return _live_or_sample_latest()
 
 
-@app.get("/v1/report/{epoch}")
+@app.get("/v1/report/{epoch}", tags=["report"], summary="Report for a specific epoch")
 def report_epoch(epoch: int):
     try:
         client = CachedClient()
@@ -106,13 +122,13 @@ def report_epoch(epoch: int):
         raise HTTPException(status_code=404, detail=f"epoch {epoch} not available offline")
 
 
-@app.get("/v1/clusters/{epoch}")
+@app.get("/v1/clusters/{epoch}", tags=["report"], summary="Operator clusters for an epoch")
 def clusters_epoch(epoch: int):
     rep = report_epoch(epoch)
     return {"epoch": rep["epoch"], "clusters": rep["clusters"]}
 
 
-@app.get("/v1/metrics/timeseries")
+@app.get("/v1/metrics/timeseries", tags=["metrics"], summary="Concentration indices across epochs")
 def metrics_timeseries():
     try:
         client = CachedClient()
@@ -123,7 +139,7 @@ def metrics_timeseries():
         return _sample("timeseries.json")
 
 
-@app.get("/v1/report/{epoch}/snapshot.json")
+@app.get("/v1/report/{epoch}/snapshot.json", tags=["report"], summary="Frozen archivable snapshot")
 def snapshot(epoch: int):
     return JSONResponse(report_epoch(epoch))
 
@@ -131,7 +147,7 @@ def snapshot(epoch: int):
 DASHBOARD_DIR = ROOT / "dashboard"
 
 
-@app.get("/v1/dashboard-data")
+@app.get("/v1/dashboard-data", tags=["metrics"], summary="One bundle for the dashboard SPA")
 def dashboard_data():
     """One bundle for the SPA: latest report + timeseries + per-epoch bubbles."""
     try:
