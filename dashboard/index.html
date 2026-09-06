@@ -9,6 +9,7 @@
     --bg:#0c141b; --bg2:#101820; --surface:#16232e; --surface2:#1b2c38;
     --border:#263846; --text:#e6eef2; --muted:#8aa0ab; --faint:#5c7180;
     --accent:#22d3a6; --accent2:#3b9dff; --warn:#f5a623; --danger:#ff5c7a;
+    --warn-bg:rgba(245,166,35,.09); --warn-fg:#c8993f; --warn-link:#3b9dff;
     --declared:#22d3a6; --unattributed:#5c7180; --linked:#f5a623; --flagged:#ff5c7a;
     --shadow:0 6px 24px rgba(0,0,0,.35);
     --radius:14px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -18,6 +19,7 @@
     --bg:#eef3f6; --bg2:#f6f9fb; --surface:#ffffff; --surface2:#f1f5f8;
     --border:#d8e2e8; --text:#132430; --muted:#546773; --faint:#8698a2;
     --accent:#0aa17e; --accent2:#1f7fe0; --warn:#c9820f; --danger:#e0435f;
+    --warn-bg:rgba(201,130,15,.10); --warn-fg:#8a5c07; --warn-link:#1f7fe0;
     --declared:#0aa17e; --unattributed:#93a6b0; --linked:#c9820f; --flagged:#e0435f;
     --shadow:0 6px 20px rgba(20,40,55,.10);
   }
@@ -128,8 +130,27 @@
   .bar-cell .bar{position:absolute;left:0;top:0;bottom:0;background:color-mix(in srgb,var(--accent) 16%,transparent);border-radius:4px}
   .bar-cell span{position:relative}
 
-  footer{margin-top:34px;font-size:12px;color:var(--faint);border-top:1px solid var(--border);padding-top:16px}
+  footer{margin-top:34px;font-size:12px;color:var(--faint)}
   footer code{font-family:var(--mono);color:var(--muted)}
+  /* disclaimer alert — mirrors the Spotlight footer's warning banner */
+  .fdisc{display:flex;flex-wrap:wrap;justify-content:center;align-items:baseline;gap:4px;
+         text-align:center;padding:8px 10px;border-radius:6px;line-height:1.55;
+         background:var(--warn-bg);color:var(--warn-fg);margin-bottom:14px}
+  .fdisc a{color:var(--warn-link);text-decoration:none}
+  .fdisc a:hover{text-decoration:underline}
+  .fbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;
+        border-top:1px solid var(--border);padding-top:16px}
+  .fbar .fleft{display:flex;align-items:center;gap:6px}
+  .fbar .flogo{width:22px;height:22px;border-radius:6px;background:var(--accent);flex:0 0 auto}
+  .fbar .flinks{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px}
+  .fbar .flinks a{color:var(--accent);text-decoration:none}
+  .fbar .flinks a:hover{text-decoration:underline}
+  .fbar .fsep{color:var(--faint)}
+  .fbar .fright{text-align:right}
+  @media (max-width:720px){
+    .fbar{grid-template-columns:1fr;justify-items:center;text-align:center;gap:8px}
+    .fbar .fright{text-align:center}
+  }
   @media (max-width:560px){.kpi .k-val{font-size:24px}.epoch-bar input[type=range]{width:130px}}
 </style>
 </head>
@@ -228,8 +249,36 @@
   </section>
 
   <footer>
-    <span data-i18n="footer">Reproducible from public Qubic RPC data + a self-reporting registry.</span>
-    <span> · <span data-i18n="codeVersion">code</span> <code id="code-ver">–</code> · <a href="https://github.com" id="repo-link" data-i18n="repo">source</a></span>
+    <div class="fdisc">
+      <b data-i18n="discLabel">Disclaimer:</b>
+      <span data-i18n="discBeta">This report is currently in beta status.</span>
+      <span data-i18n="discData">Network data is retrieved from the public RPC endpoint</span>
+      <span><a href="https://rpc.qubic.org" target="_blank" rel="noreferrer">rpc.qubic.org</a>;</span>
+      <span data-i18n="discData2">operator attribution comes from the self-reporting registry in</span>
+      <span><a href="https://github.com/AndyQus/qubic-decentralization-report/tree/main/data/self_reporting"
+         id="registry-link" target="_blank" rel="noreferrer">data/self_reporting</a>.</span>
+      <span data-i18n="discNoGuarantee">We do not guarantee the completeness, accuracy, or availability of the data.</span>
+      <span data-i18n="discSelfReported">Operator groupings are self-reported or derived from on-chain heuristics; they are indications, not proof of ownership.</span>
+      <span data-i18n="discCorrections">Operators can correct or complete their entry at any time via pull request.</span>
+      <b data-i18n="discDemo">Use it for analysis purposes only — not as a basis for investment decisions.</b>
+    </div>
+
+    <div class="fbar">
+      <div class="fleft">
+        <span class="flogo" aria-hidden="true"></span>
+        <span>&copy; <span id="foot-year">2026</span> <span data-i18n="sponsored">Qubic – Sponsored by AndyQus</span></span>
+      </div>
+      <div class="flinks">
+        <a href="https://qubic.org" target="_blank" rel="noreferrer">Qubic.org</a>
+        <span class="fsep">&#x2022;</span>
+        <a href="https://github.com/AndyQus/qubic-decentralization-report" id="repo-link" target="_blank" rel="noreferrer">GitHub</a>
+        <span class="fsep">&#x2022;</span>
+        <a href="https://qubic.org/terms-of-service" target="_blank" rel="noreferrer" data-i18n="tos">Terms of Service</a>
+        <span class="fsep">&#x2022;</span>
+        <a href="https://qubic.org/privacy-policy" target="_blank" rel="noreferrer" data-i18n="privacy">Privacy Policy</a>
+      </div>
+      <div class="fright"><span data-i18n="codeVersion">code</span> v.<code id="code-ver">–</code> (BETA)</div>
+    </div>
   </footer>
 </div>
 
@@ -253,7 +302,15 @@
       nakamotoShort:"Nakamoto (⅓)", giniShort:"Gini ×10",
       tableTitle:"Operators this epoch", tableDesc:"Sorted by revenue share. Slots = number of computors the operator controls.",
       thOperator:"Operator", thConfidence:"Basis", thSlots:"Slots", thShare:"Revenue share",
-      footer:"Reproducible from public Qubic RPC data + a self-reporting registry.", codeVersion:"code", repo:"source",
+      codeVersion:"code", repo:"source",
+      discLabel:"Disclaimer:", discBeta:"This report is currently in beta status.",
+      discData:"Network data is retrieved from the public RPC endpoint",
+      discData2:"operator attribution comes from the self-reporting registry in",
+      discNoGuarantee:"We do not guarantee the completeness, accuracy, or availability of the data.",
+      discSelfReported:"Operator groupings are self-reported or derived from on-chain heuristics; they are indications, not proof of ownership.",
+      discCorrections:"Operators can correct or complete their entry at any time via pull request.",
+      discDemo:"Use it for analysis purposes only — not as a basis for investment decisions.",
+      sponsored:"Qubic – Sponsored by AndyQus", tos:"Terms of Service", privacy:"Privacy Policy",
       kOperators:"Operators", kOperatorsSub:"from 676 computor slots",
       kDeclared:"Declared operators", kDeclaredSub:"self-reported",
       kNak13:"Nakamoto ⅓", kNak13Sub:"operators to control ⅓",
@@ -272,7 +329,15 @@
       nakamotoShort:"Nakamoto (⅓)", giniShort:"Gini ×10",
       tableTitle:"Betreiber dieser Epoche", tableDesc:"Sortiert nach Umsatzanteil. Slots = Anzahl der Computors des Betreibers.",
       thOperator:"Betreiber", thConfidence:"Basis", thSlots:"Slots", thShare:"Umsatzanteil",
-      footer:"Reproduzierbar aus öffentlichen Qubic-RPC-Daten + einem Self-Reporting-Registry.", codeVersion:"Code", repo:"Quelle",
+      codeVersion:"Code", repo:"Quelle",
+      discLabel:"Disclaimer:", discBeta:"Dieser Report befindet sich derzeit im Beta-Status.",
+      discData:"Die Netzwerkdaten stammen vom öffentlichen RPC-Endpunkt",
+      discData2:"die Betreiber-Zuordnung aus dem Self-Reporting-Registry in",
+      discNoGuarantee:"Wir übernehmen keine Gewähr für Vollständigkeit, Richtigkeit oder Verfügbarkeit der Daten.",
+      discSelfReported:"Die Betreiber-Gruppierungen sind self-reported oder aus On-Chain-Heuristiken abgeleitet; sie sind Hinweise, kein Eigentumsnachweis.",
+      discCorrections:"Betreiber können ihren Eintrag jederzeit per Pull Request korrigieren oder ergänzen.",
+      discDemo:"Nutzung nur zu Analysezwecken — keine Grundlage für Investitionsentscheidungen.",
+      sponsored:"Qubic – Sponsored by AndyQus", tos:"Nutzungsbedingungen", privacy:"Datenschutz",
       kOperators:"Betreiber", kOperatorsSub:"aus 676 Computor-Slots",
       kDeclared:"Deklarierte Betreiber", kDeclaredSub:"self-reported",
       kNak13:"Nakamoto ⅓", kNak13Sub:"Betreiber für ⅓-Kontrolle",
@@ -511,6 +576,7 @@
   function startUI(){
     document.getElementById("sample-badge").hidden=!isSample;
     document.getElementById("code-ver").textContent=report.code_version||"–";
+    document.getElementById("foot-year").textContent=String(new Date().getFullYear());
     range.max=String(Math.max(0,epochs.length-1)); range.value=String(idx);
     if(!series.length){
       document.getElementById("kpis").innerHTML="<div class='kpi'><div class='k-label'>No data</div><div class='k-sub'>Load data.js or add ?api=&lt;base-url&gt;.</div></div>";
