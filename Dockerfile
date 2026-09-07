@@ -27,8 +27,14 @@ COPY dashboard/ ./dashboard/
 COPY examples/ ./examples/
 COPY scripts/ ./scripts/
 COPY data/self_reporting/ ./data/self_reporting/
+COPY docs/ ./docs/
 
-# The RPC cache lives in the volume, not in the image layer.
+# The /how-it-works page is generated from docs/CONCEPT*.md at build time, so the
+# image can never ship a page that disagrees with the concept it was built from.
+RUN python scripts/build_how_it_works.py
+
+# The RPC cache and the persistent store both live in the volume (DATA_DIR=/data),
+# not in the image layer: sealed epochs must survive image upgrades.
 RUN mkdir -p /data/raw && useradd -r -u 10001 qdr && chown -R qdr:qdr /app /data
 USER qdr
 VOLUME ["/data"]

@@ -1,39 +1,80 @@
 {
   "epoch": 228,
-  "generated_at": 1788353087,
-  "code_version": "0.1.1",
+  "status": "live",
+  "generated_at": 1788784629,
+  "code_version": "0.2.0",
   "reproducible": true,
   "data_sources": {
     "computors": "/v1/epochs/228/computors",
-    "revenue": "derived from arbitrator epoch-boundary transfers",
-    "self_reporting": "data/self_reporting/pools.json"
+    "revenue": "arbitrator-payouts",
+    "self_reporting": "data/self_reporting/pools.json",
+    "onchain_linkage": "payout graph (primary attribution layer)"
+  },
+  "revenue_provenance": {
+    "method": "arbitrator-payouts",
+    "arbitrator": "AFZPUAIYVPNUYGJRQVLUKOPPVLHAZQTGLYAAUUNBXFTVTAMSBKQBLEIEPCVJF",
+    "tick_range": [
+      null,
+      null
+    ],
+    "payout_lag_epochs": 1,
+    "transfers_matched": 0,
+    "computors_paid": 676,
+    "total_revenue": 879244609334,
+    "complete": true,
+    "warnings": [
+      "revenue injected by caller; not derived from chain"
+    ]
   },
   "totals": {
     "computors": 676,
-    "operators": 160,
+    "operators": 74,
     "declared_operators": 5,
-    "unattributed_slots": 155,
+    "unattributed_slots": 62,
     "total_revenue": 879244609334
   },
+  "linkage_coverage": {
+    "computors": 676,
+    "attributed_slots": 614,
+    "attributed_share": 0.908284,
+    "onchain_linked_slots": 93,
+    "onchain_linked_share": 0.137574,
+    "declared_slots": 521,
+    "declared_share": 0.77071,
+    "unattributed_slots": 62,
+    "slots_by_confidence": {
+      "declared": 521,
+      "linked": 93,
+      "unattributed": 62
+    }
+  },
+  "declared_vs_detected": {
+    "confirmed_operators": 0,
+    "declared_unconfirmed_operators": 5,
+    "undeclared_linked_operators": 7,
+    "undeclared_linked_slots": 93,
+    "undeclared_linked_revenue": 120581786877,
+    "largest_undeclared_cluster": 81
+  },
   "concentration_by_revenue": {
-    "n_entries": 160,
+    "n_entries": 74,
     "total": 879244609334.0,
-    "gini": 0.752804,
-    "hhi_normalized": 0.145737,
+    "gini": 0.838249,
+    "hhi_normalized": 0.153797,
     "top1_share": 0.293851,
     "top3_share": 0.616536,
-    "top5_share": 0.771233,
+    "top5_share": 0.824407,
     "nakamoto_one_third": 2,
     "nakamoto_half": 3
   },
   "concentration_by_slots": {
-    "n_entries": 160,
+    "n_entries": 74,
     "total": 676.0,
-    "gini": 0.746117,
-    "hhi_normalized": 0.145204,
+    "gini": 0.835879,
+    "hhi_normalized": 0.153311,
     "top1_share": 0.292899,
     "top3_share": 0.615385,
-    "top5_share": 0.77071,
+    "top5_share": 0.823964,
     "nakamoto_one_third": 2,
     "nakamoto_half": 3
   },
@@ -494,6 +535,100 @@
       "revenue_share": 0.153515
     },
     {
+      "cluster_id": "linked:HIDDENPOOLWALLET",
+      "label": "Linked (HIDDENPO)",
+      "confidence": "linked",
+      "computors": [
+        "C0521PZHLEXLTLVVGHEFEUWYOHWTGQTTFAJLPWWZHZLHEHNNCQLBPMCBROBQ",
+        "C0522FMTPZDYQZFGMBDAPDEMDLURHRVRUFWCPVZUNWYIRIYMPGKOYIEEGGWE",
+        "C0523EFWQAUDYTJIELRVXSEWVVUFFXLMBMFTKGLUBMHUZXPZHCUDRBIMVZPI",
+        "C0524DHAPVKHRJYDURKEAVCHYMFMVBQZJVMHSXPVLMCKXIZPBLKISCZFUVCL",
+        "C0525CNXICCSYVKKNIASVCSXMSGSKORPLZFBPZAZEAIFNFVACTUPDEXVCEJC",
+        "C0526GSHYWNTMORSUOMBSQPGCFNPPHCZTYFEOUMVYAOKWSQRTPURNLHUGUVS",
+        "C0527WWJGDTCUYMKJGAQVXZSUKFHDEBFDSCLAYLPZMIJSUOZJPAWBAENROMJ",
+        "C0528JRVYNPMJSOSOJCNGMLNWBIKBANHLKWHPGBSXMISNTFOOCDUSULESWMH",
+        "C0529KGBWLSOXAFLLDFQFONVGNJHCKTJQTRSYKTMLJNVNHJKYIJXHJWIZCZJ",
+        "C0530TDMSTSHYTHWIISOJHSINIAQYVVWRFEHBSKQNETXPXGSVRUYQSIDHFDA",
+        "C0531YSOEBWFDPYBPKJQLGJUWZNLKPZSEYEBHABJISNJMCEXTHSBAEXLDEYD",
+        "C0532GXOKMLQWTMGKSKUVPARNZCSTGCIWLRJGIWKMMHCCHRRLBGJFGNFVXEB",
+        "C0533HGJOJFINGUDAJHVOWSNQXWVZVMZRABRZUKWWESIMYSBEZUCUVPOJCOI",
+        "C0534GBJGKBEHRZZLBFFRTINMKFOYKXYYFGGEQETZHAEAEKMSDGGAHAHGINO",
+        "C0535OCXWDVNZOLAONEYPTTLYKHXBFIULGBCFHXSRYIPFHAGIWZEBERJOCZS",
+        "C0536ZXZYACOWFFVZEJBLBOXNIVROXYDPUUWPKINDTZTFIBMLURHROEZVPUE",
+        "C0537KQCFEKTBZSZWKMMYRJWIQXXEHPHUGOSYCZFDECCBDQOQBHWLWRNZXTB",
+        "C0538VCOBPJWBZUHTELDSTTIWLFTKXYDPDFFEPMXIHHROFFALJEEDMFMVKVZ",
+        "C0539ISUMGGXXAWRGGJJJOAJQQPQTSKAIOAZFALTVMYQVLCTYKGZVOPITWFM",
+        "C0540NUVGFTXKNHIFOPPKZFFLSEANCMLRCEZTEAULSXFESJDCKYNGBESKKYV",
+        "C0541WSMHNHOVXZEUNFTXJVYFBNMCKVITQAUVRKDGGXDHURYBBISRHWFCUCF",
+        "C0542EDFZCLXJQVDWLRENRNRPMJADYSDQKIRRBMJJYEVABZMFSQPOUQPHKQK",
+        "C0543YXMUMJMXJYXDTNXEGJVFDTEWNZEFCGFAJWCBJFTIRGZDJXPQSYWDCPT",
+        "C0544OEYNSTTTISWQDUFQWGDXRABHNNNAXWXFWABALGXFRKGRMGDAKUBKZFI",
+        "C0545HQHRWALRWFNZTFVYSYTBBOMRWNFOYNHHFRGQTMVZGGPNXCQKUDURZYY",
+        "C0546MFMODHNRJYDACGEVQZFGHWTEDVRQXHLFOXTXCQPKWYXWAMPPMDUBNYU",
+        "C0547XLSFAURQDUIHYCTEOTONDOQWDLSNSRUHRWJLVPFXVAWXEWMMLWMRMYF",
+        "C0548TLSDEKOGJTQSSFKKHTIVNUUAYOXJESTAOIUPEYTNNSJCYOSTMPARARZ",
+        "C0549TOJVVPIRLVTSJMICQGZTZQJDNOHJOQUKGMXSRZRDMJYSRAIJKAZTFVU",
+        "C0550QZMAKFDBFMEOBMMJRTBARFIRILQDYHARRSRGVZBKPJVRRHTTXPIXDRL",
+        "C0551NHAEOZLABAGBVLXMYVMDSYTLUGALMJDRIYSGORVJNOSBQYPXAUDQPFN",
+        "C0552UZBADUYGNLWDBHIJJIETTBMPIVKNRMLFJBMEZYEDKLTTNPEKNYFFFDT",
+        "C0553AKHGUUVJOZAIPJPMJRJVZKLTHTNKFDHRHKAPCEJKXLGDFWTBAXHMEVF",
+        "C0554CCWYPHYUEUOPFNYIRURXHTLRKWVKRKFFSVJFVLEWKDMDQKPLTCOCBKB",
+        "C0555QUBLJTCIOOJIPHYLUGLYEJOQXXXJDZODLSJWZSOGIJTGBKHPQRAHGDQ",
+        "C0556GNCZCWGHUQTFNBQPQRFZRCLZFPRPGAJRNFKVCKFDOWJNKVGKXHPZZZQ",
+        "C0557BDQSDLNVPGJIMPCXPOXMFSZMSCJHGMESTSIMUZNIKBTSSSZAWBDBRTR",
+        "C0558KPHSARHVWKFDWCRTNVQJJFUJMIXQYQJTYVTXOSLOFRLYPKUWSLYQEQX",
+        "C0559DSBFECOXSOXRTVVUCEJQRGUTOCOAKYSQJIKZDZIZGNPYFQMQDCFXGUA",
+        "C0560GQQKYNRDYCSHTPRCIKSAAXZTVXSUFDOOSBLKERNNSGHZLCUVKXQRYAY",
+        "C0561XOXAYVKGEVMAXXDDSHZSCAHRESPJEUKLDHXNBSBWQKRZDQWDBJKBEJG",
+        "C0562WOGMCKWZZQPGMYMEOCGWLQXTMSHGLHZTBWAUKRKYNCLUJOVHCUKMMHS",
+        "C0563PSFLLZDDMJHMVTBVEQHPPFOAFRTNYUMNAKHJFQCMZIICWVNCBDTWOKU",
+        "C0564GKRUJNIBLDBGVRRAEPGAIEPNGNEQDIUIVIODQYSHSKZGASNSZBNPMIW",
+        "C0565YVTUWASFFQRYITQOYIKYLDWHYKRXOEPDOIGAUNZRRDZDYMIYXYBGJGS",
+        "C0566QYQCQPGRPOUXLQHXHGMJYPOAIDHWATATDLGQUNAFREMELIZFBICUFHC",
+        "C0567TBXULOOEAIYICABWWPWSWIDSGFILYHRUCBTPWTJDUEEYIROASXXRPEX",
+        "C0568MISNGFFLCPJZEFJAIWUVGFNDDRTBBGJMQNDWMGBPAERMOWUFBEYBBTK",
+        "C0569YZHMZNXECSLGNRSAAKOPTKABDPHEKZSAAZOGTOCGYYBUOFFCDGRMSBX",
+        "C0570QPCUMPEFDAZIKWYIXNZDPDSFRZCPAOIJHNBEHYJJZEFLECUMAEKFGSI",
+        "C0571YCEXVXASIJXOZPFMTAGVFNUULKDHEPNCUOTJXRAVEILWLSRLDMBEDDS",
+        "C0572VDKRSCFZNRMYWJXTZRNIPRNZQVNEGOMBAQQIJOIAQXHOVRCSDSBPJTS",
+        "C0573ECNJBBMSXXYQYGMTXUEGZKHIRIQNIOBQFDHSQNKINFEWAFCFGXXPVXE",
+        "C0574ALKAGYGABAARQMHZJXWMOHSDTAAQQSYYSCDIDMZAASCMSYXUEHEVPGO",
+        "C0575XSVRYSXOXWTBMARZXKJRCRNPIMHBBATSQIVHHNDDXHOCDQCKCVTRULW",
+        "C0576IKQEYSZJEAGUIZVACLGKYHINNAOKMSTTIJSWIMNOEWBDBREIUXAZEWY",
+        "C0577RCWQEEUHQOTYJAEMEBQLQCPIWKEOHZLUGNJFHLOAAJCFTDYRERWKDRD",
+        "C0578VNCUFZUKLSAJVMDBBOTFHBINNABCERHQEOCACXXFGESXUNCLCEAUIRW",
+        "C0579LAPXNNYKHYXYIJMXBJUFEONHUJMADTCKHALPXXZUGXJPEIHLRNCPNRF",
+        "C0580FKYDXVEOVFMOAQMNWZMLWZMEEICTONROQIZTJPOCVFSBUGLABNDZQJQ",
+        "C0581SPJEEHKIZGJBJXNXYMREDECKZUNITXYLFLISZFAMVWIZJUCYDDVWTPY",
+        "C0582GRRCQEOHAVNHJHKVSZJQQZFXCQQISZNRAMMIYALDDBFCFLJGVXICZXF",
+        "C0583HADWMBJTXQNAHPEDWXUQMBBGFBWGDTORSTTBCCZIBAGJPDHDYWPXDSO",
+        "C0584YURNBYXDUYMEYLVWTYBXQIDSUJUOQKLAUDCGOKHKQFWDAPFRQVOQXAP",
+        "C0585EYOTYBWHODNDNARWQDYTPEEGVTYSUMIPPYDRGPKHBONRDAFZJRAVXWR",
+        "C0586LZLOQBAFUIVJGZYEGMFFDMSBZMTVYMRLOIMVPAMZOVVLCNTWDHSLWXE",
+        "C0587CKBXDNJEMCAPAGGLBUQYIZFJGWXWDTRHSEJRJQCHAAJDXNTZZCAKHBE",
+        "C0588DLCMPXLYZWRMWJMWZHHVTKHJRCCAKADYIPNIYEPQZSZNDKPHRKKXYDE",
+        "C0589RYCOPKZDEHSLYSPQDKLIEMUBYVZTOFHXMAEJZJNYXLYINYOOEBLCODA",
+        "C0590OGBQODLMZIYUPRUYHPVXBGDPKJHQAYFOJCJQKWOVFMBFSFKIYYMVQME",
+        "C0591OFRQJBONNIEAOUMVGEPCWGKGXRMPNWELTEGQNXQPTBNVWAZIQQMSVHF",
+        "C0592BWKYLYHIALZAVQTYEPGSNXCKTONIYAKGVUXKNOBXPQTOPWKLIFNCSWA",
+        "C0593HZQIEFPGMXEOXGFBWFFUEPDDYCOLUPNTDPDNFBYJFTRLDJIRMSRHBLF",
+        "C0594DNSAGSZFFAFXNSZRADIFVMIPCBNRACOOYAGZCMGOYBKVABJSGGFNOFI",
+        "C0595IMSHDZOFSIZONHRARHSBXMYKIBFLTXTRKDWTHXTHEOWFYPFRCFSDMHL",
+        "C0596UBJYSNBENWNOMUKFOFRUJLGSPITXUSLAOXAQRNJANXPLYNAFBRAVWDS",
+        "C0597FTBFFYCLYJHTBIIRSBSHFFLGHGFAFHLCBEZLUZKLBDTXHKJKZWVBHMS",
+        "C0598QRZRJWZGTGYYHGFJHMFSNEAZRALSXXRUHDEZIYICFSBOYKYTMKTTTEB",
+        "C0599DEHPMGCPOJSLIFCAMFTYIUCSGOKTZDSEFMOCWHDPLHXMENIPKEVQUMI",
+        "C0600MDEWATNDOZYHAASSFVXRIKEIBGFWDCLWHKLAKDIGXYEDSUDJHVBQOPS",
+        "C0601OUEIOTELWXIEECQRHWIUZVKWRZDSFXAJYRPPBNPUMSGGHYFSSRNLDLT"
+      ],
+      "revenue": 105172389023,
+      "evidence": [
+        "shared on-chain payout destination"
+      ],
+      "computor_count": 81,
+      "revenue_share": 0.119617
+    },
+    {
       "cluster_id": "minerlab",
       "label": "MinerLab",
       "confidence": "declared",
@@ -625,18 +760,94 @@
       "revenue_share": 0.066443
     },
     {
-      "cluster_id": "unattributed:C0559DSB",
-      "label": "Unattributed",
-      "confidence": "unattributed",
+      "cluster_id": "linked:SMALLWALLET91",
+      "label": "Linked (SMALLWAL)",
+      "confidence": "linked",
       "computors": [
-        "C0559DSBFECOXSOXRTVVUCEJQRGUTOCOAKYSQJIKZDZIZGNPYFQMQDCFXGUA"
+        "C0612OANMGFBYCMYFSVAPGZSSFYQTCVSRFPDRENWKYGYZHOCOXARNJTIFMSJ",
+        "C0613FAGWWSRVVHCVYHKJVUTWADJLYSTNOAMTFCTKROGALITQFIHRQXYIVZH"
       ],
-      "revenue": 1399720350,
+      "revenue": 2695440362,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "shared on-chain payout destination"
       ],
-      "computor_count": 1,
-      "revenue_share": 0.001592
+      "computor_count": 2,
+      "revenue_share": 0.003066
+    },
+    {
+      "cluster_id": "linked:SMALLWALLET89",
+      "label": "Linked (SMALLWAL)",
+      "confidence": "linked",
+      "computors": [
+        "C0610JHLNYNBKBHWHOINSQHGAMPUOVGAMPWZDREFXFNNPSUIYCTAYQOQUQNK",
+        "C0611GQYKVTZBMPYGSNGJVFWQWTQYPMAXKZUKAVUJSEEDWOBIURNYWYCRMVX"
+      ],
+      "revenue": 2574041974,
+      "evidence": [
+        "shared on-chain payout destination"
+      ],
+      "computor_count": 2,
+      "revenue_share": 0.002928
+    },
+    {
+      "cluster_id": "linked:SMALLWALLET87",
+      "label": "Linked (SMALLWAL)",
+      "confidence": "linked",
+      "computors": [
+        "C0608ICUAATKHQKUKPXIFCMXIHKYSTAZBSYHPRCIVNBJPUUNXDJHOQQIIGOB",
+        "C0609MXMCRYOULNINOEVMYHMRZZCLVJWCQLQXTSBBEOPWFSDAYQJKBWOURMA"
+      ],
+      "revenue": 2568249339,
+      "evidence": [
+        "shared on-chain payout destination"
+      ],
+      "computor_count": 2,
+      "revenue_share": 0.002921
+    },
+    {
+      "cluster_id": "linked:SMALLWALLET85",
+      "label": "Linked (SMALLWAL)",
+      "confidence": "linked",
+      "computors": [
+        "C0606JEGWDMLIJDXGOFOPVMQLPNYBNWGZITJFTBINZCPKKDQROACPTTSGFJW",
+        "C0607FBFJRHOJIYICYPFHILNYKZGQMSIOSYAFLJYRLXHMYENRSBIWOFGQNXW"
+      ],
+      "revenue": 2544623818,
+      "evidence": [
+        "shared on-chain payout destination"
+      ],
+      "computor_count": 2,
+      "revenue_share": 0.002894
+    },
+    {
+      "cluster_id": "linked:SMALLWALLET81",
+      "label": "Linked (SMALLWAL)",
+      "confidence": "linked",
+      "computors": [
+        "C0602BFKOWRVJNIBQKUQZZLXQQGXRFYKWNWZPEMZFAXQIMPEVSYFLJGYUKXL",
+        "C0603CZSMFRFFFLAYDRFLXZVUMFYJOFRNGSYIFUACFZFHICJSSFTAZATWUNM"
+      ],
+      "revenue": 2513892082,
+      "evidence": [
+        "shared on-chain payout destination"
+      ],
+      "computor_count": 2,
+      "revenue_share": 0.002859
+    },
+    {
+      "cluster_id": "linked:SMALLWALLET83",
+      "label": "Linked (SMALLWAL)",
+      "confidence": "linked",
+      "computors": [
+        "C0604FWOBENMAIKBSLNGFCPJUBAWHTCBXYCSHHLYGRTFEFJOCCSHMAWBNAQE",
+        "C0605OPVBKMIMDVXNBPNEMJGWQWLAASKHOFGINCONVEHVDGGZNDAUZTIJWCN"
+      ],
+      "revenue": 2513150279,
+      "evidence": [
+        "shared on-chain payout destination"
+      ],
+      "computor_count": 2,
+      "revenue_share": 0.002858
     },
     {
       "cluster_id": "unattributed:C0616NSV",
@@ -647,24 +858,10 @@
       ],
       "revenue": 1398725726,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001591
-    },
-    {
-      "cluster_id": "unattributed:C0555QUB",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0555QUBLJTCIOOJIPHYLUGLYEJOQXXXJDZODLSJWZSOGIJTGBKHPQRAHGDQ"
-      ],
-      "revenue": 1398170876,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.00159
     },
     {
       "cluster_id": "unattributed:C0653GMR",
@@ -675,7 +872,7 @@
       ],
       "revenue": 1398007440,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.00159
@@ -689,24 +886,10 @@
       ],
       "revenue": 1397081579,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001589
-    },
-    {
-      "cluster_id": "unattributed:C0589RYC",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0589RYCOPKZDEHSLYSPQDKLIEMUBYVZTOFHXMAEJZJNYXLYINYOOEBLCODA"
-      ],
-      "revenue": 1392972530,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001584
     },
     {
       "cluster_id": "unattributed:C0640MDE",
@@ -717,7 +900,7 @@
       ],
       "revenue": 1392487381,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001584
@@ -731,24 +914,10 @@
       ],
       "revenue": 1391411208,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001583
-    },
-    {
-      "cluster_id": "unattributed:C0551NHA",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0551NHAEOZLABAGBVLXMYVMDSYTLUGALMJDRIYSGORVJNOSBQYPXAUDQPFN"
-      ],
-      "revenue": 1386810345,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001577
     },
     {
       "cluster_id": "unattributed:C0651DBO",
@@ -759,38 +928,10 @@
       ],
       "revenue": 1384411661,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001575
-    },
-    {
-      "cluster_id": "unattributed:C0577RCW",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0577RCWQEEUHQOTYJAEMEBQLQCPIWKEOHZLUGNJFHLOAAJCFTDYRERWKDRD"
-      ],
-      "revenue": 1384265322,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001574
-    },
-    {
-      "cluster_id": "unattributed:C0579LAP",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0579LAPXNNYKHYXYIJMXBJUFEONHUJMADTCKHALPXXZUGXJPEIHLRNCPNRF"
-      ],
-      "revenue": 1381750613,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001572
     },
     {
       "cluster_id": "unattributed:C0654KPG",
@@ -801,38 +942,10 @@
       ],
       "revenue": 1381369565,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001571
-    },
-    {
-      "cluster_id": "unattributed:C0583HAD",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0583HADWMBJTXQNAHPEDWXUQMBBGFBWGDTORSTTBCCZIBAGJPDHDYWPXDSO"
-      ],
-      "revenue": 1379889888,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001569
-    },
-    {
-      "cluster_id": "unattributed:C0587CKB",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0587CKBXDNJEMCAPAGGLBUQYIZFJGWXWDTRHSEJRJQCHAAJDXNTZZCAKHBE"
-      ],
-      "revenue": 1379009322,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001568
     },
     {
       "cluster_id": "unattributed:C0661CIH",
@@ -843,38 +956,10 @@
       ],
       "revenue": 1376449870,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001565
-    },
-    {
-      "cluster_id": "unattributed:C0613FAG",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0613FAGWWSRVVHCVYHKJVUTWADJLYSTNOAMTFCTKROGALITQFIHRQXYIVZH"
-      ],
-      "revenue": 1375398740,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001564
-    },
-    {
-      "cluster_id": "unattributed:C0540NUV",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0540NUVGFTXKNHIFOPPKZFFLSEANCMLRCEZTEAULSXFESJDCKYNGBESKKYV"
-      ],
-      "revenue": 1375158660,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001564
     },
     {
       "cluster_id": "unattributed:C0652FZV",
@@ -885,24 +970,10 @@
       ],
       "revenue": 1374799153,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001564
-    },
-    {
-      "cluster_id": "unattributed:C0525CNX",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0525CNXICCSYVKKNIASVCSXMSGSKORPLZFBPZAZEAIFNFVACTUPDEXVCEJC"
-      ],
-      "revenue": 1373469904,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001562
     },
     {
       "cluster_id": "unattributed:C0647IDS",
@@ -913,7 +984,7 @@
       ],
       "revenue": 1371141297,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001559
@@ -927,7 +998,7 @@
       ],
       "revenue": 1370452501,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001559
@@ -941,52 +1012,10 @@
       ],
       "revenue": 1370234090,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001558
-    },
-    {
-      "cluster_id": "unattributed:C0549TOJ",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0549TOJVVPIRLVTSJMICQGZTZQJDNOHJOQUKGMXSRZRDMJYSRAIJKAZTFVU"
-      ],
-      "revenue": 1370231038,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001558
-    },
-    {
-      "cluster_id": "unattributed:C0562WOG",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0562WOGMCKWZZQPGMYMEOCGWLQXTMSHGLHZTBWAUKRKYNCLUJOVHCUKMMHS"
-      ],
-      "revenue": 1365454263,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001553
-    },
-    {
-      "cluster_id": "unattributed:C0529KGB",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0529KGBWLSOXAFLLDFQFONVGNJHCKTJQTRSYKTMLJNVNHJKYIJXHJWIZCZJ"
-      ],
-      "revenue": 1364768455,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001552
     },
     {
       "cluster_id": "unattributed:C0632VLE",
@@ -997,21 +1026,7 @@
       ],
       "revenue": 1363145334,
       "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.00155
-    },
-    {
-      "cluster_id": "unattributed:C0547XLS",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0547XLSFAURQDUIHYCTEOTONDOQWDLSNSRUHRWJLVPFXVAWXEWMMLWMRMYF"
-      ],
-      "revenue": 1362732202,
-      "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.00155
@@ -1025,80 +1040,10 @@
       ],
       "revenue": 1360759494,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001548
-    },
-    {
-      "cluster_id": "unattributed:C0536ZXZ",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0536ZXZYACOWFFVZEJBLBOXNIVROXYDPUUWPKINDTZTFIBMLURHROEZVPUE"
-      ],
-      "revenue": 1359434941,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001546
-    },
-    {
-      "cluster_id": "unattributed:C0534GBJ",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0534GBJGKBEHRZZLBFFRTINMKFOYKXYYFGGEQETZHAEAEKMSDGGAHAHGINO"
-      ],
-      "revenue": 1358804514,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001545
-    },
-    {
-      "cluster_id": "unattributed:C0595IMS",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0595IMSHDZOFSIZONHRARHSBXMYKIBFLTXTRKDWTHXTHEOWFYPFRCFSDMHL"
-      ],
-      "revenue": 1358219378,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001545
-    },
-    {
-      "cluster_id": "unattributed:C0581SPJ",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0581SPJEEHKIZGJBJXNXYMREDECKZUNITXYLFLISZFAMVWIZJUCYDDVWTPY"
-      ],
-      "revenue": 1358100222,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001545
-    },
-    {
-      "cluster_id": "unattributed:C0591OFR",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0591OFRQJBONNIEAOUMVGEPCWGKGXRMPNWELTEGQNXQPTBNVWAZIQQMSVHF"
-      ],
-      "revenue": 1357982404,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001544
     },
     {
       "cluster_id": "unattributed:C0673SJF",
@@ -1109,21 +1054,7 @@
       ],
       "revenue": 1357792729,
       "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001544
-    },
-    {
-      "cluster_id": "unattributed:C0566QYQ",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0566QYQCQPGRPOUXLQHXHGMJYPOAIDHWATATDLGQUNAFREMELIZFBICUFHC"
-      ],
-      "revenue": 1357415553,
-      "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001544
@@ -1137,80 +1068,10 @@
       ],
       "revenue": 1356568534,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001543
-    },
-    {
-      "cluster_id": "unattributed:C0563PSF",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0563PSFLLZDDMJHMVTBVEQHPPFOAFRTNYUMNAKHJFQCMZIICWVNCBDTWOKU"
-      ],
-      "revenue": 1355057256,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001541
-    },
-    {
-      "cluster_id": "unattributed:C0552UZB",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0552UZBADUYGNLWDBHIJJIETTBMPIVKNRMLFJBMEZYEDKLTTNPEKNYFFFDT"
-      ],
-      "revenue": 1355012519,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001541
-    },
-    {
-      "cluster_id": "unattributed:C0611GQY",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0611GQYKVTZBMPYGSNGJVFWQWTQYPMAXKZUKAVUJSEEDWOBIURNYWYCRMVX"
-      ],
-      "revenue": 1352387140,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001538
-    },
-    {
-      "cluster_id": "unattributed:C0609MXM",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0609MXMCRYOULNINOEVMYHMRZZCLVJWCQLQXTSBBEOPWFSDAYQJKBWOURMA"
-      ],
-      "revenue": 1351280688,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001537
-    },
-    {
-      "cluster_id": "unattributed:C0539ISU",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0539ISUMGGXXAWRGGJJJOAJQQPQTSKAIOAZFALTVMYQVLCTYKGZVOPITWFM"
-      ],
-      "revenue": 1350657185,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001536
     },
     {
       "cluster_id": "unattributed:C0670PVZ",
@@ -1221,80 +1082,10 @@
       ],
       "revenue": 1350322915,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001536
-    },
-    {
-      "cluster_id": "unattributed:C0522FMT",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0522FMTPZDYQZFGMBDAPDEMDLURHRVRUFWCPVZUNWYIRIYMPGKOYIEEGGWE"
-      ],
-      "revenue": 1349454564,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001535
-    },
-    {
-      "cluster_id": "unattributed:C0592BWK",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0592BWKYLYHIALZAVQTYEPGSNXCKTONIYAKGVUXKNOBXPQTOPWKLIFNCSWA"
-      ],
-      "revenue": 1345613040,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.00153
-    },
-    {
-      "cluster_id": "unattributed:C0553AKH",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0553AKHGUUVJOZAIPJPMJRJVZKLTHTNKFDHRHKAPCEJKXLGDFWTBAXHMEVF"
-      ],
-      "revenue": 1344943603,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.00153
-    },
-    {
-      "cluster_id": "unattributed:C0543YXM",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0543YXMUMJMXJYXDTNXEGJVFDTEWNZEFCGFAJWCBJFTIRGZDJXPQSYWDCPT"
-      ],
-      "revenue": 1343436732,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001528
-    },
-    {
-      "cluster_id": "unattributed:C0593HZQ",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0593HZQIEFPGMXEOXGFBWFFUEPDDYCOLUPNTDPDNFBYJFTRLDJIRMSRHBLF"
-      ],
-      "revenue": 1343270789,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001528
     },
     {
       "cluster_id": "unattributed:C0641QQE",
@@ -1305,24 +1096,10 @@
       ],
       "revenue": 1342682611,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001527
-    },
-    {
-      "cluster_id": "unattributed:C0570QPC",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0570QPCUMPEFDAZIKWYIXNZDPDSFRZCPAOIJHNBEHYJJZEFLECUMAEKFGSI"
-      ],
-      "revenue": 1340870324,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001525
     },
     {
       "cluster_id": "unattributed:C0626CZR",
@@ -1333,35 +1110,7 @@
       ],
       "revenue": 1339394986,
       "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001523
-    },
-    {
-      "cluster_id": "unattributed:C0596UBJ",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0596UBJYSNBENWNOMUKFOFRUJLGSPITXUSLAOXAQRNJANXPLYNAFBRAVWDS"
-      ],
-      "revenue": 1339110992,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001523
-    },
-    {
-      "cluster_id": "unattributed:C0527WWJ",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0527WWJGDTCUYMKJGAQVXZSUKFHDEBFDSCLAYLPZMIJSUOZJPAWBAENROMJ"
-      ],
-      "revenue": 1339050800,
-      "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001523
@@ -1375,24 +1124,10 @@
       ],
       "revenue": 1338627381,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001522
-    },
-    {
-      "cluster_id": "unattributed:C0557BDQ",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0557BDQSDLNVPGJIMPCXPOXMFSZMSCJHGMESTSIMUZNIKBTSSSZAWBDBRTR"
-      ],
-      "revenue": 1337468440,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001521
     },
     {
       "cluster_id": "unattributed:C0642VRH",
@@ -1403,24 +1138,10 @@
       ],
       "revenue": 1336199969,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.00152
-    },
-    {
-      "cluster_id": "unattributed:C0600MDE",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0600MDEWATNDOZYHAASSFVXRIKEIBGFWDCLWHKLAKDIGXYEDSUDJHVBQOPS"
-      ],
-      "revenue": 1333979836,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001517
     },
     {
       "cluster_id": "unattributed:C0628FZM",
@@ -1431,38 +1152,10 @@
       ],
       "revenue": 1332259688,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001515
-    },
-    {
-      "cluster_id": "unattributed:C0571YCE",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0571YCEXVXASIJXOZPFMTAGVFNUULKDHEPNCUOTJXRAVEILWLSRLDMBEDDS"
-      ],
-      "revenue": 1328607264,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001511
-    },
-    {
-      "cluster_id": "unattributed:C0582GRR",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0582GRRCQEOHAVNHJHKVSZJQQZFXCQQISZNRAMMIYALDDBFCFLJGVXICZXF"
-      ],
-      "revenue": 1327635635,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.00151
     },
     {
       "cluster_id": "unattributed:C0625LQA",
@@ -1473,38 +1166,10 @@
       ],
       "revenue": 1325392221,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001507
-    },
-    {
-      "cluster_id": "unattributed:C0538VCO",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0538VCOBPJWBZUHTELDSTTIWLFTKXYDPDFFEPMXIHHROFFALJEEDMFMVKVZ"
-      ],
-      "revenue": 1322441762,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001504
-    },
-    {
-      "cluster_id": "unattributed:C0612OAN",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0612OANMGFBYCMYFSVAPGZSSFYQTCVSRFPDRENWKYGYZHOCOXARNJTIFMSJ"
-      ],
-      "revenue": 1320041622,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001501
     },
     {
       "cluster_id": "unattributed:C0660GEL",
@@ -1515,24 +1180,10 @@
       ],
       "revenue": 1319859936,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001501
-    },
-    {
-      "cluster_id": "unattributed:C0526GSH",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0526GSHYWNTMORSUOMBSQPGCFNPPHCZTYFEOUMVYAOKWSQRTPURNLHUGUVS"
-      ],
-      "revenue": 1318154263,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001499
     },
     {
       "cluster_id": "unattributed:C0623GPV",
@@ -1543,21 +1194,7 @@
       ],
       "revenue": 1316491789,
       "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001497
-    },
-    {
-      "cluster_id": "unattributed:C0599DEH",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0599DEHPMGCPOJSLIFCAMFTYIUCSGOKTZDSEFMOCWHDPLHXMENIPKEVQUMI"
-      ],
-      "revenue": 1316173586,
-      "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001497
@@ -1571,7 +1208,7 @@
       ],
       "revenue": 1314411080,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001495
@@ -1585,38 +1222,10 @@
       ],
       "revenue": 1313918732,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001494
-    },
-    {
-      "cluster_id": "unattributed:C0574ALK",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0574ALKAGYGABAARQMHZJXWMOHSDTAAQQSYYSCDIDMZAASCMSYXUEHEVPGO"
-      ],
-      "revenue": 1312428862,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001493
-    },
-    {
-      "cluster_id": "unattributed:C0558KPH",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0558KPHSARHVWKFDWCRTNVQJJFUJMIXQYQJTYVTXOSLOFRLYPKUWSLYQEQX"
-      ],
-      "revenue": 1312377404,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001493
     },
     {
       "cluster_id": "unattributed:C0627BGT",
@@ -1627,24 +1236,10 @@
       ],
       "revenue": 1311463093,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001492
-    },
-    {
-      "cluster_id": "unattributed:C0564GKR",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0564GKRUJNIBLDBGVRRAEPGAIEPNGNEQDIUIVIODQYSHSKZGASNSZBNPMIW"
-      ],
-      "revenue": 1310933648,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001491
     },
     {
       "cluster_id": "unattributed:C0634MNX",
@@ -1655,24 +1250,10 @@
       ],
       "revenue": 1310900082,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001491
-    },
-    {
-      "cluster_id": "unattributed:C0573ECN",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0573ECNJBBMSXXYQYGMTXUEGZKHIRIQNIOBQFDHSQNKINFEWAFCFGXXPVXE"
-      ],
-      "revenue": 1310051566,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.00149
     },
     {
       "cluster_id": "unattributed:C0659ZCJ",
@@ -1683,7 +1264,7 @@
       ],
       "revenue": 1308268818,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001488
@@ -1697,7 +1278,7 @@
       ],
       "revenue": 1307701525,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001487
@@ -1711,24 +1292,10 @@
       ],
       "revenue": 1306772180,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001486
-    },
-    {
-      "cluster_id": "unattributed:C0568MIS",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0568MISNGFFLCPJZEFJAIWUVGFNDDRTBBGJMQNDWMGBPAERMOWUFBEYBBTK"
-      ],
-      "revenue": 1305852237,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001485
     },
     {
       "cluster_id": "unattributed:C0658IMD",
@@ -1739,35 +1306,7 @@
       ],
       "revenue": 1305049722,
       "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001484
-    },
-    {
-      "cluster_id": "unattributed:C0544OEY",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0544OEYNSTTTISWQDUFQWGDXRABHNNNAXWXFWABALGXFRKGRMGDAKUBKZFI"
-      ],
-      "revenue": 1304854295,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001484
-    },
-    {
-      "cluster_id": "unattributed:C0604FWO",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0604FWOBENMAIKBSLNGFCPJUBAWHTCBXYCSHHLYGRTFEFJOCCSHMAWBNAQE"
-      ],
-      "revenue": 1304841591,
-      "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001484
@@ -1781,7 +1320,7 @@
       ],
       "revenue": 1300384927,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001479
@@ -1795,7 +1334,7 @@
       ],
       "revenue": 1297758758,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001476
@@ -1809,24 +1348,10 @@
       ],
       "revenue": 1295525167,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001473
-    },
-    {
-      "cluster_id": "unattributed:C0606JEG",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0606JEGWDMLIJDXGOFOPVMQLPNYBNWGZITJFTBINZCPKKDQROACPTTSGFJW"
-      ],
-      "revenue": 1293649451,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001471
     },
     {
       "cluster_id": "unattributed:C0663HSE",
@@ -1837,94 +1362,10 @@
       ],
       "revenue": 1290618057,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001468
-    },
-    {
-      "cluster_id": "unattributed:C0578VNC",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0578VNCUFZUKLSAJVMDBBOTFHBINNABCERHQEOCACXXFGESXUNCLCEAUIRW"
-      ],
-      "revenue": 1290475103,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001468
-    },
-    {
-      "cluster_id": "unattributed:C0597FTB",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0597FTBFFYCLYJHTBIIRSBSHFFLGHGFAFHLCBEZLUZKLBDTXHKJKZWVBHMS"
-      ],
-      "revenue": 1289328220,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001466
-    },
-    {
-      "cluster_id": "unattributed:C0541WSM",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0541WSMHNHOVXZEUNFTXJVYFBNMCKVITQAUVRKDGGXDHURYBBISRHWFCUCF"
-      ],
-      "revenue": 1287278174,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001464
-    },
-    {
-      "cluster_id": "unattributed:C0603CZS",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0603CZSMFRFFFLAYDRFLXZVUMFYJOFRNGSYIFUACFZFHICJSSFTAZATWUNM"
-      ],
-      "revenue": 1286952949,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001464
-    },
-    {
-      "cluster_id": "unattributed:C0560GQQ",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0560GQQKYNRDYCSHTPRCIKSAAXZTVXSUFDOOSBLKERNNSGHZLCUVKXQRYAY"
-      ],
-      "revenue": 1281666680,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001458
-    },
-    {
-      "cluster_id": "unattributed:C0601OUE",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0601OUEIOTELWXIEECQRHWIUZVKWRZDSFXAJYRPPBNPUMSGGHYFSSRNLDLT"
-      ],
-      "revenue": 1280805121,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001457
     },
     {
       "cluster_id": "unattributed:C0646YEK",
@@ -1935,7 +1376,7 @@
       ],
       "revenue": 1280518007,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001456
@@ -1949,24 +1390,10 @@
       ],
       "revenue": 1280270039,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001456
-    },
-    {
-      "cluster_id": "unattributed:C0585EYO",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0585EYOTYBWHODNDNARWQDYTPEEGVTYSUMIPPYDRGPKHBONRDAFZJRAVXWR"
-      ],
-      "revenue": 1275393622,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001451
     },
     {
       "cluster_id": "unattributed:C0648YEM",
@@ -1977,52 +1404,10 @@
       ],
       "revenue": 1273725398,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001449
-    },
-    {
-      "cluster_id": "unattributed:C0523EFW",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0523EFWQAUDYTJIELRVXSEWVVUFFXLMBMFTKGLUBMHUZXPZHCUDRBIMVZPI"
-      ],
-      "revenue": 1272815093,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001448
-    },
-    {
-      "cluster_id": "unattributed:C0530TDM",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0530TDMSTSHYTHWIISOJHSINIAQYVVWRFEHBSKQNETXPXGSVRUYQSIDHFDA"
-      ],
-      "revenue": 1268594782,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001443
-    },
-    {
-      "cluster_id": "unattributed:C0548TLS",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0548TLSDEKOGJTQSSFKKHTIVNUUAYOXJESTAOIUPEYTNNSJCYOSTMPARARZ"
-      ],
-      "revenue": 1266098977,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.00144
     },
     {
       "cluster_id": "unattributed:C0630EXQ",
@@ -2033,38 +1418,10 @@
       ],
       "revenue": 1265697360,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.00144
-    },
-    {
-      "cluster_id": "unattributed:C0572VDK",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0572VDKRSCFZNRMYWJXTZRNIPRNZQVNEGOMBAQQIJOIAQXHOVRCSDSBPJTS"
-      ],
-      "revenue": 1264252200,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001438
-    },
-    {
-      "cluster_id": "unattributed:C0584YUR",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0584YURNBYXDUYMEYLVWTYBXQIDSUJUOQKLAUDCGOKHKQFWDAPFRQVOQXAP"
-      ],
-      "revenue": 1258232672,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001431
     },
     {
       "cluster_id": "unattributed:C0639OIK",
@@ -2075,24 +1432,10 @@
       ],
       "revenue": 1257396022,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.00143
-    },
-    {
-      "cluster_id": "unattributed:C0524DHA",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0524DHAPVKHRJYDURKEAVCHYMFMVBQZJVMHSXPVLMCKXIZPBLKISCZFUVCL"
-      ],
-      "revenue": 1255800367,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001428
     },
     {
       "cluster_id": "unattributed:C0629KXH",
@@ -2103,7 +1446,7 @@
       ],
       "revenue": 1253423900,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001426
@@ -2117,66 +1460,10 @@
       ],
       "revenue": 1253082490,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001425
-    },
-    {
-      "cluster_id": "unattributed:C0545HQH",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0545HQHRWALRWFNZTFVYSYTBBOMRWNFOYNHHFRGQTMVZGGPNXCQKUDURZYY"
-      ],
-      "revenue": 1253038958,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001425
-    },
-    {
-      "cluster_id": "unattributed:C0532GXO",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0532GXOKMLQWTMGKSKUVPARNZCSTGCIWLRJGIWKMMHCCHRRLBGJFGNFVXEB"
-      ],
-      "revenue": 1252128821,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001424
-    },
-    {
-      "cluster_id": "unattributed:C0531YSO",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0531YSOEBWFDPYBPKJQLGJUWZNLKPZSEYEBHABJISNJMCEXTHSBAEXLDEYD"
-      ],
-      "revenue": 1252033204,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001424
-    },
-    {
-      "cluster_id": "unattributed:C0607FBF",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0607FBFJRHOJIYICYPFHILNYKZGQMSIOSYAFLJYRLXHMYENRSBIWOFGQNXW"
-      ],
-      "revenue": 1250974367,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001423
     },
     {
       "cluster_id": "unattributed:C0618YCW",
@@ -2187,38 +1474,10 @@
       ],
       "revenue": 1250899822,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001423
-    },
-    {
-      "cluster_id": "unattributed:C0561XOX",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0561XOXAYVKGEVMAXXDDSHZSCAHRESPJEUKLDHXNBSBWQKRZDQWDBJKBEJG"
-      ],
-      "revenue": 1250807918,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001423
-    },
-    {
-      "cluster_id": "unattributed:C0554CCW",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0554CCWYPHYUEUOPFNYIRURXHTLRKWVKRKFFSVJFVLEWKDMDQKPLTCOCBKB"
-      ],
-      "revenue": 1249747807,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001421
     },
     {
       "cluster_id": "unattributed:C0672VJA",
@@ -2229,7 +1488,7 @@
       ],
       "revenue": 1247210475,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001419
@@ -2243,7 +1502,7 @@
       ],
       "revenue": 1240227326,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001411
@@ -2257,21 +1516,7 @@
       ],
       "revenue": 1239035961,
       "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001409
-    },
-    {
-      "cluster_id": "unattributed:C0594DNS",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0594DNSAGSZFFAFXNSZRADIFVMIPCBNRACOOYAGZCMGOYBKVABJSGGFNOFI"
-      ],
-      "revenue": 1238976920,
-      "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001409
@@ -2285,7 +1530,7 @@
       ],
       "revenue": 1235707559,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001405
@@ -2299,7 +1544,7 @@
       ],
       "revenue": 1235561214,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001405
@@ -2313,24 +1558,10 @@
       ],
       "revenue": 1233248293,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001403
-    },
-    {
-      "cluster_id": "unattributed:C0598QRZ",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0598QRZRJWZGTGYYHGFJHMFSNEAZRALSXXRUHDEZIYICFSBOYKYTMKTTTEB"
-      ],
-      "revenue": 1232447008,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001402
     },
     {
       "cluster_id": "unattributed:C0631WRN",
@@ -2341,52 +1572,10 @@
       ],
       "revenue": 1229533740,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001398
-    },
-    {
-      "cluster_id": "unattributed:C0602BFK",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0602BFKOWRVJNIBQKUQZZLXQQGXRFYKWNWZPEMZFAXQIMPEVSYFLJGYUKXL"
-      ],
-      "revenue": 1226939133,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001395
-    },
-    {
-      "cluster_id": "unattributed:C0550QZM",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0550QZMAKFDBFMEOBMMJRTBARFIRILQDYHARRSRGVZBKPJVRRHTTXPIXDRL"
-      ],
-      "revenue": 1226183602,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001395
-    },
-    {
-      "cluster_id": "unattributed:C0521PZH",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0521PZHLEXLTLVVGHEFEUWYOHWTGQTTFAJLPWWZHZLHEHNNCQLBPMCBROBQ"
-      ],
-      "revenue": 1224445365,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001393
     },
     {
       "cluster_id": "unattributed:C0621XSC",
@@ -2397,7 +1586,7 @@
       ],
       "revenue": 1224179842,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001392
@@ -2411,80 +1600,10 @@
       ],
       "revenue": 1223366517,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001391
-    },
-    {
-      "cluster_id": "unattributed:C0610JHL",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0610JHLNYNBKBHWHOINSQHGAMPUOVGAMPWZDREFXFNNPSUIYCTAYQOQUQNK"
-      ],
-      "revenue": 1221654834,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001389
-    },
-    {
-      "cluster_id": "unattributed:C0533HGJ",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0533HGJOJFINGUDAJHVOWSNQXWVZVMZRABRZUKWWESIMYSBEZUCUVPOJCOI"
-      ],
-      "revenue": 1221276931,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001389
-    },
-    {
-      "cluster_id": "unattributed:C0537KQC",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0537KQCFEKTBZSZWKMMYRJWIQXXEHPHUGOSYCZFDECCBDQOQBHWLWRNZXTB"
-      ],
-      "revenue": 1218456314,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001386
-    },
-    {
-      "cluster_id": "unattributed:C0608ICU",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0608ICUAATKHQKUKPXIFCMXIHKYSTAZBSYHPRCIVNBJPUUNXDJHOQQIIGOB"
-      ],
-      "revenue": 1216968651,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001384
-    },
-    {
-      "cluster_id": "unattributed:C0590OGB",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0590OGBQODLMZIYUPRUYHPVXBGDPKJHQAYFOJCJQKWOVFMBFSFKIYYMVQME"
-      ],
-      "revenue": 1213909189,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001381
     },
     {
       "cluster_id": "unattributed:C0633NPZ",
@@ -2495,7 +1614,7 @@
       ],
       "revenue": 1212615403,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001379
@@ -2509,108 +1628,10 @@
       ],
       "revenue": 1209761037,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001376
-    },
-    {
-      "cluster_id": "unattributed:C0528JRV",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0528JRVYNPMJSOSOJCNGMLNWBIKBANHLKWHPGBSXMISNTFOOCDUSULESWMH"
-      ],
-      "revenue": 1209431587,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001376
-    },
-    {
-      "cluster_id": "unattributed:C0565YVT",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0565YVTUWASFFQRYITQOYIKYLDWHYKRXOEPDOIGAUNZRRDZDYMIYXYBGJGS"
-      ],
-      "revenue": 1208953378,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001375
-    },
-    {
-      "cluster_id": "unattributed:C0567TBX",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0567TBXULOOEAIYICABWWPWSWIDSGFILYHRUCBTPWTJDUEEYIROASXXRPEX"
-      ],
-      "revenue": 1208594889,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001375
-    },
-    {
-      "cluster_id": "unattributed:C0580FKY",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0580FKYDXVEOVFMOAQMNWZMLWZMEEICTONROQIZTJPOCVFSBUGLABNDZQJQ"
-      ],
-      "revenue": 1208593532,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001375
-    },
-    {
-      "cluster_id": "unattributed:C0605OPV",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0605OPVBKMIMDVXNBPNEMJGWQWLAASKHOFGINCONVEHVDGGZNDAUZTIJWCN"
-      ],
-      "revenue": 1208308688,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001374
-    },
-    {
-      "cluster_id": "unattributed:C0588DLC",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0588DLCMPXLYZWRMWJMWZHHVTKHJRCCAKADYIPNIYEPQZSZNDKPHRKKXYDE"
-      ],
-      "revenue": 1208261683,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001374
-    },
-    {
-      "cluster_id": "unattributed:C0586LZL",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0586LZLOQBAFUIVJGZYEGMFFDMSBZMTVYMRLOIMVPAMZOVVLCNTWDHSLWXE"
-      ],
-      "revenue": 1208132216,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001374
     },
     {
       "cluster_id": "unattributed:C0655XIR",
@@ -2621,7 +1642,7 @@
       ],
       "revenue": 1207865989,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001374
@@ -2635,38 +1656,10 @@
       ],
       "revenue": 1204721763,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.00137
-    },
-    {
-      "cluster_id": "unattributed:C0575XSV",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0575XSVRYSXOXWTBMARZXKJRCRNPIMHBBATSQIVHHNDDXHOCDQCKCVTRULW"
-      ],
-      "revenue": 1202837429,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001368
-    },
-    {
-      "cluster_id": "unattributed:C0546MFM",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0546MFMODHNRJYDACGEVQZFGHWTEDVRQXHLFOXTXCQPKWYXWAMPPMDUBNYU"
-      ],
-      "revenue": 1201903534,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001367
     },
     {
       "cluster_id": "unattributed:C0649SKW",
@@ -2677,24 +1670,10 @@
       ],
       "revenue": 1201305250,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001366
-    },
-    {
-      "cluster_id": "unattributed:C0535OCX",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0535OCXWDVNZOLAONEYPTTLYKHXBFIULGBCFHXSRYIPFHAGIWZEBERJOCZS"
-      ],
-      "revenue": 1198475639,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001363
     },
     {
       "cluster_id": "unattributed:C0617JZV",
@@ -2705,21 +1684,7 @@
       ],
       "revenue": 1198281030,
       "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001363
-    },
-    {
-      "cluster_id": "unattributed:C0569YZH",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0569YZHMZNXECSLGNRSAAKOPTKABDPHEKZSAAZOGTOCGYYBUOFFCDGRMSBX"
-      ],
-      "revenue": 1198144891,
-      "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001363
@@ -2733,7 +1698,7 @@
       ],
       "revenue": 1197510589,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001362
@@ -2747,53 +1712,14 @@
       ],
       "revenue": 1196336221,
       "evidence": [
-        "no self-report; no proven on-chain link"
+        "no on-chain link found; no self-report"
       ],
       "computor_count": 1,
       "revenue_share": 0.001361
-    },
-    {
-      "cluster_id": "unattributed:C0576IKQ",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0576IKQEYSZJEAGUIZVACLGKYHINNAOKMSTTIJSWIMNOEWBDBREIUXAZEWY"
-      ],
-      "revenue": 1195651028,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.00136
-    },
-    {
-      "cluster_id": "unattributed:C0542EDF",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0542EDFZCLXJQVDWLRENRNRPMJADYSDQKIRRBMJJYEVABZMFSQPOUQPHKQK"
-      ],
-      "revenue": 1195401333,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.00136
-    },
-    {
-      "cluster_id": "unattributed:C0556GNC",
-      "label": "Unattributed",
-      "confidence": "unattributed",
-      "computors": [
-        "C0556GNCZCWGHUQTFNBQPQRFZRCLZFPRPGAJRNFKVCKFDOWJNKVGKXHPZZZQ"
-      ],
-      "revenue": 1192017454,
-      "evidence": [
-        "no self-report; no proven on-chain link"
-      ],
-      "computor_count": 1,
-      "revenue_share": 0.001356
     }
+  ],
+  "warnings": [
+    "revenue injected by caller; not derived from chain"
   ],
   "_sample": true
 }

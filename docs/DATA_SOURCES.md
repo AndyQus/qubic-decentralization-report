@@ -95,7 +95,121 @@ spec we build to.
 
 ## 4. Identities & constants to confirm on a direct pull
 
-- Arbitrator identity (payout source) — confirm the exact public ID against boundary-tick
-  transfers.
+- **Arbitrator identity (payout source)** — the bundled default is a *candidate*, not a
+  verified value, and nothing in the pipeline trusts it blindly. Confirm it empirically:
+
+  ```
+  python scripts/ingest.py --verify-arbitrator
+  ```
+
+  This counts, for each candidate identity, how many of the epoch's computors it actually
+  paid within the epoch's tick window. The real arbitrator pays a large share of the 676; a
+  candidate that pays none is wrong. Set the confirmed value via `QUBIC_ARBITRATOR` and
+  record the tick evidence here. Until it is confirmed, derived revenue carries an explicit
+  warning in the payload rather than silently returning zeros.
 - Active computor count (676) vs. the `identities` array length returned by the endpoint.
 - Epoch length in ticks (varies; `initialTick` + observed range give it per epoch).
+
+## 5. Revenue derivation — the exact procedure (v0.2)
+
+Implemented in `qdr/revenue.py`. The three rules that make two implementations agree:
+
+1. **Epoch scoping.** Payouts for epoch *N* are searched from *N*'s `initialTick` through the
+   end of epoch *N+1* (Qubic pays with a one-epoch lag). Transfers outside that window are
+   discarded even if the RPC returns them, because the client cannot assume the endpoint
+   honoured its tick parameters.
+2. **Exhaustive pagination.** `fetch_identity_transfers()` pages until a short page, an empty
+   page, or a page with no new transaction ids. If it cannot prove exhaustion (page ceiling,
+   RPC error, or an endpoint that only serves the unpaged v1 shape) the epoch is returned
+   `complete=False` and the pipeline marks it `partial` — excluded from headline metrics.
+3. **Reconciliation.** Derived totals are checked against the documented model (per-computor
+   cap after the 10% operator fee). Violations — a computor above the cap, a negative amount,
+   or more than half the computors at zero — are attached to the report as warnings rather
+   than averaged away.
+
+Every report carries a `revenue_provenance` block naming the arbitrator, the tick range, the
+number of matched transfers, the computors paid and the totals. That block is what lets a
+third party locate a divergence instead of arguing about it.
+
+
+---
+
+## 6. Live findings, 2026-09-07 — what the RPC actually does
+
+Verified by direct pulls against `rpc.qubic.org` (network was at **epoch 229**). These
+correct several assumptions in §1–§5 and in CONCEPT v0.1. Where a claim below contradicts an
+earlier section, **this section is the verified one.**
+
+### 6.1 Endpoints — corrections
+
+| Claim | Verified result |
+|---|---|
+| `/v1/epochs/{e}/computors` returns >676 identities | **False.** Returns exactly **676** for epoch 228. The earlier note was a proxy artefact. |
+| That endpoint carries an epoch tick pointer | **False.** It returns only `{epoch, identities, signatureHex}` — no `initialTick`. |
+| `/identities/{id}/transfer-transactions` (v1) works | **False.** Does not resolve. The working form is **`/v2/identities/{id}/transfers`**. |
+| `/v1/ticks/{tick}/transfer-transactions` works | **False.** Returns **503**. Use `/v1/ticks/{tick}/transactions` or `/v2/ticks/{tick}/transactions`. |
+
+**Epoch tick windows** (needed for epoch-scoped revenue) come from two other endpoints:
+
+* first tick — `GET /v2/epochs/{e}/ticks?page=0&pageSize=1` → `ticks[0].tickNumber`
+* last tick  — `GET /v1/status` → `lastProcessedTicksPerEpoch[{e}]`
+
+Measured: epoch 228 = ticks **76 550 000 … 77 560 787**; epoch 229 starts at **77 700 000**.
+(Epoch 227's first tick is no longer served — the archive window is limited, so older epochs
+resolve as `partial` by design.)
+
+**Pagination limit.** `/v2/identities/{id}/transfers` rejects `pageSize > 250` with
+HTTP 400 (`"Invalid page size 500 (maximum is 250)"`). Implementations that request more get
+an error, not a truncated page — and code that treats an error as "no data" will silently
+report zero revenue. `qdr/revenue.py` pins `MAX_PAGE_SIZE = 250`.
+
+The endpoint **does** honour `startTick`/`endTick` (epoch-228 window: 4 249 records vs.
+10 000 unfiltered), and returns an explicit `pagination` block that should be used to detect
+exhaustion. Note that the unfiltered `totalRecords` caps at exactly 10 000 — an unscoped scan
+is therefore truncated by the server, which is precisely the under-counting failure mode
+described in CONCEPT §4.3.
+
+### 6.2 The blocker: per-computor revenue is not visible as a transfer
+
+CONCEPT v0.1 (and §2 above) assumed computor revenue arrives as an epoch-boundary transfer
+from an arbitrator identity to each computor identity. **Direct measurement contradicts
+this:**
+
+* `python scripts/ingest.py --verify-arbitrator` reports the bundled arbitrator paid
+  **0 of 676** computors — the constant is wrong, and no candidate was found.
+* Scanning ~4 500 transactions per computor across the full epoch-228 window found
+  **zero inbound payments**. What the computor identities actually emit is a stream of
+  `amount = 0` transactions to the null address with `inputType` 1/9 — these are
+  **solution submissions**, not payments.
+* `/v1/balances/{id}` nonetheless reports substantial inbound value per computor
+  (0.5–1.6 B QU, 70–570 incoming transfers), i.e. the value *is* real…
+* …but the transfers that carry it are **not returned** by
+  `/v2/identities/{id}/transfers`, not even when querying a ±2 000-tick window around the
+  `latestIncomingTransferTick` the balance endpoint itself reports. The corresponding tick
+  (`/v2/ticks/{t}/transactions`) contains only unrelated transactions.
+
+**Conclusion.** Computor revenue is credited by protocol-level emission at the epoch
+boundary, not by an ordinary transfer that the transaction endpoints expose. Deriving it by
+"tracking arbitrator payouts" is therefore **not implementable against the public RPC as it
+stands** — no amount of pagination fixes it, because the records are not there.
+
+### 6.3 Viable paths for revenue (to decide)
+
+1. **Balance deltas across the epoch boundary.** Snapshot each computor's balance at the
+   epoch's last tick and at the successor's, and treat the credited difference as revenue.
+   Self-contained and reproducible, but needs a historical balance read (`/v1/balances` is
+   current-state only), so it requires *our own* per-epoch snapshots — which the store
+   (CONCEPT §5.1) is exactly the right place for. **This is the recommended path**: it starts
+   producing correct data from the next epoch boundary forward, without waiting on anyone.
+2. **`qubic.li` Score API.** `api.qubic.li` exposes per-computor score/revenue but needs a
+   token (`/Score/Get` → 401 without one). Fastest route to *historical* numbers and the
+   natural cross-check — worth requesting a token.
+3. **Reconcile against an existing implementation.** Kevarms reports ~6 epochs of full
+   transaction tracking that converges. Since the public transfer endpoints do not expose
+   these payments, comparing method notes is the cheapest way to find out whether they use a
+   non-public source, a node-level feed, or balance deltas as in (1).
+
+Until one of these lands, the pipeline reports revenue-derived metrics with an explicit
+warning and marks the epoch `partial` rather than publishing zeros as if they were real.
+**Slot-based concentration and on-chain clustering are unaffected** — they do not depend on
+revenue and work against live data today.

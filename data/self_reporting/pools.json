@@ -1,7 +1,7 @@
 {
   "$schema": "./pools.schema.json",
   "note": "Self-reporting registry. Each pool/operator declares the computor identities it controls. computors lists are intentionally EMPTY until backed by a real self-report (a pool disclosure or a signed statement) — do not guess which slots belong to whom. Pools add/update their entries via pull request; git history is the audit trail.",
-  "updated": "2026-09-02",
+  "updated": "2026-09-07",
   "pools": [
     {
       "id": "qubic.li",
@@ -9,15 +9,17 @@
       "url": "https://qubic.li",
       "source": "public pool site",
       "verified": false,
-      "computors": []
+      "computors": [],
+      "status": "active"
     },
     {
       "id": "apool",
       "label": "Apool",
       "url": "https://apool.io",
-      "source": "public pool site",
+      "source": "public pool site; shutdown reported in #computor-operator 2026-09-03 (Vaintor)",
       "verified": false,
-      "computors": []
+      "computors": [],
+      "status": "winding_down"
     },
     {
       "id": "minerlab-solutions",
@@ -25,7 +27,8 @@
       "url": "",
       "source": "community disclosure",
       "verified": false,
-      "computors": []
+      "computors": [],
+      "status": "active"
     }
   ]
 }

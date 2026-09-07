@@ -1,9 +1,18 @@
 """Decentralization Report API.
 
 Serves the computed report as JSON for explorers to embed. Read-only, CORS-open,
-versioned under /v1. If the live pipeline can reach rpc.qubic.org it serves fresh
-data; otherwise it falls back to the static snapshots in api/sample so the service
-(and the dashboard) always have something to render.
+versioned under /v1.
+
+Reads go through the persistent store (CONCEPT §5.1), not a rebuild-per-request:
+
+  * a SEALED epoch is served straight from disk — immutable, no RPC call, and
+    available for *any* epoch we ever computed, not just the last snapshot;
+  * the LIVE (current) epoch is refreshed from the RPC when the stored copy is
+    older than QDR_LIVE_MAX_AGE seconds, so the running epoch is always current
+    without hammering the RPC once per request.
+
+If the store is empty (fresh install) and the RPC is unreachable, the bundled
+sample snapshots in api/sample are used as a cold-start fallback (`sample: true`).
 
 Run:
     pip install -r requirements.txt
@@ -14,23 +23,28 @@ Then e.g. GET http://localhost:8000/v1/report/latest
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 try:
-    from fastapi import FastAPI, HTTPException
+    from fastapi import FastAPI, HTTPException, Query
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import JSONResponse, RedirectResponse
+    from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
     from fastapi.staticfiles import StaticFiles
 except ImportError as e:  # pragma: no cover
     raise SystemExit("Install deps first: pip install -r requirements.txt") from e
 
 from qdr import __version__ as QDR_VERSION
-from qdr.client import CachedClient, derive_computor_revenue, QubicRPCError
-from qdr.report import build_epoch_report, build_timeseries, build_dashboard_bundle
+from qdr import pipeline
+from qdr.client import CachedClient, QubicRPCError
 from qdr.clustering import load_registry
+from qdr.store import STATUS_SEALED, Store
 
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLE = ROOT / "api" / "sample"
+
+# How stale the live epoch may get before a request triggers a recompute.
+LIVE_MAX_AGE_S = int(os.environ.get("QDR_LIVE_MAX_AGE", "300"))
 
 app = FastAPI(
     title="Qubic Decentralization Report API",
@@ -38,14 +52,19 @@ app = FastAPI(
     description=(
         "Read-only JSON API measuring how decentralized Qubic's 676 Computors are.\n\n"
         "CORS is open, everything is versioned under `/v1`, and every response names its "
-        "inputs so consumers can show provenance. When `rpc.qubic.org` is unreachable the "
-        "service falls back to bundled sample snapshots (`sample: true`).\n\n"
+        "inputs so consumers can show provenance.\n\n"
+        "**History is persistent.** Closed epochs are sealed and served from the store; "
+        "the current epoch is recomputed live. Each response carries `status` "
+        "(`sealed` / `partial` / `live`), `computed_at` and `code_version`.\n\n"
+        "**On-chain linkage is the primary attribution layer** — `unattributed` means the "
+        "ledger showed no link, not that no self-report exists. See `linkage_coverage` on "
+        "every report for how much of the network is actually resolved.\n\n"
         "The reference dashboard is served at [`/dashboard/`](/dashboard/)."
     ),
     openapi_tags=[
         {"name": "report", "description": "Per-epoch decentralization reports and snapshots."},
         {"name": "metrics", "description": "Concentration indices over time, for charts."},
-        {"name": "service", "description": "Index and health probes."},
+        {"name": "service", "description": "Index, health and store status."},
     ],
 )
 app.add_middleware(
@@ -55,28 +74,63 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_store: Store | None = None
+
+
+def get_store() -> Store:
+    """Lazily open the store; one connection for the process (WAL, thread-safe)."""
+    global _store
+    if _store is None:
+        _store = Store()
+    return _store
+
+
+def get_client() -> CachedClient | None:
+    """An RPC client, or None when the network is unavailable.
+
+    Returning None (instead of raising) is what lets every endpoint degrade to
+    store-only mode cleanly.
+    """
+    try:
+        return CachedClient()
+    except Exception:
+        return None
+
 
 def _sample(name: str) -> dict:
     p = SAMPLE / name
     if not p.exists():
         raise HTTPException(status_code=503, detail=f"no data available ({name})")
-    return json.loads(p.read_text())
+    data = json.loads(p.read_text(encoding="utf-8"))
+    data["sample"] = True
+    return data
 
 
-def _live_or_sample_latest() -> dict:
-    """Try to build a live 'latest' report; fall back to the sample snapshot."""
-    try:
-        client = CachedClient()
-        epoch = client.current_epoch()
-        return build_epoch_report(client, epoch)
-    except (QubicRPCError, Exception):
-        return _sample("report_latest.json")
+@app.on_event("shutdown")
+def _close_store() -> None:
+    global _store
+    if _store is not None:
+        _store.close()
+        _store = None
 
 
 @app.get("/", include_in_schema=False)
 def root():
     # convenience: send humans to the bundled dashboard, which will fetch the API
     return RedirectResponse(url="/dashboard/")
+
+
+@app.get("/how-it-works", include_in_schema=False)
+def how_it_works():
+    """Clean URL for the generated concept page (built by scripts/build_how_it_works.py)."""
+    page = DASHBOARD_DIR / "how-it-works.html"
+    if not page.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="how-it-works.html has not been generated; "
+                   "run: python scripts/build_how_it_works.py",
+        )
+    return FileResponse(page, media_type="text/html")
 
 
 @app.get("/api", tags=["service"], summary="Endpoint index")
@@ -87,13 +141,17 @@ def api_index():
         "endpoints": [
             "/v1/report/latest",
             "/v1/report/{epoch}",
+            "/v1/report/{epoch}/versions",
             "/v1/clusters/{epoch}",
+            "/v1/epochs",
             "/v1/metrics/timeseries",
             "/v1/report/{epoch}/snapshot.json",
             "/v1/dashboard-data",
+            "/v1/store",
             "/health",
         ],
         "dashboard": "/dashboard/",
+        "how_it_works": "/how-it-works",
         "docs": "/docs",
     }
 
@@ -102,41 +160,96 @@ def api_index():
 def health():
     """Liveness probe for Docker/orchestrators. Deliberately does no RPC call —
     it answers whether the process serves, not whether upstream data is fresh."""
-    return {"status": "ok", "version": app.version, "sample_available": SAMPLE.exists()}
+    try:
+        st = get_store().stats()
+        stored = st["reports"]
+    except Exception:
+        stored = 0
+    return {"status": "ok", "version": app.version,
+            "stored_reports": stored, "sample_available": SAMPLE.exists()}
+
+
+@app.get("/v1/store", tags=["service"], summary="What the store holds")
+def store_status():
+    """Store contents: how many epochs are sealed, partial, and on record.
+
+    This is the honest answer to "is this history complete?" — a partial count
+    above zero means some epochs could not be derived exhaustively yet.
+    """
+    return get_store().stats()
+
+
+@app.get("/v1/epochs", tags=["report"], summary="Epochs on record and their status")
+def epochs():
+    return {"epochs": get_store().list_epochs()}
 
 
 @app.get("/v1/report/latest", tags=["report"], summary="Report for the current epoch")
 def report_latest():
-    return _live_or_sample_latest()
+    """The running epoch, refreshed from the chain when the stored copy is stale."""
+    store = get_store()
+    rep = pipeline.get_report(store, None, client=get_client(),
+                              registry=load_registry(), max_live_age_s=LIVE_MAX_AGE_S)
+    if rep is None:
+        return _sample("report_latest.json")
+    return rep
 
 
 @app.get("/v1/report/{epoch}", tags=["report"], summary="Report for a specific epoch")
 def report_epoch(epoch: int):
-    try:
-        client = CachedClient()
-        return build_epoch_report(client, epoch)
-    except Exception:
+    """A sealed epoch comes from the store untouched; a live/missing one is built."""
+    store = get_store()
+    rep = pipeline.get_report(store, epoch, client=get_client(),
+                              registry=load_registry(), max_live_age_s=LIVE_MAX_AGE_S)
+    if rep is None:
         data = _sample("report_latest.json")
         if data.get("epoch") == epoch:
             return data
-        raise HTTPException(status_code=404, detail=f"epoch {epoch} not available offline")
+        raise HTTPException(status_code=404, detail=f"epoch {epoch} not available")
+    return rep
+
+
+@app.get("/v1/report/{epoch}/versions", tags=["report"],
+         summary="Every computation on record for an epoch")
+def report_versions(epoch: int):
+    """Why did this number change? Each recompute under a new code version is kept
+    beside the one it replaced, rather than overwriting it."""
+    versions = get_store().report_versions(epoch)
+    if not versions:
+        raise HTTPException(status_code=404, detail=f"no computations stored for epoch {epoch}")
+    return {"epoch": epoch, "versions": versions}
 
 
 @app.get("/v1/clusters/{epoch}", tags=["report"], summary="Operator clusters for an epoch")
 def clusters_epoch(epoch: int):
     rep = report_epoch(epoch)
-    return {"epoch": rep["epoch"], "clusters": rep["clusters"]}
+    return {
+        "epoch": rep["epoch"],
+        "status": rep.get("status"),
+        "linkage_coverage": rep.get("linkage_coverage"),
+        "declared_vs_detected": rep.get("declared_vs_detected"),
+        "clusters": rep["clusters"],
+    }
 
 
 @app.get("/v1/metrics/timeseries", tags=["metrics"], summary="Concentration indices across epochs")
-def metrics_timeseries():
-    try:
-        client = CachedClient()
-        epoch = client.current_epoch()
-        epochs = list(range(max(0, epoch - 8), epoch + 1))
-        return build_timeseries(client, epochs, registry=load_registry())
-    except Exception:
+def metrics_timeseries(
+    include_partial: bool = Query(
+        False, description="Include epochs whose revenue derivation was incomplete. "
+                           "Off by default: an under-counted epoch shows as a bogus "
+                           "decentralization spike."
+    ),
+    epochs: int = Query(
+        pipeline.DEFAULT_TIMESERIES_EPOCHS, ge=1, le=1000,
+        description="How many of the most recent epochs to return. History grows "
+                    "without bound, so the response is windowed by default."
+    ),
+):
+    store = get_store()
+    ts = pipeline.build_timeseries(store, include_partial=include_partial, limit=epochs)
+    if not ts["series"]:
         return _sample("timeseries.json")
+    return ts
 
 
 @app.get("/v1/report/{epoch}/snapshot.json", tags=["report"], summary="Frozen archivable snapshot")
@@ -150,21 +263,29 @@ DASHBOARD_DIR = ROOT / "dashboard"
 @app.get("/v1/dashboard-data", tags=["metrics"], summary="One bundle for the dashboard SPA")
 def dashboard_data():
     """One bundle for the SPA: latest report + timeseries + per-epoch bubbles."""
-    try:
-        client = CachedClient()
-        epoch = client.current_epoch()
-        epochs = list(range(max(0, epoch - 8), epoch + 1))
-        return build_dashboard_bundle(client, epochs, registry=load_registry())
-    except Exception:
-        # assemble from the static samples
-        rep = _sample("report_latest.json")
-        ts = _sample("timeseries.json")
+    store = get_store()
+    # keep the live epoch fresh before assembling the bundle
+    client = get_client()
+    if client is not None:
         try:
-            ec = _sample("epoch_clusters.json")
-        except HTTPException:
-            ec = {"epochs": []}
-        return {"report": rep, "timeseries": {"series": ts.get("series", [])},
-                "epoch_clusters": {"epochs": ec.get("epochs", [])}, "sample": True}
+            pipeline.get_report(store, None, client=client, registry=load_registry(),
+                                max_live_age_s=LIVE_MAX_AGE_S)
+        except (QubicRPCError, KeyError, ValueError):
+            pass
+
+    bundle = pipeline.build_dashboard_bundle(store)
+    if bundle.get("report"):
+        return bundle
+
+    # cold start: nothing computed yet -> bundled samples
+    rep = _sample("report_latest.json")
+    ts = _sample("timeseries.json")
+    try:
+        ec = _sample("epoch_clusters.json")
+    except HTTPException:
+        ec = {"epochs": []}
+    return {"report": rep, "timeseries": {"series": ts.get("series", [])},
+            "epoch_clusters": {"epochs": ec.get("epochs", [])}, "sample": True}
 
 
 # Serve the reference dashboard as static files at /dashboard (mounted last so the

@@ -3,8 +3,9 @@
   "epochs": [
     {
       "epoch": 220,
+      "status": "sealed",
       "nakamoto_one_third": 2,
-      "gini": 0.675668,
+      "gini": 0.714017,
       "bubbles": [
         {
           "id": "jetski",
@@ -42,18 +43,68 @@
           "revenue_share": 0.0666
         },
         {
+          "id": "linked:HIDDENPOOLWALLET",
+          "label": "Linked (HIDDENPO)",
+          "confidence": "linked",
+          "slots": 25,
+          "revenue_share": 0.037608
+        },
+        {
+          "id": "linked:SMALLWALLET27",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.003172
+        },
+        {
+          "id": "linked:SMALLWALLET33",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.003099
+        },
+        {
+          "id": "linked:SMALLWALLET35",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.003014
+        },
+        {
+          "id": "linked:SMALLWALLET31",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002963
+        },
+        {
+          "id": "linked:SMALLWALLET29",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002928
+        },
+        {
+          "id": "linked:SMALLWALLET25",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002798
+        },
+        {
           "id": "unattributed",
           "label": "Unattributed",
           "confidence": "unattributed",
-          "slots": 211,
-          "revenue_share": 0.313243
+          "slots": 174,
+          "revenue_share": 0.257661
         }
       ]
     },
     {
       "epoch": 221,
+      "status": "sealed",
       "nakamoto_one_third": 2,
-      "gini": 0.686626,
+      "gini": 0.732779,
       "bubbles": [
         {
           "id": "jetski",
@@ -91,18 +142,68 @@
           "revenue_share": 0.067609
         },
         {
+          "id": "linked:HIDDENPOOLWALLET",
+          "label": "Linked (HIDDENPO)",
+          "confidence": "linked",
+          "slots": 32,
+          "revenue_share": 0.047432
+        },
+        {
+          "id": "linked:SMALLWALLET36",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.00303
+        },
+        {
+          "id": "linked:SMALLWALLET38",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002994
+        },
+        {
+          "id": "linked:SMALLWALLET34",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002986
+        },
+        {
+          "id": "linked:SMALLWALLET42",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002933
+        },
+        {
+          "id": "linked:SMALLWALLET32",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002921
+        },
+        {
+          "id": "linked:SMALLWALLET40",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002763
+        },
+        {
           "id": "unattributed",
           "label": "Unattributed",
           "confidence": "unattributed",
-          "slots": 204,
-          "revenue_share": 0.301009
+          "slots": 160,
+          "revenue_share": 0.23595
         }
       ]
     },
     {
       "epoch": 222,
+      "status": "sealed",
       "nakamoto_one_third": 2,
-      "gini": 0.695821,
+      "gini": 0.749313,
       "bubbles": [
         {
           "id": "jetski",
@@ -140,18 +241,68 @@
           "revenue_share": 0.066229
         },
         {
+          "id": "linked:HIDDENPOOLWALLET",
+          "label": "Linked (HIDDENPO)",
+          "confidence": "linked",
+          "slots": 39,
+          "revenue_share": 0.057204
+        },
+        {
+          "id": "linked:SMALLWALLET47",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.003086
+        },
+        {
+          "id": "linked:SMALLWALLET45",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002981
+        },
+        {
+          "id": "linked:SMALLWALLET39",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002944
+        },
+        {
+          "id": "linked:SMALLWALLET49",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002934
+        },
+        {
+          "id": "linked:SMALLWALLET43",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002885
+        },
+        {
+          "id": "linked:SMALLWALLET41",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.00282
+        },
+        {
           "id": "unattributed",
           "label": "Unattributed",
           "confidence": "unattributed",
-          "slots": 197,
-          "revenue_share": 0.291042
+          "slots": 146,
+          "revenue_share": 0.216188
         }
       ]
     },
     {
       "epoch": 223,
+      "status": "sealed",
       "nakamoto_one_third": 2,
-      "gini": 0.705267,
+      "gini": 0.76726,
       "bubbles": [
         {
           "id": "jetski",
@@ -182,6 +333,13 @@
           "revenue_share": 0.088934
         },
         {
+          "id": "linked:HIDDENPOOLWALLET",
+          "label": "Linked (HIDDENPO)",
+          "confidence": "linked",
+          "slots": 46,
+          "revenue_share": 0.068407
+        },
+        {
           "id": "solutions",
           "label": "Solutions",
           "confidence": "declared",
@@ -189,18 +347,61 @@
           "revenue_share": 0.065954
         },
         {
+          "id": "linked:SMALLWALLET52",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.003095
+        },
+        {
+          "id": "linked:SMALLWALLET50",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.003049
+        },
+        {
+          "id": "linked:SMALLWALLET48",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002978
+        },
+        {
+          "id": "linked:SMALLWALLET46",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002956
+        },
+        {
+          "id": "linked:SMALLWALLET56",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002882
+        },
+        {
+          "id": "linked:SMALLWALLET54",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002818
+        },
+        {
           "id": "unattributed",
           "label": "Unattributed",
           "confidence": "unattributed",
-          "slots": 190,
-          "revenue_share": 0.281197
+          "slots": 132,
+          "revenue_share": 0.195011
         }
       ]
     },
     {
       "epoch": 224,
+      "status": "sealed",
       "nakamoto_one_third": 2,
-      "gini": 0.714272,
+      "gini": 0.783263,
       "bubbles": [
         {
           "id": "jetski",
@@ -231,6 +432,13 @@
           "revenue_share": 0.089303
         },
         {
+          "id": "linked:HIDDENPOOLWALLET",
+          "label": "Linked (HIDDENPO)",
+          "confidence": "linked",
+          "slots": 53,
+          "revenue_share": 0.078592
+        },
+        {
           "id": "solutions",
           "label": "Solutions",
           "confidence": "declared",
@@ -238,18 +446,61 @@
           "revenue_share": 0.066039
         },
         {
+          "id": "linked:SMALLWALLET61",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.003044
+        },
+        {
+          "id": "linked:SMALLWALLET57",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.003041
+        },
+        {
+          "id": "linked:SMALLWALLET55",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002972
+        },
+        {
+          "id": "linked:SMALLWALLET63",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.00292
+        },
+        {
+          "id": "linked:SMALLWALLET59",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002863
+        },
+        {
+          "id": "linked:SMALLWALLET53",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002809
+        },
+        {
           "id": "unattributed",
           "label": "Unattributed",
           "confidence": "unattributed",
-          "slots": 183,
-          "revenue_share": 0.271209
+          "slots": 118,
+          "revenue_share": 0.174968
         }
       ]
     },
     {
       "epoch": 225,
+      "status": "sealed",
       "nakamoto_one_third": 2,
-      "gini": 0.723998,
+      "gini": 0.799548,
       "bubbles": [
         {
           "id": "jetski",
@@ -273,6 +524,13 @@
           "revenue_share": 0.155112
         },
         {
+          "id": "linked:HIDDENPOOLWALLET",
+          "label": "Linked (HIDDENPO)",
+          "confidence": "linked",
+          "slots": 60,
+          "revenue_share": 0.088818
+        },
+        {
           "id": "minerlab",
           "label": "MinerLab",
           "confidence": "declared",
@@ -287,18 +545,61 @@
           "revenue_share": 0.066714
         },
         {
+          "id": "linked:SMALLWALLET60",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.003066
+        },
+        {
+          "id": "linked:SMALLWALLET66",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.003009
+        },
+        {
+          "id": "linked:SMALLWALLET70",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002983
+        },
+        {
+          "id": "linked:SMALLWALLET68",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002972
+        },
+        {
+          "id": "linked:SMALLWALLET64",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002888
+        },
+        {
+          "id": "linked:SMALLWALLET62",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002874
+        },
+        {
           "id": "unattributed",
           "label": "Unattributed",
           "confidence": "unattributed",
-          "slots": 176,
-          "revenue_share": 0.2604
+          "slots": 104,
+          "revenue_share": 0.153789
         }
       ]
     },
     {
       "epoch": 226,
+      "status": "sealed",
       "nakamoto_one_third": 2,
-      "gini": 0.733,
+      "gini": 0.814721,
       "bubbles": [
         {
           "id": "jetski",
@@ -322,6 +623,13 @@
           "revenue_share": 0.159215
         },
         {
+          "id": "linked:HIDDENPOOLWALLET",
+          "label": "Linked (HIDDENPO)",
+          "confidence": "linked",
+          "slots": 67,
+          "revenue_share": 0.099888
+        },
+        {
           "id": "minerlab",
           "label": "MinerLab",
           "confidence": "declared",
@@ -336,18 +644,61 @@
           "revenue_share": 0.067524
         },
         {
+          "id": "linked:SMALLWALLET73",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.003119
+        },
+        {
+          "id": "linked:SMALLWALLET75",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.003069
+        },
+        {
+          "id": "linked:SMALLWALLET71",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002966
+        },
+        {
+          "id": "linked:SMALLWALLET67",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002964
+        },
+        {
+          "id": "linked:SMALLWALLET77",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002953
+        },
+        {
+          "id": "linked:SMALLWALLET69",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.00292
+        },
+        {
           "id": "unattributed",
           "label": "Unattributed",
           "confidence": "unattributed",
-          "slots": 169,
-          "revenue_share": 0.250471
+          "slots": 90,
+          "revenue_share": 0.132592
         }
       ]
     },
     {
       "epoch": 227,
+      "status": "sealed",
       "nakamoto_one_third": 2,
-      "gini": 0.74225,
+      "gini": 0.827297,
       "bubbles": [
         {
           "id": "jetski",
@@ -371,6 +722,13 @@
           "revenue_share": 0.158114
         },
         {
+          "id": "linked:HIDDENPOOLWALLET",
+          "label": "Linked (HIDDENPO)",
+          "confidence": "linked",
+          "slots": 74,
+          "revenue_share": 0.110022
+        },
+        {
           "id": "minerlab",
           "label": "MinerLab",
           "confidence": "declared",
@@ -385,18 +743,61 @@
           "revenue_share": 0.066046
         },
         {
+          "id": "linked:SMALLWALLET80",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002976
+        },
+        {
+          "id": "linked:SMALLWALLET76",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002946
+        },
+        {
+          "id": "linked:SMALLWALLET78",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002946
+        },
+        {
+          "id": "linked:SMALLWALLET82",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002939
+        },
+        {
+          "id": "linked:SMALLWALLET84",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002929
+        },
+        {
+          "id": "linked:SMALLWALLET74",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002809
+        },
+        {
           "id": "unattributed",
           "label": "Unattributed",
           "confidence": "unattributed",
-          "slots": 162,
-          "revenue_share": 0.240066
+          "slots": 76,
+          "revenue_share": 0.112499
         }
       ]
     },
     {
       "epoch": 228,
+      "status": "live",
       "nakamoto_one_third": 2,
-      "gini": 0.752804,
+      "gini": 0.838249,
       "bubbles": [
         {
           "id": "jetski",
@@ -420,6 +821,13 @@
           "revenue_share": 0.153515
         },
         {
+          "id": "linked:HIDDENPOOLWALLET",
+          "label": "Linked (HIDDENPO)",
+          "confidence": "linked",
+          "slots": 81,
+          "revenue_share": 0.119617
+        },
+        {
           "id": "minerlab",
           "label": "MinerLab",
           "confidence": "declared",
@@ -434,11 +842,53 @@
           "revenue_share": 0.066443
         },
         {
+          "id": "linked:SMALLWALLET91",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.003066
+        },
+        {
+          "id": "linked:SMALLWALLET89",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002928
+        },
+        {
+          "id": "linked:SMALLWALLET87",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002921
+        },
+        {
+          "id": "linked:SMALLWALLET85",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002894
+        },
+        {
+          "id": "linked:SMALLWALLET81",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002859
+        },
+        {
+          "id": "linked:SMALLWALLET83",
+          "label": "Linked (SMALLWAL)",
+          "confidence": "linked",
+          "slots": 2,
+          "revenue_share": 0.002858
+        },
+        {
           "id": "unattributed",
           "label": "Unattributed",
           "confidence": "unattributed",
-          "slots": 155,
-          "revenue_share": 0.228767
+          "slots": 62,
+          "revenue_share": 0.091624
         }
       ]
     }

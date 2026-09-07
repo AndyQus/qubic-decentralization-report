@@ -11,7 +11,8 @@ Endpoints used (verified 2026-09-02, see docs/DATA_SOURCES.md):
   GET /identities/{identity}/transfer-transactions   (for revenue derivation)
 
 Per-computor revenue is NOT a single endpoint; it is derived from the arbitrator's
-epoch-boundary payouts to each computor identity (see derive_computor_revenue).
+epoch-boundary payouts to each computor identity — see qdr/revenue.py, which does
+the epoch-scoping, full pagination and reconciliation that derivation requires.
 
 Note: some hosted environments cannot reach rpc.qubic.org directly. The client is
 network-agnostic — point BASE_URL at any mirror, or load cached fixtures via
@@ -112,6 +113,17 @@ class CachedClient:
     def rich_list(self, page: int = 1, page_size: int = 100) -> dict:
         return self._get(f"/v1/rich-list?page={page}&pageSize={page_size}")
 
+    def balance(self, identity: str) -> dict:
+        """Current balance record for an identity.
+
+        Returns the `balance` object, which carries cumulative `incomingAmount` /
+        `outgoingAmount` counters alongside the spendable balance. Those counters
+        are what the balance-delta revenue method samples (see qdr/revenue.py) —
+        they are current-state only, so history has to be snapshotted by us.
+        """
+        data = self._get(f"/v1/balances/{identity}", use_cache=False)
+        return data["balance"] if isinstance(data, dict) and "balance" in data else data
+
     def identity_transfers(self, identity: str) -> list[dict]:
         data = self._get(f"/identities/{identity}/transfer-transactions")
         # shape may nest under "transferTransactionsPerTick" or similar; normalize best-effort
@@ -122,40 +134,6 @@ class CachedClient:
         return data if isinstance(data, list) else [data]
 
 
-# -- revenue derivation ----------------------------------------------------
-
-# The Arbitrator identity distributes computor revenue at each epoch boundary.
-# Confirm against a direct pull before trusting in production (see DATA_SOURCES §4).
-ARBITRATOR_IDENTITY = os.environ.get(
-    "QUBIC_ARBITRATOR",
-    "AFZPUAIYVPNUYGJRQVLUKOPPVLHAZQTGLYAAUUNBXFTVTAMSBKQBLEIEPCVJF",
-)
-
-
-def derive_computor_revenue(
-    client: CachedClient,
-    epoch: int,
-    arbitrator: str = ARBITRATOR_IDENTITY,
-) -> dict[str, int]:
-    """Derive per-computor revenue for an epoch from arbitrator payout transfers.
-
-    Returns {computor_identity: amount}. Amounts come from transfers whose source
-    is the arbitrator and whose destination is a computor identity of that epoch.
-
-    This is intentionally source-agnostic about the exact transfer JSON shape: it
-    looks for the common {sourceId,destId,amount} triples. Adapt field names once
-    verified against a live pull.
-    """
-    computors = set(client.computors(epoch))
-    revenue: dict[str, int] = {c: 0 for c in computors}
-    transfers = client.identity_transfers(arbitrator)
-    for entry in transfers:
-        # entry may itself wrap a per-tick list of transactions
-        txs = entry.get("transactions", [entry]) if isinstance(entry, dict) else []
-        for tx in txs:
-            src = tx.get("sourceId") or tx.get("source")
-            dst = tx.get("destId") or tx.get("destination")
-            amt = tx.get("amount", 0)
-            if src == arbitrator and dst in computors:
-                revenue[dst] = revenue.get(dst, 0) + int(amt)
-    return revenue
+# Revenue derivation lives in qdr/revenue.py — it needs epoch tick windows,
+# exhaustive pagination and reconciliation, which is more than a client concern.
+# The arbitrator constant moved there too (revenue.ARBITRATOR_IDENTITY).

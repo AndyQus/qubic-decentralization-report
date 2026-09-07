@@ -25,6 +25,13 @@
       "problemMatcher": []
     },
     {
+      "label": "Build how-it-works page",
+      "type": "shell",
+      "command": "python scripts/build_how_it_works.py",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
       "label": "Generate sample data",
       "type": "shell",
       "command": "python scripts/generate_sample.py",

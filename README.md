@@ -31,10 +31,14 @@ docker run -d -p 8000:8000 -v qdr-data:/data andyqus/qubic_decentralization_repo
 ```
   Data sources                Tool (this repo)                 Consumers
   ────────────                ────────────────                 ─────────
-  Qubic RPC 2.0        ┐
-  Pool self-reporting  ├──▶  ingest → analyze ──▶  JSON API ──▶  Explorers (embed it)
-  On-chain ledger      ┘        │                     │
-  (behavioral signals)          └── reference dashboard (own UI, animated + DE/EN + dark/light)
+  Qubic RPC 2.0        ┐                       ┌── store ──┐
+  Pool self-reporting  ├──▶ ingest → analyze ──▶│  sealed   │──▶ JSON API ──▶ Explorers
+  On-chain ledger      ┘        │               │  history  │        │        (embed it)
+  (behavioral signals)          │               └───────────┘        │
+                                └── reference dashboard (animated + DE/EN + dark/light)
+
+  Closed epochs are computed once and SEALED in the store; the running epoch is
+  recomputed live. History survives restarts and RPC outages.
 ```
 
 **We are the data provider.** The tool computes the report and serves it as an API.
@@ -48,9 +52,9 @@ views).
 docs/         Concept, data-source mapping, API spec
 api/          The service that serves the computed report (JSON)
 analysis/     Revenue-metrics and clustering engines
-data/         Cached raw pulls (data/raw) + the self-reporting registry
+data/         Cached raw pulls (data/raw), the store (qdr.db) + the self-reporting registry
 dashboard/    Reference front-end: charts, animations, DE/EN i18n, dark/light
-scripts/      CLI: build reports, validate the registry, verify the dashboard
+scripts/      CLI: ingest worker, build reports, validate the registry, verify the dashboard
 tests/        Metric + report unit tests
 Dockerfile, docker-compose.yaml, .env.example
 ```
@@ -70,14 +74,20 @@ Dockerfile, docker-compose.yaml, .env.example
 pip install -r requirements.txt
 
 # 1) run the tests
-python3 tests/test_metrics.py && python3 tests/test_report.py
+python3 -m pytest tests/ -q
 
 # 2) sample data (no live RPC needed) -> api/sample/ + dashboard/data.js
 python3 scripts/generate_sample.py
 
-# 2b) LIVE data (run where rpc.qubic.org is reachable) -> real snapshots
-python3 scripts/build_report.py --check     # test connectivity first
-python3 scripts/build_report.py             # last 9 epochs
+# 2b) LIVE data (run where rpc.qubic.org is reachable) -> store + snapshots
+python3 scripts/build_report.py --check         # test connectivity
+python3 scripts/ingest.py --snapshot            # snapshot balances (revenue input)
+python3 scripts/build_report.py                 # last 9 epochs into the store
+
+# 2c) keep it current (production): snapshot + refresh + seal epochs as they close
+python3 scripts/ingest.py --watch               # <- the one you actually run
+python3 scripts/ingest.py --status              # what the store holds
+python3 scripts/ingest.py --backfill 30         # fill history
 
 # 3) view it
 #   a) just open dashboard/index.html  (bundled sample data)
@@ -217,14 +227,58 @@ docker image prune -f              # remove the superseded image
 | `QUBIC_RPC_BASE` | Qubic RPC endpoint the report is built from | https://rpc.qubic.org |
 | `DATA_DIR` | Storage for the RPC cache (`$DATA_DIR/raw`) | (local: `data/raw`) |
 | `QDR_REGISTRY` | Path to the self-reporting registry | bundled `data/self_reporting/pools.json` |
-| `QUBIC_ARBITRATOR` | Arbitrator identity used for revenue derivation | built-in default |
+| `QUBIC_ARBITRATOR` | Arbitrator identity used for revenue derivation | built-in default (**unverified** — run `ingest.py --verify-arbitrator`) |
+| `QDR_DB` | Persistent store holding sealed epochs and history | `$DATA_DIR/qdr.db` (local: `data/qdr.db`) |
+| `QDR_LIVE_MAX_AGE` | Seconds the running epoch may be stale before a request recomputes it | `300` |
 
 ## Status
 
-Working end-to-end on sample data: research + core engine + API + dashboard are in place.
-Remaining for production: live RPC pulls (needs network access to `rpc.qubic.org`),
-filling the self-reporting registry with real pool declarations, and enriching the
-on-chain-linkage layer. See the roadmap in [`docs/CONCEPT.md`](docs/CONCEPT.md) §9.
+Working end-to-end on sample data: research + core engine + persistent store + API +
+dashboard are in place.
+
+**v0.2** reworked the analysis after community feedback (see
+[`docs/CONCEPT.md`](docs/CONCEPT.md) §7.1):
+
+- **On-chain linkage is now the primary attribution layer**, not an optional hook. Slots
+  are `unattributed` only when the ledger shows no link — every report states its
+  `linkage_coverage` so a reader can tell resolved from assumed.
+- **Full transaction tracking** for revenue: epoch-scoped tick windows, exhaustive
+  pagination, reconciliation, and a `revenue_provenance` block so a third party can locate
+  a divergence rather than argue about totals.
+- **Persistent history**: closed epochs are sealed in a SQLite store and served from disk;
+  only the running epoch touches the network. Recomputes under a new `code_version` land
+  beside the old ones instead of overwriting them.
+
+- **Forward-compatible by design**: no network constant is hardcoded (the UI language files
+  use `{slots}` / `{epoch}` placeholders filled from live data, so translations never go
+  stale), new pools need no code change, unknown confidence levels degrade honestly, and API
+  responses stay a constant size as history grows. Covered by `tests/test_forward_compat.py`.
+
+### Live-chain findings (2026-09-07)
+
+Running the new pipeline against `rpc.qubic.org` produced a substantive result, recorded in
+[`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md) §6:
+
+**Per-computor revenue is not exposed as a transfer.** The arbitrator identity carried since
+v0.1 paid **0 of 676** computors, and scanning ~4,500 transactions per computor across a full
+epoch found no inbound payments — what computor identities emit is `amount = 0` solution
+submissions. Yet `/v1/balances` shows 0.5–1.6 B QU inbound per computor. Revenue is credited
+by protocol-level emission, so "track the arbitrator's payouts" cannot work against the
+public RPC however completely it paginates.
+
+The pipeline therefore derives revenue from **balance deltas across the epoch boundary**
+(verified working live), using snapshots it takes itself — which is what the store is for.
+Run `scripts/ingest.py --watch` so boundaries are observed; a boundary that was never
+observed cannot be reconstructed later.
+
+Also corrected: the working transfer endpoint is `/v2/identities/{id}/transfers` (v1 does not
+resolve), it caps at **250 rows per page**, and epoch tick windows come from
+`/v2/epochs/{e}/ticks` + `/v1/status`.
+
+Remaining for production: a `qubic.li` Score API token for historical revenue, comparing
+methods with the independent implementation that reports converging numbers, and filling the
+self-reporting registry with real pool declarations. See the roadmap in
+[`docs/CONCEPT.md`](docs/CONCEPT.md) §9.
 
 ## Bounty
 

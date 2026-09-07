@@ -2,24 +2,67 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Qubic self-reporting registry",
   "type": "object",
-  "required": ["pools"],
+  "required": [
+    "pools"
+  ],
   "properties": {
-    "updated": { "type": "string", "description": "ISO date of last change" },
+    "updated": {
+      "type": "string",
+      "description": "ISO date of last change"
+    },
     "pools": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "label", "computors"],
+        "required": [
+          "id",
+          "label",
+          "computors"
+        ],
         "properties": {
-          "id": { "type": "string", "description": "stable operator slug" },
-          "label": { "type": "string" },
-          "url": { "type": "string" },
-          "source": { "type": "string", "description": "where the declaration comes from" },
-          "verified": { "type": "boolean", "description": "confirmed against an on-chain or signed proof" },
+          "id": {
+            "type": "string",
+            "description": "stable operator slug"
+          },
+          "label": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "description": "where the declaration comes from"
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "confirmed against an on-chain or signed proof"
+          },
           "computors": {
             "type": "array",
-            "items": { "type": "string", "pattern": "^[A-Z]{60}$" },
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z]{60}$"
+            },
             "description": "computor identities (60-char Qubic IDs) this operator declares"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "winding_down",
+              "closed"
+            ],
+            "default": "active",
+            "description": "operator lifecycle state; announced exits are recorded before the boundary (CONCEPT.md 4.4)"
+          },
+          "status_effective_epoch": {
+            "type": "integer",
+            "description": "epoch from which `status` applies — the boundary the transition diff must account for"
+          },
+          "successor_of": {
+            "type": "string",
+            "description": "operator id this entry succeeds, when a pool re-registers under a new identity"
           }
         }
       }

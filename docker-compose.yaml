@@ -9,6 +9,11 @@ services:
       - DATA_DIR=/data
       # Optional: mount your own registry over the bundled one, see volumes below.
       # - QDR_REGISTRY=/data/pools.json
+      # Persistent store: sealed epochs live here, so history survives restarts.
+      # Defaults to $DATA_DIR/qdr.db; set only to move it.
+      # - QDR_DB=/data/qdr.db
+      # How stale the running epoch may get before a request recomputes it.
+      - QDR_LIVE_MAX_AGE=${QDR_LIVE_MAX_AGE:-300}
     ports:
       - "8000:8000"
     volumes:

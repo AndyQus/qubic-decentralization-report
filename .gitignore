@@ -2,6 +2,12 @@
 data/raw/*
 !data/raw/.gitkeep
 
+# The persistent store is runtime state, not source: it belongs in the volume
+# (DATA_DIR), and each deployment builds its own history.
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
 # Node / build
 node_modules/
 dist/

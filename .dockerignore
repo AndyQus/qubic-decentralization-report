@@ -1,9 +1,16 @@
 .git
 .github
 .vscode
-docs
+# docs/CONCEPT*.md are build inputs for scripts/build_how_it_works.py
+docs/*
+!docs/CONCEPT.md
+!docs/CONCEPT.de.md
 tests
 data/raw
+# the store is runtime state and lives in the volume, never in the image
+data/*.db
+data/*.db-wal
+data/*.db-shm
 **/__pycache__
 **/*.pyc
 .venv
@@ -12,4 +19,6 @@ venv
 .env.*
 *.md
 !api/README.md
+!docs/CONCEPT.md
+!docs/CONCEPT.de.md
 scripts/shot_*.png
