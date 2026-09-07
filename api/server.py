@@ -46,6 +46,12 @@ SAMPLE = ROOT / "api" / "sample"
 # How stale the live epoch may get before a request triggers a recompute.
 LIVE_MAX_AGE_S = int(os.environ.get("QDR_LIVE_MAX_AGE", "300"))
 
+# Measured 2026-09-07: ~2.7 ticks/s. Epoch LENGTH varies a lot though (1.08M-2.29M
+# ticks over epochs 223-229), so the pulse derives the expected length from recent
+# history; this constant is only the fallback when that lookup fails.
+TYPICAL_EPOCH_TICKS = int(os.environ.get("QDR_EPOCH_TICKS", "1400000"))
+TICKS_PER_SECOND = 2.7
+
 app = FastAPI(
     title="Qubic Decentralization Report API",
     version=QDR_VERSION,
@@ -148,6 +154,7 @@ def api_index():
             "/v1/report/{epoch}/snapshot.json",
             "/v1/dashboard-data",
             "/v1/store",
+            "/v1/pulse",
             "/health",
         ],
         "dashboard": "/dashboard/",
@@ -167,6 +174,50 @@ def health():
         stored = 0
     return {"status": "ok", "version": app.version,
             "stored_reports": stored, "sample_available": SAMPLE.exists()}
+
+
+# The live pulse is cached for a few seconds: many dashboards may poll it, but
+# the upstream only moves ~2.7 ticks/s, so re-fetching per request is pointless.
+_pulse_cache: dict = {"at": 0.0, "data": None}
+PULSE_TTL_S = float(os.environ.get("QDR_PULSE_TTL", "10"))
+
+
+@app.get("/v1/pulse", tags=["service"], summary="Live state of the running epoch")
+def pulse():
+    """Fast-moving network state, for a live view that updates every few seconds.
+
+    Deliberately separate from the report: ticks advance continuously, but the
+    computor list, revenue and clustering only change at an epoch boundary
+    (~4.4 days). Poll this often; poll `/v1/report/latest` slowly.
+
+    `epoch_progress` is 0..1 through the current epoch, derived from the observed
+    epoch length, so a UI can show the epoch filling up.
+    """
+    import time as _t
+    now = _t.time()
+    if _pulse_cache["data"] and now - _pulse_cache["at"] < PULSE_TTL_S:
+        return _pulse_cache["data"]
+
+    client = get_client()
+    if client is None:
+        raise HTTPException(status_code=503, detail="RPC unreachable")
+    try:
+        data = client.network_pulse()
+    except Exception as e:
+        # serve the last good pulse rather than failing a polling dashboard
+        if _pulse_cache["data"]:
+            stale = dict(_pulse_cache["data"])
+            stale["stale"] = True
+            return stale
+        raise HTTPException(status_code=503, detail=f"pulse unavailable: {e}")
+
+    span = data["tick"] - data["initial_tick"]
+    expected = data.get("expected_epoch_ticks") or TYPICAL_EPOCH_TICKS
+    data["epoch_progress"] = round(min(max(span / expected, 0.0), 1.0), 4)
+    data["ticks_per_second"] = TICKS_PER_SECOND
+    data["served_at"] = int(now)
+    _pulse_cache.update(at=now, data=data)
+    return data
 
 
 @app.get("/v1/store", tags=["service"], summary="What the store holds")

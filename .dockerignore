@@ -7,6 +7,7 @@ docs/*
 !docs/CONCEPT.de.md
 tests
 data/raw
+data/bob
 # the store is runtime state and lives in the volume, never in the image
 data/*.db
 data/*.db-wal

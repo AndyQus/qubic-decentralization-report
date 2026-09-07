@@ -26,6 +26,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Iterable, Optional
 
+from .bob import BobClient, BobError, computor_revenue, payout_sources
 from .client import CachedClient, QubicRPCError
 
 # The arbitrator distributes computor revenue at each epoch boundary. This is
@@ -414,19 +415,76 @@ def verify_arbitrator(
     }
 
 
-def payout_linkage(result: RevenueResult) -> dict[str, str]:
-    """Derive on-chain linkage candidates from the payout graph.
+# Identities that say nothing about ownership when funds move through them: the
+# protocol's own emission source, and burn/null sinks. Grouping computors by these
+# would "link" the entire network into one cluster (or each slot to itself), which
+# is worse than no linkage at all because it looks like proof.
+_NULL_PREFIX = "A" * 20
+BURN_PREFIXES = ("AAAAAAAAAAAAAAAAAAAA", "BAAAAAAAAAAAAAAAAAAA", "DAAAAAAAAAAAAAAAAAAA")
 
-    Computor identities are paid by the arbitrator; where those funds go *next*
-    is what reveals shared ownership. This returns the first hop we can see from
-    the derived transfers — the pipeline extends it via forward tracing.
+
+def is_uninformative_identity(identity: Optional[str]) -> bool:
+    """True for null/burn/system addresses that cannot indicate a shared owner."""
+    if not identity:
+        return True
+    return any(identity.startswith(p) for p in BURN_PREFIXES)
+
+
+def payout_linkage(result: RevenueResult) -> dict[str, str]:
+    """Linkage candidates from an epoch's payout transfers.
+
+    Deliberately returns nothing for the epoch-payout leg itself. Measured on
+    epoch 228: all 676 computors are credited by the SAME null address, because
+    the credit is protocol emission — so "shares a payout source" is true of the
+    whole network and proves nothing. Mapping a computor to its own identity
+    (what this did before) is worse still: it claims 100% on-chain coverage while
+    proving no link at all.
+
+    Real linkage is where a computor forwards its revenue ON to — see
+    `forward_linkage()`, which needs the tick log rather than the end-epoch log.
     """
-    by_dest: dict[str, str] = {}
-    for t in result.transfers:
-        dest = t.get("destId")
-        if dest:
-            by_dest.setdefault(dest, dest)
-    return by_dest
+    return {}
+
+
+def forward_linkage(
+    transfers: list[dict],
+    computors: list[str],
+    min_amount: int = 0,
+) -> dict[str, str]:
+    """Group computors by where they forward their funds.
+
+    `transfers` are ordinary tick-log transfers (from Bob's `qubic_getLogs`). A
+    computor that sends to destination D is grouped under D; two computors paying
+    out to the same wallet are the same economic owner, which is the actual
+    anti-Sybil signal (CONCEPT §4.2 layer 1).
+
+    Only outgoing transfers count, null/burn destinations are ignored, and a
+    destination that every computor sends to (an exchange, a fee sink) is dropped
+    — a "cluster" of the whole network is noise, not a finding.
+    """
+    slots = set(computors)
+    dest_counts: dict[str, set[str]] = {}
+    for t in transfers:
+        src, dst = t.get("sourceId"), t.get("destId")
+        amt = int(t.get("amount") or 0)
+        if src not in slots or amt <= min_amount:
+            continue
+        if dst in slots or is_uninformative_identity(dst):
+            continue
+        dest_counts.setdefault(dst, set()).add(src)
+
+    if not dest_counts:
+        return {}
+
+    # A destination shared by almost everyone is infrastructure, not an owner.
+    ceiling = max(2, int(len(slots) * 0.5))
+    linkage: dict[str, str] = {}
+    for dst, senders in dest_counts.items():
+        if len(senders) < 2 or len(senders) > ceiling:
+            continue
+        for src in senders:
+            linkage.setdefault(src, dst)
+    return linkage
 
 
 # -- balance-delta derivation ----------------------------------------------
@@ -552,6 +610,78 @@ def revenue_from_balance_deltas(
         complete=complete,
         warnings=warnings,
         method="balance-delta",
+    )
+    result.warnings.extend(reconcile(result))
+    return result
+
+
+# -- Bob-node derivation (primary) -----------------------------------------
+#
+# A Bob node keeps the full event log, including the virtual end-epoch tick where
+# the protocol credits every computor. That is the only public source carrying
+# these payouts (DATA_SOURCES §6.2/§6.4). Verified against bob.qubic.li on
+# 2026-09-07: epoch 228 -> 676/676 computors paid, 178,477,462,349 QU, all from
+# the null address, with history available back to at least epoch 220.
+#
+# This supersedes both the arbitrator-payout method (impossible: the records are
+# not in the public RPC) and balance deltas (works, but only forward from the
+# first observed boundary). Balance deltas stay as the fallback for when no Bob
+# node is reachable.
+
+
+def revenue_from_bob(
+    epoch: int,
+    computors: list[str],
+    bob: Optional[BobClient] = None,
+    first_tick: Optional[int] = None,
+    last_tick: Optional[int] = None,
+) -> RevenueResult:
+    """Derive an epoch's revenue from a Bob node's end-epoch log.
+
+    A complete result means every computor of the epoch was found in the log —
+    that is the strong completeness signal the other methods cannot give us.
+    """
+    bob = bob or BobClient()
+    warnings: list[str] = []
+    try:
+        logs = bob.end_epoch_logs(epoch)
+    except BobError as e:
+        return RevenueResult(
+            epoch=epoch, revenue={c: 0 for c in computors}, complete=False,
+            method="bob-end-epoch", first_tick=first_tick, last_tick=last_tick,
+            warnings=[f"bob unavailable for epoch {epoch}: {e}"],
+        )
+
+    revenue, matched = computor_revenue(logs, computors)
+    paid = sum(1 for v in revenue.values() if v > 0)
+
+    if not matched:
+        warnings.append(
+            f"bob returned {len(logs)} entries for epoch {epoch} but no computor "
+            "payouts — the epoch is probably still running"
+        )
+    elif paid < len(computors):
+        warnings.append(f"bob paid {paid}/{len(computors)} computors")
+
+    sources = payout_sources(matched)
+    if len(sources) > 1:
+        # one source (the null address) means protocol emission; more than one
+        # would change what this number represents, so say so rather than sum it
+        warnings.append(f"payouts came from {len(sources)} distinct sources, not one")
+
+    # the end-epoch tick is the settlement point, and it is in the log itself
+    ticks = [t["tick"] for t in matched if t.get("tick")]
+    settle_tick = max(ticks) if ticks else None
+
+    result = RevenueResult(
+        epoch=epoch,
+        revenue=revenue,
+        first_tick=first_tick,
+        last_tick=last_tick if last_tick is not None else settle_tick,
+        complete=bool(matched) and paid == len(computors),
+        transfers=matched,
+        warnings=warnings,
+        method="bob-end-epoch",
     )
     result.warnings.extend(reconcile(result))
     return result

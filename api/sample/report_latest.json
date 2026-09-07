@@ -1,8 +1,8 @@
 {
   "epoch": 228,
   "status": "live",
-  "generated_at": 1788784629,
-  "code_version": "0.2.0",
+  "generated_at": 1788786832,
+  "code_version": "0.2.1",
   "reproducible": true,
   "data_sources": {
     "computors": "/v1/epochs/228/computors",

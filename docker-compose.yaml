@@ -14,6 +14,9 @@ services:
       # - QDR_DB=/data/qdr.db
       # How stale the running epoch may get before a request recomputes it.
       - QDR_LIVE_MAX_AGE=${QDR_LIVE_MAX_AGE:-300}
+      # Bob node: the source of the epoch-end computor payouts. Point this at your
+      # own node (RPC port 40420) instead of the public one where you can.
+      - QDR_BOB_URL=${QDR_BOB_URL:-https://bob.qubic.li/qubic}
     ports:
       - "8000:8000"
     volumes:

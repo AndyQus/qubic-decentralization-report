@@ -113,6 +113,70 @@ class CachedClient:
     def rich_list(self, page: int = 1, page_size: int = 100) -> dict:
         return self._get(f"/v1/rich-list?page={page}&pageSize={page_size}")
 
+    def epoch_lengths(self, count: int = 6) -> list[int]:
+        """Recent epoch lengths in ticks, newest last.
+
+        Measured lengths vary a lot (1.08M-2.29M ticks over epochs 223-229), so
+        anything showing "progress through the epoch" has to derive the expected
+        length from recent history rather than assume a constant.
+        """
+        try:
+            per_epoch = self._get("/v1/status", use_cache=False).get(
+                "lastProcessedTicksPerEpoch") or {}
+        except (QubicRPCError, AttributeError, TypeError):
+            return []
+        pairs = []
+        for k, v in per_epoch.items():
+            try:
+                pairs.append((int(k), int(v)))
+            except (TypeError, ValueError):
+                continue
+        pairs.sort()
+        lengths = [b[1] - a[1] for a, b in zip(pairs, pairs[1:]) if b[1] > a[1]]
+        return lengths[-count:]
+
+    def network_pulse(self) -> dict:
+        """Cheap, always-fresh view of the running epoch.
+
+        Two things move on very different timescales (measured 2026-09-07):
+        the tick advances ~2.7/s and epoch quality drifts continuously, while the
+        computor list, revenue and clustering only change at an epoch boundary —
+        roughly every 4.4 days. So the live view polls this, and the analysis
+        pipeline stays on its slow cadence instead of recomputing 676 operators
+        every minute for data that has not moved.
+        """
+        # latest-stats alone answers almost everything; tick-info only adds
+        # initialTick. A public endpoint hiccups now and then, so a pulse must
+        # survive one of the two failing rather than dropping the whole update.
+        stats = self.latest_stats()
+        try:
+            info = self.tick_info()
+        except QubicRPCError:
+            info = {}
+        first = int(info.get("initialTick") or 0)
+        tick = int(stats.get("currentTick") or info.get("tick") or 0)
+        return {
+            "epoch": int(stats.get("epoch") or info.get("epoch") or 0),
+            "tick": tick,
+            "initial_tick": first,
+            "ticks_in_epoch": int(stats.get("ticksInCurrentEpoch") or 0),
+            "empty_ticks": int(stats.get("emptyTicksInCurrentEpoch") or 0),
+            "tick_quality": float(stats.get("epochTickQuality") or 0.0),
+            "recent_tick_quality": float(stats.get("last10000TickQuality") or 0.0),
+            "active_addresses": int(stats.get("activeAddresses") or 0),
+            "circulating_supply": int(stats.get("circulatingSupply") or 0),
+            "burned_qus": int(stats.get("burnedQus") or 0),
+            "price": float(stats.get("price") or 0.0),
+            "market_cap": int(stats.get("marketCap") or 0),
+            "timestamp": int(stats.get("timestamp") or 0),
+            "expected_epoch_ticks": self._expected_epoch_ticks(),
+        }
+
+    def _expected_epoch_ticks(self, fallback: int = 1_400_000) -> int:
+        """Average of recent epoch lengths, for the progress indicator."""
+        lengths = self.epoch_lengths()
+        return int(sum(lengths) / len(lengths)) if lengths else fallback
+
     def balance(self, identity: str) -> dict:
         """Current balance record for an identity.
 

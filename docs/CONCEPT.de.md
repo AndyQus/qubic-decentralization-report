@@ -4,7 +4,7 @@
 Bericht „Wie dezentral ist Qubic?" erzeugt und ihn als API bereitstellt, die Explorer
 einbinden können.*
 
-Status: Entwurf v0.2 · Owner: (Qubic-Community-Projekt) · Sprachen: Diese Datei ist die
+Status: Entwurf v0.2.1 · Owner: (Qubic-Community-Projekt) · Sprachen: Diese Datei ist die
 deutsche Fassung; die englische liegt unter `docs/CONCEPT.md`. Beide werden synchron
 gehalten.
 
@@ -177,6 +177,38 @@ unabhängige Implementierungen auseinander. Die Ableitung ist deshalb exakt spez
 
 Wo eine Epoche nicht vollständig abgeleitet werden kann, wird sie als `partial` markiert und
 aus den Kennzahlen herausgehalten, statt so veröffentlicht zu werden, als wäre sie belastbar.
+
+**Welche Quelle konkret.** Die öffentliche RPC macht diese Auszahlungen überhaupt nicht
+sichtbar (DATA_SOURCES §6.2). Die Pipeline liest sie deshalb von einem **Bob-Node**, der das
+vollständige Event-Log vorhält — inklusive des virtuellen End-Epoch-Ticks, an dem das
+Protokoll jeden Computor gutschreibt:
+
+1. **Bobs End-Epoch-Log (primär).** Ein Aufruf pro Epoche liefert jeden Abrechnungstransfer.
+   Für Epoche 228 verifiziert: 676 von 676 Computors bezahlt, 178 477 462 349 QU, mit
+   Historie mindestens zurück bis Epoche 220 — der Report startet also mit echter Historie
+   statt bei null.
+2. **Balance-Deltas (Fallback).** Wo kein Bob-Node erreichbar ist, ist Revenue die Änderung
+   des kumulativen `incomingAmount` jedes Computors über die Epochengrenze, aus selbst
+   genommenen Snapshots. In sich geschlossen, aber erst ab der ersten beobachteten Grenze.
+
+`QDR_BOB_URL` auf den eigenen Node richten, statt von einem öffentlichen abzuhängen.
+
+### 4.3.1 Warum die Auszahlungsquelle nichts über Eigentum aussagt
+
+Alle 676 Auszahlungen kommen von **derselben Null-Adresse** — die Gutschrift ist
+Protokoll-Emission, keine Wallet. „Teilt sich eine Auszahlungsquelle" trifft also auf das
+gesamte Netz zu und darf *keine* Verknüpfung erzeugen. Und die ausgehenden Transfers der
+Computors sind durchweg 1 000 000 QU Burns an dieselbe Adresse. Beides sind Fallen für eine
+naive Payout-Graph-Implementierung (eine davon kostete uns einen Bug, der 100 % On-Chain-
+Abdeckung meldete und dabei nichts bewies). Die Verknüpfung ignoriert deshalb Null-/Burn-
+Ziele, verlangt mindestens zwei Computors mit gemeinsamem Ziel und verwirft Ziele, die mehr
+als die Hälfte des Netzes nutzt.
+
+**Aktueller Befund: Aus dem öffentlichen Ledger ist heute keine On-Chain-Verknüpfung zwischen
+Computors nachweisbar.** Der Report weist das als `linkage_coverage: 0` aus, statt
+Unabhängigkeit zu suggerieren, und das Dashboard warnt, dass der Nakamoto-Wert eine
+*Obergrenze* der Dezentralisierung ist. Self-Reports würden das schärfen — genau CFBs Punkt,
+Self-Reporting „to the fullest" zu nutzen.
 ### 4.4 Slot-Übergänge — Betreiber-Abgänge und Re-Identifikation überstehen
 
 Alle bisherigen Schichten beschreiben **eine einzelne Epoche**. Das genügt nicht für die
@@ -346,6 +378,27 @@ historische Epoche ausliefern, nicht nur den zuletzt gebauten Snapshot. Antworte
 `status` (`sealed` / `partial` / `live`), `computed_at` und `code_version` mit. Die statischen
 `api/sample/*.json` bleiben nur noch als Kaltstart-Fallback für eine frische Installation mit
 leerer Datenbank.
+
+---
+
+## 5.1.1 Zwei Takte: was live ist und was nicht
+
+Am Live-Netz gemessen: Der Tick läuft mit **~2,7/s**, während sich Computor-Liste, Revenue
+und Clustering **einmal pro Epoche** ändern — etwa alle 4,4 Tage (die Epochenlänge selbst
+schwankt, 1,08–2,29 Mio. Ticks). Die Analyse minütlich abzufragen würde RPC-Budget verbrennen,
+um vier Tage lang dieselbe Antwort zu erzeugen.
+
+Der Dienst läuft deshalb in zwei Takten:
+
+- **`/v1/pulse`** — Tick, Epochen-Fortschritt, Tick-Qualität, aktive Adressen. Günstig, ~10 s
+  gecacht, ausgelegt auf Abruf alle 15 s. Das ist es, was das Dashboard animiert.
+- **Der Report** — nur neu berechnet, wenn die Epoche wechselt (das Dashboard beobachtet die
+  Epochennummer des Pulses, statt den Report auf Verdacht zu pollen).
+
+Die laufende Epoche hat außerdem *noch kein Revenue* — es wird erst bei Epochenschluss
+gutgeschrieben. Der Hauptbericht ist deshalb die neueste **abgeschlossene** Epoche, die
+laufende erscheint separat im Live-Panel. Die laufende als Report zu zeigen hieße, einen
+leeren Bericht zu zeigen, während ein vollständiger direkt dahinter liegt.
 
 ---
 
@@ -570,10 +623,13 @@ Teil der Bewegung er nicht erklären konnte.
 4. **Clustering-Engine** — Registry + Verknüpfung implementiert (`qdr/clustering.py`); **On-chain-Verknüpfung vom optionalen Hook zur Standard-Zuordnungsebene befördert** (§4.2) ✅
 4d. **Slot-Übergänge** — Epochen-zu-Epochen-Identitäts-Diff, Nachfolger-Erkennung,
    Churn-Metrik mit explizit unerklärtem Anteil, `status`-Feld in der Registry (§4.4) 🔶
-4b. **Revenue-Ableitung** — implementiert und gegen die Live-Chain verifiziert.
-   Payout-Tracking erwies sich gegen die öffentliche RPC als unmöglich (Revenue ist
-   Protokoll-Emission, kein sichtbarer Transfer — DATA_SOURCES §6.2), daher Ableitung über
-   **Balance-Deltas über die Epochengrenze**. Erfordert den laufenden Snapshot-Worker ✅
+4b. **Revenue-Ableitung** — gelöst. Payout-Tracking erwies sich gegen die öffentliche RPC als
+   unmöglich (Revenue ist Protokoll-Emission, kein sichtbarer Transfer — DATA_SOURCES §6.2);
+   das **End-Epoch-Log eines Bob-Nodes** trägt sie, samt Historie. Epochen 225–228 aus
+   Live-Daten gebaut: jeweils 676/676 Computors bezahlt. Balance-Deltas bleiben der
+   Fallback ohne Bob (§4.3) ✅
+4b-ii. **Live-Ansicht** — `/v1/pulse` im schnellen Takt (Tick, Epochen-Fortschritt, Qualität)
+   neben dem Report im langsamen; Taktung gemessen statt geraten (§5.1.1) ✅
 4c. **Persistenz** — SQLite-Speicher, sealed vs. live, versionierte Neuberechnung (§5.1) ✅
 4e. **Zukunftsfestigkeit** — keine hartkodierten Netzkonstanten, datengetriebene i18n,
    begrenzte API-Fenster, getestet mit 100–2048 Slots (§5.2) ✅

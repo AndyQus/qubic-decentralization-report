@@ -443,8 +443,25 @@ class Store:
         rep["code_version"] = r["code_version"]
         return rep
 
-    def latest_report(self) -> Optional[dict]:
+    def latest_report(self, settled_only: bool = True) -> Optional[dict]:
+        """The newest report worth showing as *the* report.
+
+        Revenue is only credited when an epoch closes, so the running epoch has a
+        real computor list but zero revenue — presenting it as the headline would
+        show an empty report while a complete one sits right behind it. By default
+        this returns the newest SETTLED epoch; the running epoch is surfaced
+        separately (the live pulse), which is what it is good for.
+        """
         with self._lock:
+            if settled_only:
+                r = self._conn.execute(
+                    "SELECT epoch FROM reports WHERE status IN (?,?) "
+                    "ORDER BY epoch DESC, computed_at DESC LIMIT 1",
+                    (STATUS_SEALED, STATUS_PARTIAL),
+                ).fetchone()
+                if r:
+                    return self.get_report(r["epoch"])
+                # nothing settled yet (fresh install): fall through to whatever exists
             r = self._conn.execute(
                 "SELECT epoch FROM reports ORDER BY epoch DESC, computed_at DESC LIMIT 1"
             ).fetchone()

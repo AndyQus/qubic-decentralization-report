@@ -2,6 +2,7 @@
 
 Modules:
   client      RPC ingestion (Qubic RPC 2.0) with on-disk caching.
+  bob         Bob-node client: the epoch-end payouts the public RPC hides.
   revenue     Per-computor revenue: epoch-scoped, fully paginated, reconciled.
   metrics     Revenue concentration metrics (Gini, HHI, top-N, Nakamoto).
   clustering  On-chain linkage (primary) + self-reporting registry -> operators.
@@ -10,4 +11,4 @@ Modules:
   report      Stateless single-epoch assembly (tests / ad-hoc recomputation).
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"

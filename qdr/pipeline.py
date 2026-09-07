@@ -26,11 +26,13 @@ from .clustering import (
     load_registry,
 )
 from .metrics import summarize
+from .bob import BobClient, BobError, scan_tick_transfers
 from .revenue import (
     RevenueResult,
-    derive_epoch_revenue,
+    forward_linkage,
     payout_linkage,
     revenue_from_balance_deltas,
+    revenue_from_bob,
     snapshot_balances,
     _first_tick,
     _last_tick,
@@ -85,6 +87,7 @@ def compute_epoch(
     store: Store,
     epoch: int,
     registry: Optional[dict] = None,
+    bob: Optional[BobClient] = None,
 ) -> dict:
     """Derive, cluster and persist one epoch. Returns the report payload.
 
@@ -95,24 +98,41 @@ def compute_epoch(
     registry = registry if registry is not None else load_registry()
     computors = client.computors(epoch)
 
-    # Revenue: balance deltas are the method that actually works against the public
-    # RPC (DATA_SOURCES §6.2 — payouts are protocol emission, not exposed transfers).
-    # Payout tracking stays as a fallback so the code path is ready if a feed appears.
+    # Revenue, in order of preference (DATA_SOURCES §6):
+    #   1. a Bob node's end-epoch log — the only public source that carries the
+    #      protocol's computor payouts, and it has history;
+    #   2. balance deltas from our own snapshots — works without Bob, but only
+    #      forward from the first boundary we observed ourselves.
     first_tick = _first_tick(client, epoch)
     last_tick = _last_tick(client, epoch + 1) or _last_tick(client, epoch)
-    rev = revenue_from_balance_deltas(store, epoch, computors, first_tick, last_tick)
-    if not rev.complete and not store.snapshot_ticks(epoch):
-        # no snapshots at all for this epoch: try the payout route before giving up
-        alt = derive_epoch_revenue(client, epoch, computors=computors)
-        if alt.total > 0:
-            rev = alt
+
+    rev = None
+    if bob is not None:
+        rev = revenue_from_bob(epoch, computors, bob, first_tick, last_tick)
+    if rev is None or not rev.complete:
+        fallback = revenue_from_balance_deltas(store, epoch, computors, first_tick, last_tick)
+        # keep whichever actually resolved the epoch; prefer Bob on a tie since
+        # it identifies the settlement transfers, not just the net change
+        if rev is None or (fallback.complete and not rev.complete):
+            rev = fallback
     store.put_revenue(epoch, rev.revenue, rev.first_tick, rev.last_tick, rev.complete)
     if rev.transfers:
         store.put_transfers(epoch, rev.transfers)
 
-    # on-chain linkage is the default layer: accumulate the payout graph, then
-    # cluster against everything proven up to and including this epoch.
-    store.put_linkage(epoch, payout_linkage(rev), evidence="arbitrator payout destination")
+    # On-chain linkage is the default attribution layer. The epoch-payout leg
+    # itself proves nothing (every computor is credited by the same null address —
+    # it is protocol emission), so the signal is where a computor forwards its
+    # revenue ON to. That needs the tick log right after the payout settles.
+    linkage_found: dict[str, str] = {}
+    if bob is not None and rev.last_tick:
+        try:
+            moves = scan_tick_transfers(bob, int(rev.last_tick), int(rev.last_tick) + 20_000)
+            linkage_found = forward_linkage(moves, computors)
+        except (BobError, ValueError, TypeError):
+            linkage_found = {}
+    if linkage_found:
+        store.put_linkage(epoch, linkage_found,
+                          evidence="shared forward-payout destination")
     linkage = store.get_linkage(epoch)
 
     clusters = cluster_epoch(computors, rev.revenue, registry, linkage)
@@ -153,9 +173,10 @@ def snapshot_epoch_balances(client: CachedClient, store: Store,
             "tick_range": [ticks[0], ticks[-1]] if ticks else [None, None]}
 
 
-def update_live(client: CachedClient, store: Store, registry: Optional[dict] = None) -> dict:
+def update_live(client: CachedClient, store: Store, registry: Optional[dict] = None,
+                bob: Optional[BobClient] = None) -> dict:
     """Recompute the currently running epoch. Safe to call on every poll."""
-    return compute_epoch(client, store, client.current_epoch(), registry)
+    return compute_epoch(client, store, client.current_epoch(), registry, bob)
 
 
 def finalize(
@@ -164,6 +185,7 @@ def finalize(
     epoch: int,
     registry: Optional[dict] = None,
     force: bool = False,
+    bob: Optional[BobClient] = None,
 ) -> Optional[dict]:
     """Compute a closed epoch once and seal it.
 
@@ -173,7 +195,7 @@ def finalize(
     """
     if store.is_sealed(epoch) and not force:
         return None
-    return compute_epoch(client, store, epoch, registry)
+    return compute_epoch(client, store, epoch, registry, bob)
 
 
 def get_report(
@@ -182,6 +204,7 @@ def get_report(
     client: Optional[CachedClient] = None,
     registry: Optional[dict] = None,
     max_live_age_s: int = 300,
+    bob: Optional[BobClient] = None,
 ) -> Optional[dict]:
     """Serve an epoch's report: from the store when sealed, recomputed when live.
 
@@ -207,7 +230,7 @@ def get_report(
         stale = (not stored) or (int(time.time()) - int(stored.get("computed_at", 0)) > max_live_age_s)
         if stale:
             try:
-                return compute_epoch(client, store, epoch, registry)
+                return compute_epoch(client, store, epoch, registry, bob)
             except (QubicRPCError, KeyError, ValueError):
                 pass  # fall through to whatever we have stored
     return stored
@@ -219,6 +242,7 @@ def backfill(
     epochs: list[int],
     registry: Optional[dict] = None,
     force: bool = False,
+    bob: Optional[BobClient] = None,
 ) -> dict:
     """Fill history, or re-derive it under a new code version.
 
@@ -233,7 +257,7 @@ def backfill(
             skipped.append(e)
             continue
         try:
-            rep = compute_epoch(client, store, e, registry)
+            rep = compute_epoch(client, store, e, registry, bob)
             done.append({"epoch": e, "status": rep["status"],
                          "operators": rep["totals"]["operators"]})
         except (QubicRPCError, KeyError, ValueError) as err:
@@ -267,6 +291,8 @@ def build_timeseries(store: Store, epochs: Optional[list[int]] = None,
             continue
         if rep.get("status") == STATUS_PARTIAL and not include_partial:
             continue
+        if rep.get("status") == STATUS_LIVE and not rep["totals"].get("total_revenue"):
+            continue   # running epoch: revenue is only credited when it closes
         cbr = rep["concentration_by_revenue"]
         cov = rep.get("linkage_coverage", {})
         series.append({
@@ -287,11 +313,29 @@ def build_timeseries(store: Store, epochs: Optional[list[int]] = None,
     return {"generated_at": int(time.time()), "code_version": __version__, "series": series}
 
 
+# With an empty registry and no provable on-chain linkage, every slot is its own
+# unattributed cluster — 676 of them. Listing those individually is noise: they
+# are indistinguishable from each other and say nothing. Only clusters that
+# actually represent an operator are listed; the rest is one honest summary row.
+MAX_LISTED_CLUSTERS = 60
+
+
 def _bubbles(rep: dict) -> list[dict]:
-    """Per-operator bubbles for the animated map: named clusters in full, the
-    unattributed tail folded into one summary bubble."""
-    named = [c for c in rep["clusters"] if c["confidence"] != "unattributed"]
-    tail = [c for c in rep["clusters"] if c["confidence"] == "unattributed"]
+    """Per-operator bubbles for the animated map: real clusters in full, the
+    unattributed tail folded into one summary bubble.
+
+    A singleton unattributed slot is not an operator we identified — it is a slot
+    we could not attribute, so it belongs in the tail with the others rather than
+    as its own row.
+    """
+    def is_tail(c):
+        return c["confidence"] == "unattributed" and c["computor_count"] <= 1
+    named = [c for c in rep["clusters"] if not is_tail(c)][:MAX_LISTED_CLUSTERS]
+    tail = [c for c in rep["clusters"] if is_tail(c)]
+    # anything beyond the listing cap joins the tail rather than vanishing
+    listed_ids = {c["cluster_id"] for c in named}
+    tail = tail + [c for c in rep["clusters"]
+                   if not is_tail(c) and c["cluster_id"] not in listed_ids]
     total_rev = rep["totals"]["total_revenue"] or 1
     bubbles = [
         {"id": c["cluster_id"], "label": c["label"], "confidence": c["confidence"],
@@ -303,7 +347,8 @@ def _bubbles(rep: dict) -> list[dict]:
         tail_rev = sum(c["revenue"] for c in tail)
         bubbles.append({"id": "unattributed", "label": "Unattributed",
                         "confidence": "unattributed", "slots": tail_slots,
-                        "revenue_share": round(tail_rev / total_rev, 6)})
+                        "revenue_share": round(tail_rev / total_rev, 6),
+                        "operators": len(tail)})
     return bubbles
 
 

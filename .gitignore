@@ -2,6 +2,9 @@
 data/raw/*
 !data/raw/.gitkeep
 
+# Bob end-epoch log cache: large, refetchable, and per-deployment
+data/bob/
+
 # The persistent store is runtime state, not source: it belongs in the volume
 # (DATA_DIR), and each deployment builds its own history.
 data/*.db

@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from qdr import pipeline
+from qdr.bob import BOB_URL, BobClient, BobError
 from qdr.client import CachedClient, QubicRPCError
 from qdr.clustering import load_registry
 from qdr.revenue import ARBITRATOR_IDENTITY, verify_arbitrator
@@ -70,6 +71,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Qubic decentralization report ingest")
     ap.add_argument("--base", default=None, help="RPC base URL (default: env QUBIC_RPC_BASE)")
     ap.add_argument("--db", default=None, help="store path (default: env QDR_DB / data/qdr.db)")
+    ap.add_argument("--bob", default=None,
+                    help=f"Bob node RPC URL, the source of epoch payouts (default: {BOB_URL})")
+    ap.add_argument("--no-bob", action="store_true",
+                    help="skip Bob; fall back to balance-delta revenue only")
     ap.add_argument("--once", action="store_true", help="refresh the live epoch once")
     ap.add_argument("--watch", action="store_true", help="keep the live epoch fresh in a loop")
     ap.add_argument("--interval", type=int, default=300, help="watch interval seconds (default 300)")
@@ -120,6 +125,18 @@ def main() -> int:
             return 1
         return 0
 
+    # Bob carries the epoch-end payouts the public RPC does not expose, so it is
+    # the default revenue source; --no-bob falls back to balance deltas.
+    bob = None
+    if not args.no_bob:
+        bob = BobClient(url=args.bob) if args.bob else BobClient()
+        try:
+            be = bob.current_epoch()
+            print(f"bob connected · processing epoch {be}")
+        except BobError as e:
+            print(f"bob unavailable ({e}); falling back to balance deltas", file=sys.stderr)
+            bob = None
+
     registry = load_registry()
 
     if args.snapshot:
@@ -129,7 +146,7 @@ def main() -> int:
         return 0
 
     if args.epoch is not None:
-        rep = pipeline.compute_epoch(client, store, args.epoch, registry)
+        rep = pipeline.compute_epoch(client, store, args.epoch, registry, bob=bob)
         print(describe(rep))
         for w in rep.get("warnings", []):
             print(f"  ! {w}")
@@ -138,7 +155,7 @@ def main() -> int:
     if args.backfill:
         epochs = list(range(max(0, current - args.backfill + 1), current + 1))
         print(f"backfilling epochs {epochs[0]}..{epochs[-1]} (force={args.force}) …")
-        out = pipeline.backfill(client, store, epochs, registry, force=args.force)
+        out = pipeline.backfill(client, store, epochs, registry, force=args.force, bob=bob)
         for d in out["computed"]:
             print(f"  epoch {d['epoch']}: {d['status']}, {d['operators']} operators")
         if out["skipped_sealed"]:
@@ -154,13 +171,13 @@ def main() -> int:
                 # snapshot first: revenue for an epoch can only be derived if its
                 # boundary was actually observed, and a boundary is not replayable.
                 snap = pipeline.snapshot_epoch_balances(client, store)
-                rep = pipeline.update_live(client, store, registry)
+                rep = pipeline.update_live(client, store, registry, bob=bob)
                 print(f"[{time.strftime('%H:%M:%S')}] {describe(rep)} "
                       f"| snapshots {snap['snapshots']}")
                 # seal the epoch that just closed, if it is complete
                 prev = rep["epoch"] - 1
                 if not store.is_sealed(prev):
-                    done = pipeline.finalize(client, store, prev, registry)
+                    done = pipeline.finalize(client, store, prev, registry, bob=bob)
                     if done:
                         print(f"           finalized epoch {prev}: {done['status']}")
             except QubicRPCError as e:
@@ -175,7 +192,7 @@ def main() -> int:
                 return 0
 
     # default: --once
-    rep = pipeline.update_live(client, store, registry)
+    rep = pipeline.update_live(client, store, registry, bob=bob)
     print(describe(rep))
     for w in rep.get("warnings", []):
         print(f"  ! {w}")

@@ -81,7 +81,7 @@ python3 scripts/generate_sample.py
 
 # 2b) LIVE data (run where rpc.qubic.org is reachable) -> store + snapshots
 python3 scripts/build_report.py --check         # test connectivity
-python3 scripts/ingest.py --snapshot            # snapshot balances (revenue input)
+python3 scripts/ingest.py --snapshot            # balance snapshots (fallback revenue)
 python3 scripts/build_report.py                 # last 9 epochs into the store
 
 # 2c) keep it current (production): snapshot + refresh + seal epochs as they close
@@ -230,6 +230,8 @@ docker image prune -f              # remove the superseded image
 | `QUBIC_ARBITRATOR` | Arbitrator identity used for revenue derivation | built-in default (**unverified** — run `ingest.py --verify-arbitrator`) |
 | `QDR_DB` | Persistent store holding sealed epochs and history | `$DATA_DIR/qdr.db` (local: `data/qdr.db`) |
 | `QDR_LIVE_MAX_AGE` | Seconds the running epoch may be stale before a request recomputes it | `300` |
+| `QDR_BOB_URL` | Bob node carrying the epoch-end payouts (use your own node) | `https://bob.qubic.li/qubic` |
+| `QDR_PULSE_TTL` | Seconds the live pulse is cached | `10` |
 
 ## Status
 
@@ -256,29 +258,46 @@ dashboard are in place.
 
 ### Live-chain findings (2026-09-07)
 
-Running the new pipeline against `rpc.qubic.org` produced a substantive result, recorded in
-[`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md) §6:
+Running the pipeline against the live network produced substantive results, recorded in
+[`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md) §6–§8.
 
-**Per-computor revenue is not exposed as a transfer.** The arbitrator identity carried since
-v0.1 paid **0 of 676** computors, and scanning ~4,500 transactions per computor across a full
-epoch found no inbound payments — what computor identities emit is `amount = 0` solution
-submissions. Yet `/v1/balances` shows 0.5–1.6 B QU inbound per computor. Revenue is credited
-by protocol-level emission, so "track the arbitrator's payouts" cannot work against the
-public RPC however completely it paginates.
+**Per-computor revenue is not exposed by the public RPC.** The arbitrator identity carried
+since v0.1 paid **0 of 676** computors, and scanning ~4,500 transactions per computor across a
+full epoch found no inbound payments — what computor identities emit is `amount = 0` solution
+submissions. Revenue is credited by protocol-level emission, so "track the arbitrator's
+payouts" cannot work against the public RPC however completely it paginates.
 
-The pipeline therefore derives revenue from **balance deltas across the epoch boundary**
-(verified working live), using snapshots it takes itself — which is what the store is for.
-Run `scripts/ingest.py --watch` so boundaries are observed; a boundary that was never
-observed cannot be reconstructed later.
+**A Bob node has it.** Bob keeps the full event log, including the virtual end-epoch tick
+where the protocol credits every computor. One call per epoch
+(`qubic_getEndEpochLogs`) returns the settlement, and history reaches back to at least epoch
+220 — so the report starts with real history instead of from zero:
 
-Also corrected: the working transfer endpoint is `/v2/identities/{id}/transfers` (v1 does not
-resolve), it caps at **250 rows per page**, and epoch tick windows come from
-`/v2/epochs/{e}/ticks` + `/v1/status`.
+| Epoch | Computors paid | Revenue |
+|---|---|---|
+| 225 | 676 / 676 | 357,094,835,754 QU |
+| 226 | 676 / 676 | 360,401,553,845 QU |
+| 227 | 676 / 676 | 180,603,819,833 QU |
+| 228 | 676 / 676 | 178,477,462,349 QU |
 
-Remaining for production: a `qubic.li` Score API token for historical revenue, comparing
-methods with the independent implementation that reports converging numbers, and filling the
-self-reporting registry with real pool declarations. See the roadmap in
-[`docs/CONCEPT.md`](docs/CONCEPT.md) §9.
+Set `QDR_BOB_URL` to your own node (RPC port 40420) rather than depending on the public one.
+Balance deltas from our own snapshots remain the fallback when no Bob node is reachable.
+
+**No on-chain linkage between computors is currently provable.** All 676 payouts come from
+the same null address (protocol emission, not a wallet), and computors' own outgoing
+transfers are uniformly 1,000,000 QU burns to that address. Both are traps for a naive payout
+graph — one of them cost a bug that claimed 100% on-chain coverage while proving nothing. The
+report states `linkage_coverage: 0` rather than implying independence, and the dashboard
+warns that the Nakamoto figure is an **upper bound** on decentralization. Pool self-reports
+are what would sharpen it.
+
+**Update cadence, measured:** the tick advances ~2.7/s while the analysis changes once per
+epoch (~4.4 days, though epoch length varies 1.08M–2.29M ticks). Hence two clocks —
+`/v1/pulse` for the live view (poll every 15 s) and the report only when the epoch turns.
+
+Remaining for production: filling the self-reporting registry with real pool declarations
+(the single biggest lever now), a `qubic.li` Score API token as an independent cross-check,
+and comparing methods with the implementation that reports converging numbers. See the
+roadmap in [`docs/CONCEPT.md`](docs/CONCEPT.md) §9.
 
 ## Bounty
 

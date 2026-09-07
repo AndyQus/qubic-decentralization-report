@@ -4,7 +4,7 @@
 Qubic" report from self-reported and on-chain data, and exposes it as an API that
 explorers can embed.*
 
-Status: draft v0.2 · Owner: (Qubic community project) · Language: English (spec is for
+Status: draft v0.2.1 · Owner: (Qubic community project) · Language: English (spec is for
 the Qubic community / bounty reviewers; happy to keep a German copy alongside)
 
 ---
@@ -171,6 +171,35 @@ and made auditable rather than left to a best-effort scan:
 Where an epoch cannot be derived completely, it is marked `partial` and excluded from the
 headline metrics rather than published as if it were solid.
 
+**Which source, in practice.** The public RPC does not expose these payouts at all
+(DATA_SOURCES §6.2), so the pipeline reads them from a **Bob node**, which keeps the full
+event log including the virtual end-epoch tick where the protocol credits every computor:
+
+1. **Bob's end-epoch log (primary).** One call per epoch returns every settlement transfer.
+   Verified on epoch 228: 676 of 676 computors paid, 178 477 462 349 QU, with history back
+   to at least epoch 220 — so the report starts with real history rather than from zero.
+2. **Balance deltas (fallback).** Where no Bob node is reachable, revenue is the change in
+   each computor's cumulative `incomingAmount` across the epoch boundary, from snapshots we
+   take ourselves. Self-contained, but only forward from the first boundary observed.
+
+Point `QDR_BOB_URL` at your own node rather than depending on a public one.
+
+### 4.3.1 Why the payout source proves nothing about ownership
+
+All 676 payouts come from the **same null address** — the credit is protocol emission, not a
+wallet. So "shares a payout source" is true of the whole network and must produce *no*
+linkage; and computors' own outgoing transfers are uniformly 1 000 000 QU burns to that same
+address. Both facts are traps for a naive payout-graph implementation (one cost us a bug that
+reported 100 % on-chain coverage while proving nothing). Linkage therefore ignores null/burn
+destinations, needs at least two computors sharing a destination, and discards destinations
+used by more than half the network.
+
+**Current finding: no on-chain linkage between computors is provable from the public ledger
+today.** The report states that as `linkage_coverage: 0` instead of implying independence,
+and the dashboard warns that the Nakamoto figure is an *upper bound* on decentralization.
+Self-reports are what would sharpen it — which is exactly CFB's point about using
+self-reporting "to the fullest".
+
 ### 4.4 Slot transitions — surviving operator exits and re-identification
 
 Every layer above describes a **single epoch**. That is not enough for the question the
@@ -328,6 +357,27 @@ hammering the API all read the store; only the live epoch touches the network.
 epoch, not just whatever snapshot was last built. Responses carry `status` (`sealed` /
 `partial` / `live`), `computed_at`, and `code_version`. The static `api/sample/*.json`
 snapshots stay only as a cold-start fallback for a fresh install with an empty database.
+
+---
+
+## 5.1.1 Two clocks: what is live, and what is not
+
+Measured against the live network: the tick advances **~2.7/s**, while the computor list,
+revenue and clustering change **once per epoch** — roughly every 4.4 days (epoch length
+itself varies, 1.08M-2.29M ticks). Polling the analysis every minute would burn RPC budget to
+produce an identical answer for four days.
+
+So the service runs two cadences:
+
+- **`/v1/pulse`** — tick, epoch progress, tick quality, active addresses. Cheap, cached ~10 s,
+  designed to be polled every 15 s. This is what the dashboard animates.
+- **The report** — recomputed only when the epoch turns (the dashboard watches the pulse's
+  epoch number rather than polling the report on a timer).
+
+The running epoch also has *no revenue yet* — it is credited when the epoch closes — so the
+headline report is the newest **settled** epoch, with the running one shown separately as the
+live panel. Presenting the running epoch as the report would show an empty one while a
+complete one sat right behind it.
 
 ---
 
@@ -535,14 +585,19 @@ plainly how much of the movement it could not explain.
 2. **Data mapping** — endpoints confirmed against live RPC, documented in `docs/DATA_SOURCES.md` ✅
 3. **Revenue engine** — Gini / HHI / top-N / Nakamoto implemented + unit-tested (`qdr/metrics.py`) ✅
 4. **Clustering engine** — registry + linkage implemented (`qdr/clustering.py`); **on-chain linkage promoted from optional hook to the default attribution layer** (§4.2) ✅
-4b. **Revenue derivation** — implemented and verified against the live chain. Payout
-   tracking proved impossible against the public RPC (revenue is protocol emission, not an
-   exposed transfer — DATA_SOURCES §6.2), so revenue is derived from **balance deltas across
-   the epoch boundary**. Needs the snapshot worker running to observe boundaries ✅
+4b. **Revenue derivation** — solved. Payout tracking proved impossible against the public
+   RPC (revenue is protocol emission, not an exposed transfer — DATA_SOURCES §6.2); a **Bob
+   node's end-epoch log** carries it, with history. Epochs 225-228 built from live data:
+   676/676 computors paid each. Balance deltas remain the no-Bob fallback (§4.3) ✅
+4b-ii. **Live view** — `/v1/pulse` on a fast clock (tick, epoch progress, quality) beside the
+   report on its slow one, cadence measured rather than guessed (§5.1.1) ✅
 4c. **Persistence** — SQLite store, sealed vs. live epochs, versioned recompute (§5.1) ✅
 4d. **Forward compatibility** — no hardcoded network constants, data-driven i18n, bounded
    API windows, tested at 100–2048 slots (§5.2) ✅
-4e. **Slot transitions** — epoch-over-epoch identity diff, successor detection, churn metric
+4e. **On-chain linkage** — implemented, but currently finds nothing provable: computors only
+   receive protocol emission and burn fees (§4.3.1). Reported honestly as
+   `linkage_coverage: 0` rather than as independence 🔶
+4f. **Slot transitions** — epoch-over-epoch identity diff, successor detection, churn metric
    with an explicit unexplained share, registry `status` field (§4.4) 🔶
 5. **API** — FastAPI service serving the report (`api/server.py`), CORS-open, with a
    `/v1/dashboard-data` bundle and a static-sample fallback ✅

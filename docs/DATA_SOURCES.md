@@ -213,3 +213,75 @@ Until one of these lands, the pipeline reports revenue-derived metrics with an e
 warning and marks the epoch `partial` rather than publishing zeros as if they were real.
 **Slot-based concentration and on-chain clustering are unaffected** — they do not depend on
 revenue and work against live data today.
+
+## 7. Bob node — the source that carries computor revenue (2026-09-07)
+
+§6.2 established that the public RPC does not expose the epoch-end payouts. A **Bob node**
+does: it keeps the full event log, including the *virtual end-epoch tick* where the protocol
+credits every computor. This is now the pipeline's primary revenue source (`qdr/bob.py`).
+
+Endpoint: JSON-RPC 2.0 over POST. Public instance `https://bob.qubic.li/qubic`; point
+`QDR_BOB_URL` at your own node (RPC port 40420) to avoid depending on someone else's.
+Parameters are **positional** — `{"epoch": N}` is rejected with "Missing epoch parameter".
+
+| Method | Params | Returns |
+|---|---|---|
+| `qubic_status` | `[]` | `bobVersion`, `currentProcessingEpoch`, `currentIndexingTick`, `initialTick` |
+| `qubic_getEndEpochLogs` | `[epoch]` | every log event of the epoch's settlement tick |
+| `qubic_getLogs` | `[{"fromTick":a,"toTick":b}]` | per-tick log events (node caps the span at ~1000 ticks) |
+
+**Measured, epoch 228:** 6 288 entries, of which 4 628 `QU_TRANSFER`. Filtering to that
+epoch's computors gives **676 of 676 paid, 178 477 462 349 QU total** (per computor:
+min 88 955 033, median/max 268 701 925). History is served back to at least epoch 220, so
+the report does not have to start from zero.
+
+The two log shapes differ and both must be parsed: end-epoch entries nest the payload under
+`body` and spell the type `logTypename`; tick-log entries are flat with
+`source`/`destination` and `logTypeName`.
+
+### 7.1 Why the payout leg proves no ownership
+
+Every one of the 676 payouts comes from the **same null address**
+(`AAAA…FXIB`) — the credit is protocol emission, not a wallet paying out. Two consequences,
+both of which cost a real bug before they were understood:
+
+1. **"Shares a payout source" is true of the entire network**, so it must yield no linkage.
+   The first implementation instead mapped each computor to its own identity, which reported
+   *100 % on-chain coverage* while proving nothing at all.
+2. **Computors' own outgoing transfers are burns**: sampled over 6 000 ticks of epoch 229,
+   all 11 600 outgoing transfers were exactly 1 000 000 QU to the null address. A naive
+   forward-trace would fold all 676 into one cluster.
+
+`forward_linkage()` therefore ignores null/burn destinations, requires at least two distinct
+computors sharing a destination, and drops any destination used by more than half the
+network (infrastructure, not an operator).
+
+**Current finding: no on-chain linkage between computors is provable from the public
+ledger today** — computors receive from the protocol and burn fees, and nothing else is
+visible. The report states this as `linkage_coverage: 0` rather than implying independence,
+and the dashboard shows an explicit caveat that the Nakamoto figure is an *upper bound* on
+decentralization. Pool self-reports are what would sharpen it.
+
+### 7.2 Tick logs are not retained for closed epochs
+
+`qubic_getLogs` returns data for the **current** epoch only: probing epoch 228's settlement
+range returned 0 entries, while a current-epoch range returned 805 in 200 ticks. So forward
+linkage can only be built for the running epoch, as it happens — another reason the ingest
+worker has to keep running rather than being reconstructable after the fact.
+
+## 8. Update cadence — measured, not assumed
+
+| Quantity | Rate | Poll |
+|---|---|---|
+| Tick / tick quality | ~2.7 ticks/s (160/min) | 15-60 s |
+| Computor list, revenue, clustering | once per epoch | on epoch change |
+
+Epoch **length varies a lot** — 1.08M to 2.29M ticks across epochs 223-229 (~4.4 days at the
+measured rate), so anything showing "progress through the epoch" must derive the expected
+length from recent history (`/v1/status` → `lastProcessedTicksPerEpoch`) rather than assume a
+constant.
+
+This is why the service has two clocks: `/v1/pulse` (cheap, cached ~10 s, safe to poll every
+15 s) carries what actually moves, while the report is only recomputed when the epoch turns.
+Re-running a 676-operator analysis every minute would burn RPC budget to produce an identical
+answer for four days.

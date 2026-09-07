@@ -70,6 +70,62 @@
   .lead-more{margin:2px 0 0;font-size:13.5px}
   .lead-more a{font-weight:600}
 
+  /* ---- Live epoch panel -------------------------------------------------
+     Styled after the Dividends overview (which follows Spotlight): an epoch
+     band opens the block — badge, a rule that fades out, and the state on the
+     right — over a card whose accent colour drives border, wash and glow from
+     one token, so the three cannot drift apart. */
+  .live{ --live-edge:var(--accent);
+    margin-top:18px; border:1px solid color-mix(in srgb,var(--live-edge) 45%,var(--border));
+    border-radius:var(--radius); padding:14px 16px 16px;
+    background:linear-gradient(160deg,color-mix(in srgb,var(--live-edge) 10%,transparent),
+      transparent 55%),var(--surface);
+    box-shadow:var(--shadow)}
+  .live[hidden]{display:none}
+  .live-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .live-epoch{font-size:.8125rem;font-weight:700;font-variant-numeric:tabular-nums;
+    letter-spacing:.02em;padding:.15rem .5rem;border-radius:6px;white-space:nowrap;
+    color:var(--live-edge);background:color-mix(in srgb,var(--live-edge) 16%,transparent)}
+  .live-rule{flex:1 1 auto;height:1px;min-width:20px;
+    background:linear-gradient(90deg,color-mix(in srgb,var(--live-edge) 55%,transparent),transparent)}
+  .live-pulse{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;
+    font-size:.75rem;font-weight:600;color:var(--live-edge)}
+  .live-pulse i{width:8px;height:8px;border-radius:50%;background:var(--live-edge);
+    box-shadow:0 0 0 0 color-mix(in srgb,var(--live-edge) 70%,transparent);
+    animation:livepulse 2s ease-out infinite}
+  /* The dot pulses only while data is actually arriving; a stale feed freezes it,
+     so "live" is never claimed for a number that stopped moving. */
+  .live.stale{--live-edge:var(--warn)}
+  .live.stale .live-pulse i{animation:none}
+  @keyframes livepulse{
+    0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--live-edge) 60%,transparent)}
+    70%{box-shadow:0 0 0 9px transparent} 100%{box-shadow:0 0 0 0 transparent}}
+  @media (prefers-reduced-motion:reduce){ .live-pulse i{animation:none} }
+
+  .live-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+  .live-cell{min-width:0}
+  .lc-label{font-size:11.5px;color:var(--muted);font-weight:600}
+  .lc-val{font-size:22px;font-weight:700;margin-top:4px;letter-spacing:-.3px}
+  .num{font-variant-numeric:tabular-nums}
+  .lc-sub{font-size:11px;color:var(--faint);margin-top:2px}
+  /* The tick figure flashes on change — the one number that visibly advances. */
+  .lc-val.bump{animation:bump .5s ease-out}
+  @keyframes bump{0%{color:var(--accent)}100%{color:inherit}}
+  @media (prefers-reduced-motion:reduce){ .lc-val.bump{animation:none} }
+  .lc-bar{height:6px;border-radius:99px;margin-top:7px;overflow:hidden;
+    background:color-mix(in srgb,var(--muted) 22%,transparent)}
+  .lc-fill{height:100%;width:0;border-radius:99px;background:var(--live-edge);
+    transition:width .8s cubic-bezier(.4,.05,.2,1)}
+
+  /* Attribution caveat. With no declarations and no provable linkage, a high
+     Nakamoto number means "we could not link them", not "they are independent" —
+     the page has to say so rather than let the figure be misread. */
+  .coverage-note{margin-top:14px;padding:10px 13px;border-radius:10px;font-size:12.5px;
+    color:var(--warn-fg);background:var(--warn-bg);
+    border:1px solid color-mix(in srgb,var(--warn) 32%,transparent)}
+  .coverage-note[hidden]{display:none}
+  .coverage-note b{color:var(--warn)}
+
   /* kpi grid */
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:14px;margin:20px 0 8px}
   .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:15px 16px;
@@ -199,6 +255,40 @@
   <p class="lead" data-i18n="lead">Qubic runs on {slots} computor slots. On paper that looks like {slots} independent operators — but a single operator can hold many slots at once. This report groups slots by operator (self-reported first, on-chain-linked next) and measures how concentrated revenue and control really are.</p>
 
   <p class="lead-more"><a href="./how-it-works.html" data-i18n="howItWorksLong">How this report works &rarr;</a></p>
+
+  <!-- Live epoch: the only part of the report that moves between epoch
+       boundaries, so it gets its own panel and its own (fast) refresh. -->
+  <section class="live" id="live" hidden>
+    <div class="live-head">
+      <span class="live-epoch" id="live-epoch">&ndash;</span>
+      <span class="live-rule"></span>
+      <span class="live-pulse" id="live-pulse" title="live"><i></i><span data-i18n="liveNow">live</span></span>
+    </div>
+    <div class="live-grid">
+      <div class="live-cell">
+        <div class="lc-label" data-i18n="liveTick">Tick</div>
+        <div class="lc-val num" id="live-tick">&ndash;</div>
+        <div class="lc-sub" id="live-tick-sub">&nbsp;</div>
+      </div>
+      <div class="live-cell">
+        <div class="lc-label" data-i18n="liveProgress">Epoch progress</div>
+        <div class="lc-val num" id="live-progress">&ndash;</div>
+        <div class="lc-bar"><div class="lc-fill" id="live-fill"></div></div>
+      </div>
+      <div class="live-cell">
+        <div class="lc-label" data-i18n="liveQuality">Tick quality</div>
+        <div class="lc-val num" id="live-quality">&ndash;</div>
+        <div class="lc-sub" id="live-quality-sub">&nbsp;</div>
+      </div>
+      <div class="live-cell">
+        <div class="lc-label" data-i18n="liveAddresses">Active addresses</div>
+        <div class="lc-val num" id="live-addr">&ndash;</div>
+        <div class="lc-sub" id="live-price">&nbsp;</div>
+      </div>
+    </div>
+  </section>
+
+  <div id="coverage-note" class="coverage-note" hidden></div>
 
   <!-- KPIs -->
   <div class="kpis" id="kpis"></div>
@@ -339,6 +429,14 @@
       kDeclared:"Declared operators", kDeclaredSub:"self-reported",
       kCoverage:"On-chain linked", kCoverageSub:"slots resolved via payout graph",
       confirmed:"Declared + on-chain confirmed", flagged:"Flagged (behavioral)",
+      liveNow:"live", liveTick:"Tick", liveProgress:"Epoch progress",
+      liveQuality:"Tick quality", liveAddresses:"Active addresses",
+      liveRecent:"last 10k:", perSecond:"ticks/s",
+      coverageWarnTitle:"Attribution is thin.",
+      coverageWarnBody:"Only {pct}% of slots are attributed to an operator, so the "+
+        "operator count and Nakamoto coefficient below read as an upper bound on "+
+        "decentralization — unlinked slots are counted as separate operators, which they "+
+        "may not be. Pool self-reports would sharpen this.",
       statusLive:"Live — current epoch, refreshed continuously",
       statusSealed:"Sealed — closed epoch, final",
       statusPartial:"Partial — incomplete derivation, excluded from trends",
@@ -372,6 +470,14 @@
       kDeclared:"Deklarierte Betreiber", kDeclaredSub:"self-reported",
       kCoverage:"On-Chain verknüpft", kCoverageSub:"Slots über Payout-Graph aufgelöst",
       confirmed:"Deklariert + on-chain bestätigt", flagged:"Markiert (Verhalten)",
+      liveNow:"live", liveTick:"Tick", liveProgress:"Epochen-Fortschritt",
+      liveQuality:"Tick-Qualität", liveAddresses:"Aktive Adressen",
+      liveRecent:"letzte 10k:", perSecond:"Ticks/s",
+      coverageWarnTitle:"Zuordnung ist dünn.",
+      coverageWarnBody:"Nur {pct}% der Slots sind einem Betreiber zugeordnet. Betreiberzahl "+
+        "und Nakamoto-Koeffizient unten sind daher eine Obergrenze der Dezentralisierung "+
+        "— nicht verknüpfte Slots zählen als eigene Betreiber, was sie nicht sein müssen. "+
+        "Self-Reports der Pools würden das schärfen.",
       statusLive:"Live — laufende Epoche, wird ständig aktualisiert",
       statusSealed:"Versiegelt — abgeschlossene Epoche, final",
       statusPartial:"Unvollständig — Ableitung lückenhaft, nicht im Trend",
@@ -483,6 +589,17 @@
     const key=CONF_I18N[c];
     if(key) return t(key);
     return c ? String(c) : t("unattributed");   // show the raw level, do not fake one
+  }
+
+  /* ---------- attribution caveat ---------- */
+  function renderCoverageNote(){
+    const el=document.getElementById("coverage-note");
+    const s=series[idx]||{};
+    const att=s.attributed_share;
+    if(att==null || att>=0.25){ el.hidden=true; return; }
+    el.hidden=false;
+    el.innerHTML="<b>"+escapeHtml(t("coverageWarnTitle"))+"</b> "+
+      escapeHtml(t("coverageWarnBody",{pct:(att*100).toFixed(0)}));
   }
 
   /* ---------- KPIs ---------- */
@@ -634,6 +751,7 @@
     document.getElementById("ep-cur").textContent=ep;
     document.getElementById("hdr-epoch").textContent=ep;
     renderI18nText();   // interpolated strings depend on the selected epoch's data
+    renderCoverageNote();
     renderKpis(); renderTreemap(); renderTable(); drawChart();
   }
 
@@ -680,6 +798,90 @@
     setTimeout(renderTreemap,60); // ensure layout width is measured
   }
 
+  /* ---------- live epoch ----------
+     Two clocks, because the underlying data moves at two very different speeds
+     (measured against the live network): the tick advances ~2.7/s, while the
+     computor list, revenue and clustering only change at an epoch boundary —
+     every ~4.4 days. So the pulse is polled every 15 s and the report is left
+     alone; re-running a 676-operator analysis every minute would be pure waste.
+     Polling pauses entirely while the tab is hidden. */
+  const PULSE_MS = 15000;
+  const REPORT_RECHECK_MS = 10 * 60 * 1000;
+  let pulseTimer=null, reportTimer=null, lastTick=null, lastPulseAt=0, pulseEpoch=null;
+
+  function fmtPrice(p){
+    if(!p) return "";
+    return p < 0.01 ? p.toExponential(2) : p.toFixed(4);
+  }
+
+  function renderPulse(d){
+    const live=document.getElementById("live");
+    if(!d || !d.epoch){ live.hidden=true; return; }
+    live.hidden=false;
+    pulseEpoch=d.epoch;
+    live.classList.toggle("stale", !!d.stale);
+
+    document.getElementById("live-epoch").textContent=t("epochLabel")+" "+d.epoch;
+
+    const tickEl=document.getElementById("live-tick");
+    tickEl.textContent=fmtInt(d.tick);
+    if(lastTick!=null && d.tick>lastTick){
+      // restart the flash: removing and re-adding in one frame does nothing
+      tickEl.classList.remove("bump"); void tickEl.offsetWidth; tickEl.classList.add("bump");
+      const dt=(Date.now()-lastPulseAt)/1000;
+      if(dt>0) document.getElementById("live-tick-sub").textContent=
+        "+"+fmtInt(d.tick-lastTick)+" · "+((d.tick-lastTick)/dt).toFixed(1)+" "+t("perSecond");
+    }
+    lastTick=d.tick; lastPulseAt=Date.now();
+
+    const pct=(d.epoch_progress||0)*100;
+    document.getElementById("live-progress").textContent=pct.toFixed(1)+"%";
+    document.getElementById("live-fill").style.width=Math.min(pct,100)+"%";
+
+    document.getElementById("live-quality").textContent=
+      (d.tick_quality!=null? d.tick_quality.toFixed(2)+"%" : "–");
+    document.getElementById("live-quality-sub").textContent=
+      d.recent_tick_quality? t("liveRecent")+" "+d.recent_tick_quality.toFixed(2)+"%" : " ";
+
+    document.getElementById("live-addr").textContent=fmtInt(d.active_addresses);
+    document.getElementById("live-price").textContent=
+      d.price? "$"+fmtPrice(d.price) : " ";
+  }
+
+  function pollPulse(){
+    if(apiBase==null) return;                      // no API (file:// with bundled data)
+    fetch(apiBase.replace(/\/$/,"")+"/v1/pulse")
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{ if(d) renderPulse(d); })
+      .catch(()=>{ document.getElementById("live").classList.add("stale"); });
+  }
+
+  /* The analysis only changes at an epoch boundary. Rather than re-fetching it on
+     a timer for nothing, watch the pulse's epoch: when it moves past the report's,
+     a new epoch has started and the report is genuinely worth refetching. */
+  function recheckReport(){
+    if(apiBase==null) return;
+    if(pulseEpoch!=null && report && report.epoch!=null && pulseEpoch<=report.epoch
+       && report.status!=="live") return;          // nothing new to fetch
+    fetch(apiBase.replace(/\/$/,"")+"/v1/dashboard-data")
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{ if(d && d.report){ loadData(d); renderStatusBadge(); renderAll(); } })
+      .catch(()=>{});
+  }
+
+  function startLive(){
+    if(apiBase==null) return;
+    pollPulse();
+    pulseTimer=setInterval(pollPulse, PULSE_MS);
+    reportTimer=setInterval(recheckReport, REPORT_RECHECK_MS);
+  }
+  // A hidden tab should not keep polling; resume immediately when it comes back.
+  document.addEventListener("visibilitychange", ()=>{
+    const hidden=document.hidden;
+    if(hidden){ clearInterval(pulseTimer); clearInterval(reportTimer); pulseTimer=reportTimer=null; }
+    else if(!pulseTimer){ startLive(); }
+  });
+
   // Data source:
   //   ?api=<base> or window.QDR_API  -> fetch that API
   //   served over http(s) with neither -> fetch same-origin (the API serves this page)
@@ -690,7 +892,7 @@
   if(apiBase!=null){
     fetch(apiBase.replace(/\/$/,"")+"/v1/dashboard-data")
       .then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); })
-      .then(d=>{ loadData(d); startUI(); })
+      .then(d=>{ loadData(d); startUI(); startLive(); })
       .catch(()=>{ loadData(window.QDR_DATA||{}); startUI(); }); // fall back to bundled data
   } else {
     loadData(window.QDR_DATA||{}); startUI();
