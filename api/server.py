@@ -181,15 +181,24 @@ def health():
     """
     store_error = None
     stored = 0
+    degraded_store = False
     try:
-        stored = get_store().stats()["reports"]
+        store = get_store()
+        stored = store.stats()["reports"]
+        degraded_store = getattr(store, "is_degraded", False)
     except Exception as e:                      # noqa: BLE001 - reported, not raised
         store_error = f"{type(e).__name__}: {e}"
-    body = {"status": "ok" if store_error is None else "degraded",
+    ok = store_error is None and not degraded_store
+    body = {"status": "ok" if ok else "degraded",
             "version": app.version,
             "stored_reports": stored}
     if store_error:
         body["store_error"] = store_error
+    if degraded_store:
+        # Serving from a throwaway path is not a healthy state, even though every
+        # endpoint answers: history dies on restart. Say so where orchestrators look.
+        body["store_error"] = ("data volume unusable; running on a temporary "
+                               "in-container store — see /v1/diagnostics")
     return body
 
 
@@ -200,6 +209,11 @@ def _probe_store() -> dict:
     except Exception as e:                      # noqa: BLE001
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     out: dict = {"ok": True}
+    if getattr(store, "is_degraded", False):
+        out["degraded"] = True
+        out["configured_path"] = str(store.configured_path)
+        out["actual_path"] = str(store.path)
+        out["degraded_reason"] = store.degraded_reason
     try:
         out["stats"] = store.stats()
     except Exception as e:                      # noqa: BLE001
@@ -262,6 +276,14 @@ def diagnostics():
     stats = store.get("stats") or {}
     sealed = stats.get("sealed", 0)
     problems: list[str] = []
+    if store.get("degraded"):
+        problems.append(
+            "The configured data directory could not be used, so the store fell "
+            f"back to {store['actual_path']} inside the container "
+            f"({store['degraded_reason']}). The report works, but history is lost "
+            "on every restart. The mounted volume needs to be writable by uid "
+            "10001 — on the host: chown -R 10001:10001 the mounted directory."
+        )
     if not store["ok"]:
         problems.append(
             "The store cannot be read. If this says 'readonly database' or "

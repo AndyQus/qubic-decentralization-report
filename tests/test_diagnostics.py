@@ -115,3 +115,74 @@ def test_log_page_is_served_and_self_contained():
     assert "<script src=" not in html and "@import" not in html, (
         "the diagnostics page must not depend on anything it may not be able to load"
     )
+
+
+# ---------------------------------------------------------------------------
+# Degraded-but-serving: the deployment we cannot administer
+# ---------------------------------------------------------------------------
+
+def test_store_falls_back_when_the_volume_is_unusable(tmp_path):
+    """An unwritable mount must not take the whole report down.
+
+    On a host we do not administer, "chown the volume" is not an available
+    remedy, and a store that refuses to open turns every endpoint into a 500 —
+    including the ones that would have explained why. Falling back to a path
+    inside the container keeps the report serving and the failure visible.
+    """
+    from qdr.store import Store
+
+    corrupt = tmp_path / "qdr.db"
+    corrupt.write_bytes(b"not a database")
+
+    store = Store(corrupt)
+
+    assert store.is_degraded, "a store that had to move must say so"
+    assert store.configured_path == corrupt
+    assert store.path != corrupt, "it must actually have moved somewhere writable"
+    assert store.stats()["reports"] == 0, "and it must work"
+
+
+def test_fallback_can_be_refused(tmp_path):
+    """The ingest's own tooling may prefer a hard failure over a silent move."""
+    import pytest as _pytest
+    from qdr.store import Store
+
+    corrupt = tmp_path / "qdr.db"
+    corrupt.write_bytes(b"not a database")
+
+    with _pytest.raises(Exception):
+        Store(corrupt, allow_fallback=False)
+
+
+def test_degraded_store_is_never_reported_as_healthy(tmp_path, monkeypatch):
+    import api.server as server
+    from qdr.store import Store
+
+    corrupt = tmp_path / "qdr.db"
+    corrupt.write_bytes(b"not a database")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(server, "_store", Store(corrupt))
+    monkeypatch.setattr(server, "_probe_rpc",
+                        lambda: {"ok": True, "base": "t", "epoch": 1, "tick": 2})
+    c = TestClient(server.app)
+
+    assert c.get("/health").json()["status"] == "degraded"
+
+    d = c.get("/v1/diagnostics").json()
+    assert d["store"]["degraded"] is True
+    assert d["healthy"] is False
+    assert any("history is lost" in p for p in d["problems"]), (
+        "the cost of the fallback must be stated, not hidden behind a green check"
+    )
+
+
+def test_rpc_cache_survives_an_unwritable_data_dir(monkeypatch, tmp_path):
+    """The ingest used to die here before making a single request."""
+    from qdr.client import CachedClient
+
+    blocked = tmp_path / "blocked"
+    blocked.write_text("a file where a directory should be", encoding="utf-8")
+
+    c = CachedClient(cache_dir=blocked / "raw")
+    assert c.cache_dir.exists() and c.cache_dir.is_dir()

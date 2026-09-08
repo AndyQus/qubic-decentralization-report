@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import tempfile
 import threading
 import time
 from contextlib import contextmanager
@@ -142,17 +143,56 @@ CREATE INDEX IF NOT EXISTS ix_reports_epoch ON reports(epoch);
 class Store:
     """SQLite-backed store. Safe for concurrent use from the API and a worker."""
 
-    def __init__(self, path: Path | str = DEFAULT_DB) -> None:
+    def __init__(self, path: Path | str = DEFAULT_DB,
+                 allow_fallback: bool = True) -> None:
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        # Where the store WANTED to live, kept even when it could not: the
+        # difference between the two is the whole diagnosis.
+        self.configured_path = Path(path)
+        self.degraded_reason: Optional[str] = None
         self._lock = threading.RLock()
-        self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
+        try:
+            self._conn = self._open(self.path)
+        except (sqlite3.Error, OSError) as first:
+            # A mount the container cannot write is not repairable from inside
+            # the image, and on a host we do not administer nobody may be able
+            # to fix it either. Dying takes the whole report down and reports
+            # nothing; falling back to a writable path keeps the service up and
+            # honest — it serves, it says it is degraded, and /v1/diagnostics
+            # names the real path so the condition is visible rather than
+            # silently tolerated. History does not survive a restart this way,
+            # which is why this is a fallback and never the normal path.
+            if not allow_fallback:
+                raise
+            self.degraded_reason = f"{type(first).__name__}: {first}"
+            fallback = self._fallback_path()
+            try:
+                self._conn = self._open(fallback)
+            except (sqlite3.Error, OSError):
+                raise first
+            self.path = fallback
+
+    @staticmethod
+    def _open(path: Path) -> sqlite3.Connection:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(path), check_same_thread=False)
+        conn.row_factory = sqlite3.Row
         # WAL lets the API read while a worker writes.
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA synchronous=NORMAL")
-        self._conn.executescript(SCHEMA)
-        self._conn.commit()
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.executescript(SCHEMA)
+        conn.commit()
+        return conn
+
+    @staticmethod
+    def _fallback_path() -> Path:
+        """A path inside the container, writable regardless of how /data is mounted."""
+        return Path(tempfile.gettempdir()) / "qdr-fallback" / "qdr.db"
+
+    @property
+    def is_degraded(self) -> bool:
+        """True when the store is not where it was configured to be."""
+        return self.degraded_reason is not None
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Connection]:

@@ -33,25 +33,34 @@ INTERVAL="${QDR_INGEST_INTERVAL:-300}"
 # the volume with its own log.
 LOG_FILE="${QDR_LOG_FILE:-${DATA_DIR:-/data}/worker.log}"
 LOG_MAX="${QDR_LOG_MAX_LINES:-2000}"
-if [ -f "$LOG_FILE" ]; then
-  tail -n "$LOG_MAX" "$LOG_FILE" > "$LOG_FILE.tmp" 2>/dev/null && mv "$LOG_FILE.tmp" "$LOG_FILE" || true
+
+# The log follows the store: when the mounted volume cannot be written, both fall
+# back to a path inside the container. A deployment we cannot administer must
+# still be able to show its log — that page is the only channel there is.
+if ! mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || ! touch "$LOG_FILE" 2>/dev/null; then
+  ALT="${TMPDIR:-/tmp}/qdr-fallback"
+  echo "[worker] WARNING: cannot write $LOG_FILE (uid $(id -u)); using $ALT/worker.log" >&2
+  echo "[worker] The data volume is not writable — history will not survive a restart." >&2
+  mkdir -p "$ALT" 2>/dev/null || true
+  LOG_FILE="$ALT/worker.log"
+  touch "$LOG_FILE" 2>/dev/null || LOG_FILE=""
 fi
-# Send stdout/stderr to both the container log and the file. Process
-# substitution (`> >(tee …)`) is a bashism and this runs under dash, so a
-# named pipe does the same job portably.
-mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
-if : > "$LOG_FILE" 2>/dev/null || [ -w "$LOG_FILE" ]; then
+
+if [ -n "$LOG_FILE" ]; then
+  if [ -s "$LOG_FILE" ]; then
+    tail -n "$LOG_MAX" "$LOG_FILE" > "$LOG_FILE.tmp" 2>/dev/null && mv "$LOG_FILE.tmp" "$LOG_FILE" || true
+  fi
+  # Send stdout/stderr to both the container log and the file. Process
+  # substitution (`> >(tee …)`) is a bashism and this runs under dash, so a
+  # named pipe does the same job portably.
   FIFO="$(dirname "$LOG_FILE")/.worker.fifo"
-  rm -f "$FIFO"
+  rm -f "$FIFO" 2>/dev/null || true
   if mkfifo "$FIFO" 2>/dev/null; then
     tee -a "$LOG_FILE" < "$FIFO" &
     exec > "$FIFO" 2>&1
   else
     exec >> "$LOG_FILE" 2>&1     # no fifo: the file still gets everything
   fi
-else
-  echo "[worker] WARNING: cannot write $LOG_FILE — /data is not writable by uid $(id -u)." >&2
-  echo "[worker] The ingest cannot store anything either; see /log.html." >&2
 fi
 echo "[worker] --- start $(date -u +%Y-%m-%dT%H:%M:%SZ) ---"
 

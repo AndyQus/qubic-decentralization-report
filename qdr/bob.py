@@ -60,7 +60,14 @@ class BobClient:
     ) -> None:
         self.url = url
         self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            # Same reasoning as the RPC cache: an unwritable DATA_DIR must
+            # degrade the cache, not abort the ingest before it starts.
+            import tempfile
+            self.cache_dir = Path(tempfile.gettempdir()) / "qdr-fallback" / "bob"
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.timeout = timeout
         self.max_attempts = max_attempts
 

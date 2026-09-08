@@ -68,7 +68,15 @@ class CachedClient:
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            # The cache is an optimisation, never a requirement. An unwritable
+            # DATA_DIR used to abort the ingest here — before a single request
+            # was made — which turned a slow report into no report at all.
+            import tempfile
+            self.cache_dir = Path(tempfile.gettempdir()) / "qdr-fallback" / "raw"
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.offline = offline
         self.timeout = timeout
         self.min_interval_s = min_interval_s
@@ -121,7 +129,10 @@ class CachedClient:
             data = resp.json()
         except ValueError as e:
             raise QubicRPCError(f"GET {path}: invalid JSON ({e})") from e
-        cache_file.write_text(json.dumps(data, indent=2))
+        try:
+            cache_file.write_text(json.dumps(data, indent=2))
+        except OSError:
+            pass          # a cache that cannot be written must not fail the call
         return data
 
     # -- typed calls -------------------------------------------------------
