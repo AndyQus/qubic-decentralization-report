@@ -26,6 +26,11 @@ COPY api/ ./api/
 COPY dashboard/ ./dashboard/
 COPY examples/ ./examples/
 COPY scripts/ ./scripts/
+# A Windows checkout can hand the build CRLF line endings despite .gitattributes
+# (the rule only applies on a fresh checkout, not to files already on disk), and
+# /bin/sh then fails on the first line with "Illegal option". Normalising here
+# makes the image independent of how the build host stores its files.
+RUN sed -i 's/\r$//' scripts/*.sh && chmod +x scripts/*.sh
 COPY data/self_reporting/ ./data/self_reporting/
 COPY docs/ ./docs/
 

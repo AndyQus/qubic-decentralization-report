@@ -63,6 +63,22 @@
       "nakamoto_half_revenue": 333,
       "nakamoto_one_third_slots": 226,
       "top1_share": 0.001506
+    },
+    {
+      "epoch": 229,
+      "status": "live",
+      "computors": 676,
+      "operators": 676,
+      "declared_operators": 0,
+      "unattributed_slots": 676,
+      "onchain_linked_share": 0.0,
+      "attributed_share": 0.0,
+      "gini_revenue": 0.983172,
+      "hhi_revenue": 0.085369,
+      "nakamoto_one_third_revenue": 3,
+      "nakamoto_half_revenue": 5,
+      "nakamoto_one_third_slots": 226,
+      "top1_share": 0.152535
     }
   ]
 }

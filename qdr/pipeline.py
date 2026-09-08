@@ -106,6 +106,12 @@ def compute_epoch(
     first_tick = _first_tick(client, epoch)
     last_tick = _last_tick(client, epoch + 1) or _last_tick(client, epoch)
 
+    try:
+        current = client.current_epoch()
+    except QubicRPCError:
+        current = epoch
+    is_running = epoch >= current
+
     rev = None
     if bob is not None:
         rev = revenue_from_bob(epoch, computors, bob, first_tick, last_tick)
@@ -115,6 +121,13 @@ def compute_epoch(
         # it identifies the settlement transfers, not just the net change
         if rev is None or (fallback.complete and not rev.complete):
             rev = fallback
+    if is_running and rev.complete:
+        # A running epoch's payouts are still accruing. "Every computor appears in
+        # the log" becomes true long before the epoch settles, so the epoch itself
+        # — not the log — has the final say on completeness.
+        rev.complete = False
+        rev.warnings.append(
+            f"epoch {epoch} is still running; revenue is partial until it closes")
     store.put_revenue(epoch, rev.revenue, rev.first_tick, rev.last_tick, rev.complete)
     if rev.transfers:
         store.put_transfers(epoch, rev.transfers)
@@ -138,11 +151,7 @@ def compute_epoch(
     clusters = cluster_epoch(computors, rev.revenue, registry, linkage)
     store.put_clusters(epoch, clusters)
 
-    try:
-        current = client.current_epoch()
-    except QubicRPCError:
-        current = epoch
-    if epoch >= current:
+    if is_running:
         status = STATUS_LIVE
     else:
         status = STATUS_SEALED if rev.complete else STATUS_PARTIAL
@@ -375,6 +384,13 @@ def slot_distribution(store: Store, epoch: int) -> Optional[dict]:
     Returns None when the epoch has no revenue yet (a running epoch): an empty
     distribution is not something to draw.
     """
+    # Two independent guards, because they fail in different ways: the epoch
+    # status catches a running epoch even if its revenue rows were written as
+    # complete by an older code version, and revenue completeness catches a
+    # closed epoch whose derivation did not finish.
+    row = store.get_epoch(epoch)
+    if row and row.get("status") == STATUS_LIVE:
+        return None
     if not store.revenue_is_complete(epoch):
         return None
     rev = sorted(store.get_revenue(epoch).values(), reverse=True)
@@ -383,11 +399,16 @@ def slot_distribution(store: Store, epoch: int) -> Optional[dict]:
         return None
     n = len(rev)
     bands = []
+    cursor = 0          # bands must tile the ranking, never overlap it: an
+                        # overlapping band counts a slot's revenue twice and the
+                        # shares then sum past 100%
     for name, lo, hi in SLOT_BANDS:
-        a, b = int(n * lo), max(int(n * hi), int(n * lo) + 1)
+        a = max(int(n * lo), cursor)
+        b = max(int(n * hi), a + 1)
         chunk = rev[a:b]
         if not chunk:
             continue
+        cursor = a + len(chunk)
         bands.append({
             "id": name, "slots": len(chunk),
             "revenue_share": round(sum(chunk) / total, 6),
@@ -443,7 +464,16 @@ def build_dashboard_bundle(store: Store, epochs: Optional[list[int]] = None,
             "gini": cbr["gini"], "bubbles": _bubbles(rep),
             "slot_distribution": slot_distribution(store, e),
         })
-    latest = store.latest_report()
+    # The headline report has to be an epoch the panels can actually show. The
+    # slider is driven by the timeseries, which excludes running and partial
+    # epochs, so taking "the newest settled report" independently could label the
+    # page with one epoch while every chart below it describes another.
+    # No settled epoch means there is nothing to report yet — a fresh deployment
+    # whose worker has not finished its first backfill. Returning the running
+    # epoch here would publish a report of 676 slots at zero revenue, with a
+    # Nakamoto of 0, as though that described the network. The API turns an empty
+    # bundle into a 503 and the page says it is still building.
+    latest = store.get_report(max(charted)) if charted else None
     return {
         "report": latest,
         "timeseries": {"series": ts["series"]},

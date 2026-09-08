@@ -144,6 +144,8 @@
   .dist-facts{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);
     font-size:12.5px;color:var(--muted);line-height:1.6}
   .dist-facts b{color:var(--fg)}
+  .dist-empty{padding:26px 4px;color:var(--muted);font-size:12.5px;line-height:1.6;
+    text-align:center;max-width:520px;margin:0 auto}
   @media (prefers-reduced-motion:reduce){ .dist-fill{transition:none} }
 
   /* kpi grid */
@@ -154,6 +156,7 @@
   .kpi .k-val{font-size:29px;font-weight:720;margin-top:8px;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
   .kpi .k-sub{font-size:11.5px;color:var(--faint);margin-top:3px}
   /* Scope note on a figure whose unit is easy to misread (slots, not operators). */
+  .tail-row td{color:var(--muted);font-style:italic}
   .kpi .k-note{display:inline-block;margin-top:6px;padding:2px 7px;border-radius:5px;
     font-size:10.5px;font-weight:600;letter-spacing:.02em;
     color:var(--muted);background:var(--chip-bg,rgba(127,127,127,.14))}
@@ -324,8 +327,8 @@
   <section class="panel">
     <div class="panel-head">
       <div>
-        <h2 id="map-title" data-i18n="clusterMapTitle">Operator map</h2>
-        <p id="map-desc" data-i18n="clusterMapDesc">Each tile is one operator; area = share of the epoch. Declared operators are self-reported; “unattributed” are slots with no proven owner.</p>
+        <h2 id="map-title" data-i18n="distTitle">Revenue across computor slots</h2>
+        <p id="map-desc" data-i18n="distDesc">Ranked by revenue this epoch, highest first. The same view groups by operator as soon as slots are attributed.</p>
       </div>
       <div class="epoch-bar">
         <div class="seg" id="size-seg">
@@ -357,7 +360,7 @@
     <div class="panel-head">
       <div>
         <h2 data-i18n="timelineTitle">Concentration over time</h2>
-        <p data-i18n="timelineDesc">The Nakamoto coefficient is how many operators must collude to control one third of revenue — lower means more centralized. Gini measures revenue inequality (0 = even, 1 = one operator takes all).</p>
+        <p data-i18n="timelineDesc">The Nakamoto coefficient is how many computor slots must act together to control one third of revenue — lower means more concentrated. Gini measures how unevenly revenue is spread across slots (0 = even, 1 = one slot takes all). Both count slots; where one operator holds several, the true figures are lower.</p>
       </div>
     </div>
     <div class="panel-body">
@@ -443,6 +446,9 @@
         "appear as soon as they are measured — this page never shows placeholder numbers.",
       buildingRetry:"Retrying automatically…",
       liveRunning:"running · revenue is credited when it closes",
+      distPending:"This epoch is still running — its payouts are credited when it "+
+        "closes, so there is nothing to distribute yet. Pick an earlier epoch to see "+
+        "a settled one.",
       lead:"Qubic runs on {slots} computor slots. On paper that looks like {slots} independent operators — but a single operator can hold many slots at once, and the ledger does not say who holds what. This report measures revenue and concentration per slot from the chain, and groups slots by operator wherever that can be established — self-reported or on-chain-linked.",
       clusterMapTitle:"Operator map", clusterMapDesc:"Each tile is one operator; area = share of the epoch. Declared operators are self-reported; “unattributed” are slots with no proven owner.",
       distTitle:"Revenue across computor slots",
@@ -473,6 +479,7 @@
       kOperators:"Computor slots", kOperatorsSub:"the network's {slots} slots",
       kAttribution:"Operator attribution", kAttributionSub:"slots matched to a named operator",
       slotsNotOperators:"slots, not operators",
+      tailRow:"{n} unattributed slots (a remainder, not one operator)",
       kDeclared:"Declared operators", kDeclaredSub:"self-reported",
       kCoverage:"On-chain linked", kCoverageSub:"slots resolved via payout graph",
       confirmed:"Declared + on-chain confirmed", flagged:"Flagged (behavioral)",
@@ -503,6 +510,9 @@
         "erscheinen, sobald sie gemessen sind — diese Seite zeigt niemals Platzhalterwerte.",
       buildingRetry:"Wird automatisch erneut versucht…",
       liveRunning:"läuft · Umsatz wird beim Abschluss gutgeschrieben",
+      distPending:"Diese Epoche läuft noch — ihre Auszahlungen werden beim Abschluss "+
+        "gutgeschrieben, es gibt also noch nichts zu verteilen. Wähle eine frühere "+
+        "Epoche für eine abgeschlossene.",
       lead:"Qubic läuft auf {slots} Computor-Slots. Auf dem Papier wirkt das wie {slots} unabhängige Betreiber — aber ein einzelner Betreiber kann viele Slots gleichzeitig halten, und das Ledger sagt nicht, wer welche hält. Dieser Report misst Umsatz und Konzentration pro Slot aus der Chain und gruppiert Slots nach Betreiber, wo sich das belegen lässt — self-reported oder on-chain verknüpft.",
       clusterMapTitle:"Betreiber-Karte", clusterMapDesc:"Jede Kachel ist ein Betreiber; Fläche = Anteil der Epoche. Deklarierte Betreiber sind self-reported; „unattributed“ sind Slots ohne nachgewiesenen Eigentümer.",
       distTitle:"Umsatz über die Computor-Slots",
@@ -533,6 +543,7 @@
       kOperators:"Computor-Slots", kOperatorsSub:"die {slots} Slots des Netzwerks",
       kAttribution:"Betreiber-Zuordnung", kAttributionSub:"Slots einem benannten Betreiber zugeordnet",
       slotsNotOperators:"Slots, nicht Betreiber",
+      tailRow:"{n} nicht zugeordnete Slots (ein Rest, kein einzelner Betreiber)",
       kDeclared:"Deklarierte Betreiber", kDeclaredSub:"self-reported",
       kCoverage:"On-Chain verknüpft", kCoverageSub:"Slots über Payout-Graph aufgelöst",
       confirmed:"Deklariert + on-chain bestätigt", flagged:"Markiert (Verhalten)",
@@ -766,6 +777,17 @@
     return (ec && ec.slot_distribution) || null;
   }
 
+  /* A settled epoch always has a distribution. A running one does not — its
+     payouts are still accruing — so the panel says that instead of drawing an
+     empty box or, worse, a distribution of half-paid slots. */
+  function showNoDistribution(){
+    const wrap=document.getElementById("dist");
+    wrap.hidden=false;
+    document.getElementById("dist-bars").innerHTML=
+      `<div class="dist-empty">${escapeHtml(t("distPending"))}</div>`;
+    document.getElementById("dist-facts").innerHTML="";
+  }
+
   function renderDistribution(){
     const d=currentDist();
     const wrap=document.getElementById("dist");
@@ -798,23 +820,36 @@
     // slot distribution in its place and keep the operator legend out of the way.
     const d=currentDist();
     const s=series[idx]||{};
-    const useDist = d && !(s.attributed_share>=0.25);
-    document.getElementById("treemap").hidden=!!useDist;
-    const lg=document.getElementById("legend"); if(lg) lg.hidden=!!useDist;
-    const sizeSeg=document.getElementById("size-seg"); if(sizeSeg) sizeSeg.hidden=!!useDist;
-    if(useDist){
-      const n=fmtInt(d.slots);
+    const items=currentBubbles();
+    // The operator map is drawn ONLY when there are operators to draw. Anything
+    // else — no attribution, or attribution but no distribution to fall back on —
+    // must not leave the old single-grey-tile map on screen: that tile is what a
+    // reader reports as a broken page. Decide on the attribution, then pick the
+    // best honest thing to show.
+    const attributed = (s.attributed_share>=0.25) &&
+                       (items.length>1 || items.some(b=>b.confidence!=="unattributed"));
+    const tm=document.getElementById("treemap");
+    const lg=document.getElementById("legend");
+    const sizeSeg=document.getElementById("size-seg");
+    if(!attributed){
+      tm.hidden=true;
+      if(lg) lg.hidden=true;
+      if(sizeSeg) sizeSeg.hidden=true;
+      const n=fmtInt((d&&d.slots)||s.computors||s.operators);
       document.getElementById("map-title").textContent=t("distTitle");
       document.getElementById("map-desc").textContent=t("distDesc",{slots:n});
-      renderDistribution();
+      if(d){ renderDistribution(); }
+      else { showNoDistribution(); }
       return;
     }
+    tm.hidden=false;
+    if(lg) lg.hidden=false;
+    if(sizeSeg) sizeSeg.hidden=false;
+    document.getElementById("dist").hidden=true;
     document.getElementById("map-title").textContent=t("clusterMapTitle");
     document.getElementById("map-desc").textContent=t("clusterMapDesc");
-    document.getElementById("dist").hidden=true;
     const host=document.getElementById("treemap");
     const W=host.clientWidth||900, H=host.clientHeight||340;
-    const items=currentBubbles();
     const laid=squarify(items,0,0,W,H);
     const seen={};
     laid.forEach(cell=>{
@@ -886,14 +921,18 @@
     const named=ec.bubbles.filter(b=>b.confidence!=="unattributed");
     if(panel) panel.hidden = named.length===0;   // nothing to list yet
     if(!named.length) return;
-    const rows=ec.bubbles.slice().sort((a,b)=>(b.revenue_share||0)-(a.revenue_share||0));
+    const tail=ec.bubbles.filter(b=>b.confidence==="unattributed");
+    const rows=named.slice().sort((a,b)=>(b.revenue_share||0)-(a.revenue_share||0))
+                     .concat(tail);   // remainder last, never ranked as an operator
     const maxShare=Math.max(...rows.map(r=>r.revenue_share||0))||1;
     document.getElementById("op-table").innerHTML=rows.map(r=>{
       const cls=confClass(r.confidence);
       const pct=(r.revenue_share*100);
       const w=((r.revenue_share||0)/maxShare*100).toFixed(1);
-      return `<tr>
-        <td>${escapeHtml(r.label)}</td>
+      const isTail=r.confidence==="unattributed";
+      const label=isTail ? t("tailRow",{n:fmtInt(r.slots)}) : r.label;
+      return `<tr${isTail?' class="tail-row"':''}>
+        <td>${escapeHtml(label)}</td>
         <td><span class="pill ${cls}"><i style="background:${confColor(r.confidence)}"></i>${escapeHtml(confLabel(r.confidence))}</span></td>
         <td class="num">${r.slots}</td>
         <td class="num bar-cell"><div class="bar" style="width:${w}%"></div><span>${pct<0.1?"<0.1":pct.toFixed(1)}%</span></td>

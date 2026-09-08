@@ -1,7 +1,7 @@
 {
   "epoch": 228,
   "status": "sealed",
-  "generated_at": 1788855362,
+  "generated_at": 1788861192,
   "code_version": "0.2.1",
   "reproducible": true,
   "data_sources": {
@@ -15,7 +15,7 @@
     "arbitrator": null,
     "tick_range": [
       76550000,
-      78942441
+      78950644
     ],
     "payout_lag_epochs": 1,
     "transfers_matched": 676,
@@ -72,7 +72,7 @@
     "top3_share": 0.004438,
     "top5_share": 0.007396,
     "nakamoto_one_third": 226,
-    "nakamoto_half": 338
+    "nakamoto_half": 339
   },
   "clusters": [
     {
@@ -9541,5 +9541,5 @@
     }
   ],
   "warnings": [],
-  "computed_at": 1788855362
+  "computed_at": 1788861192
 }

@@ -14,76 +14,7 @@
           "revenue_share": 1.0,
           "operators": 676
         }
-      ],
-      "slot_distribution": {
-        "epoch": 225,
-        "slots": 676,
-        "total_revenue": 357094835754,
-        "min": 226717248,
-        "max": 537403847,
-        "median": 536879038,
-        "spread": 2.37,
-        "flat_value": 537403847,
-        "flat_slots": 311,
-        "flat_share": 0.460059,
-        "distinct_values": 137,
-        "bands": [
-          {
-            "id": "top1",
-            "slots": 6,
-            "revenue_share": 0.00903,
-            "min": 537403847,
-            "max": 537403847
-          },
-          {
-            "id": "top10",
-            "slots": 61,
-            "revenue_share": 0.091801,
-            "min": 537403847,
-            "max": 537403847
-          },
-          {
-            "id": "upper",
-            "slots": 102,
-            "revenue_share": 0.153503,
-            "min": 537403847,
-            "max": 537403847
-          },
-          {
-            "id": "mid",
-            "slots": 169,
-            "revenue_share": 0.254294,
-            "min": 536879038,
-            "max": 537403847
-          },
-          {
-            "id": "lower",
-            "slots": 169,
-            "revenue_share": 0.251878,
-            "min": 522709211,
-            "max": 536879038
-          },
-          {
-            "id": "bottom",
-            "slots": 169,
-            "revenue_share": 0.239495,
-            "min": 226717248,
-            "max": 522184402
-          }
-        ],
-        "deciles": [
-          0.100831,
-          0.102335,
-          0.100831,
-          0.102335,
-          0.102296,
-          0.100531,
-          0.101316,
-          0.098195,
-          0.098833,
-          0.092498
-        ]
-      }
+      ]
     },
     {
       "epoch": 226,
@@ -99,76 +30,7 @@
           "revenue_share": 1.0,
           "operators": 676
         }
-      ],
-      "slot_distribution": {
-        "epoch": 226,
-        "slots": 676,
-        "total_revenue": 360401553845,
-        "min": 347947998,
-        "max": 537403847,
-        "median": 537403847,
-        "spread": 1.54,
-        "flat_value": 537403847,
-        "flat_slots": 370,
-        "flat_share": 0.547337,
-        "distinct_values": 43,
-        "bands": [
-          {
-            "id": "top1",
-            "slots": 6,
-            "revenue_share": 0.008947,
-            "min": 537403847,
-            "max": 537403847
-          },
-          {
-            "id": "top10",
-            "slots": 61,
-            "revenue_share": 0.090959,
-            "min": 537403847,
-            "max": 537403847
-          },
-          {
-            "id": "upper",
-            "slots": 102,
-            "revenue_share": 0.152095,
-            "min": 537403847,
-            "max": 537403847
-          },
-          {
-            "id": "mid",
-            "slots": 169,
-            "revenue_share": 0.252,
-            "min": 537403847,
-            "max": 537403847
-          },
-          {
-            "id": "lower",
-            "slots": 169,
-            "revenue_share": 0.251292,
-            "min": 532680571,
-            "max": 537403847
-          },
-          {
-            "id": "bottom",
-            "slots": 169,
-            "revenue_share": 0.244707,
-            "min": 347947998,
-            "max": 532680571
-          }
-        ],
-        "deciles": [
-          0.099905,
-          0.101397,
-          0.099905,
-          0.101397,
-          0.101397,
-          0.099827,
-          0.101081,
-          0.099158,
-          0.100069,
-          0.095865
-        ]
-      }
+      ]
     },
     {
       "epoch": 227,
@@ -184,76 +46,7 @@
           "revenue_share": 1.0,
           "operators": 676
         }
-      ],
-      "slot_distribution": {
-        "epoch": 227,
-        "slots": 676,
-        "total_revenue": 180603819833,
-        "min": 255127631,
-        "max": 268701925,
-        "median": 268701925,
-        "spread": 1.05,
-        "flat_value": 268701925,
-        "flat_slots": 382,
-        "flat_share": 0.565089,
-        "distinct_values": 36,
-        "bands": [
-          {
-            "id": "top1",
-            "slots": 6,
-            "revenue_share": 0.008927,
-            "min": 268701925,
-            "max": 268701925
-          },
-          {
-            "id": "top10",
-            "slots": 61,
-            "revenue_share": 0.090756,
-            "min": 268701925,
-            "max": 268701925
-          },
-          {
-            "id": "upper",
-            "slots": 102,
-            "revenue_share": 0.151755,
-            "min": 268701925,
-            "max": 268701925
-          },
-          {
-            "id": "mid",
-            "slots": 169,
-            "revenue_share": 0.251438,
-            "min": 268701925,
-            "max": 268701925
-          },
-          {
-            "id": "lower",
-            "slots": 169,
-            "revenue_share": 0.25062,
-            "min": 265815478,
-            "max": 268701925
-          },
-          {
-            "id": "bottom",
-            "slots": 169,
-            "revenue_share": 0.246505,
-            "min": 255127631,
-            "max": 265815478
-          }
-        ],
-        "deciles": [
-          0.099682,
-          0.10117,
-          0.099682,
-          0.10117,
-          0.10117,
-          0.099646,
-          0.100784,
-          0.098545,
-          0.099505,
-          0.098645
-        ]
-      }
+      ]
     },
     {
       "epoch": 228,
@@ -269,76 +62,23 @@
           "revenue_share": 1.0,
           "operators": 676
         }
-      ],
-      "slot_distribution": {
-        "epoch": 228,
-        "slots": 676,
-        "total_revenue": 178477462349,
-        "min": 88955033,
-        "max": 268701925,
-        "median": 268701925,
-        "spread": 3.02,
-        "flat_value": 268701925,
-        "flat_slots": 418,
-        "flat_share": 0.618343,
-        "distinct_values": 152,
-        "bands": [
-          {
-            "id": "top1",
-            "slots": 6,
-            "revenue_share": 0.009033,
-            "min": 268701925,
-            "max": 268701925
-          },
-          {
-            "id": "top10",
-            "slots": 61,
-            "revenue_share": 0.091837,
-            "min": 268701925,
-            "max": 268701925
-          },
-          {
-            "id": "upper",
-            "slots": 102,
-            "revenue_share": 0.153563,
-            "min": 268701925,
-            "max": 268701925
-          },
-          {
-            "id": "mid",
-            "slots": 169,
-            "revenue_share": 0.254433,
-            "min": 268701925,
-            "max": 268701925
-          },
-          {
-            "id": "lower",
-            "slots": 169,
-            "revenue_share": 0.252434,
-            "min": 261367931,
-            "max": 268701925
-          },
-          {
-            "id": "bottom",
-            "slots": 169,
-            "revenue_share": 0.2387,
-            "min": 88955033,
-            "max": 261354607
-          }
-        ],
-        "deciles": [
-          0.10087,
-          0.102376,
-          0.10087,
-          0.102376,
-          0.102376,
-          0.10087,
-          0.101542,
-          0.098127,
-          0.097934,
-          0.09266
-        ]
-      }
+      ]
+    },
+    {
+      "epoch": 229,
+      "status": "live",
+      "nakamoto_one_third": 3,
+      "gini": 0.983172,
+      "bubbles": [
+        {
+          "id": "unattributed",
+          "label": "Unattributed",
+          "confidence": "unattributed",
+          "slots": 676,
+          "revenue_share": 1.0,
+          "operators": 676
+        }
+      ]
     }
   ]
 }

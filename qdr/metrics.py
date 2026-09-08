@@ -7,6 +7,7 @@ Python, no heavy deps, so results are trivially reproducible.
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
+from fractions import Fraction
 from typing import Iterable
 
 
@@ -71,10 +72,16 @@ def nakamoto_coefficient(weights: Iterable[float], threshold: float = 0.5) -> in
     s = sum(xs)
     if s == 0:
         return 0
-    acc = 0.0
+    # Compare acc*1 > threshold*s rather than accumulating x/s: dividing each
+    # term first lets rounding error accumulate, and at an exact boundary that
+    # error decides the answer. 676 equal weights at threshold 0.5 reached
+    # 0.5000000000000017 after 338 terms and returned 338 where the exact answer
+    # is 339 — a published figure off by one.
+    thr = Fraction(threshold).limit_denominator(10**12) * Fraction(s).limit_denominator(10**12)
+    acc = Fraction(0)
     for i, x in enumerate(xs, start=1):
-        acc += x / s
-        if acc > threshold:
+        acc += Fraction(x).limit_denominator(10**12)
+        if acc > thr:
             return i
     return len(xs)
 
