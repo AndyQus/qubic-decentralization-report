@@ -39,26 +39,77 @@ statt nach Notwendigkeit.
 > Slots 676 unabhängigen Betreibern gehören.
 >
 > Auflösen lässt sich das nur, wenn ihr eure Identitäten selbst angebt. Die
-> Gruppierung läuft bereits in jeder Epoche, sie braucht nur die Einträge:
+> Gruppierung läuft bereits in jeder Epoche, sie braucht nur die Einträge.
+>
+> So sieht die Datei **heute** aus —
+> `data/self_reporting/pools.json`, vollständig:
 >
 > ```json
 > {
->   "id": "euer-slug",
->   "label": "Euer Pool",
->   "url": "https://...",
->   "source": "wo diese Angabe veröffentlicht ist",
->   "verified": false,
->   "computors": [
->     "AAAA...  (60 Zeichen, A-Z)",
->     "BBBB...  (60 Zeichen, A-Z)"
->   ],
->   "status": "active"
+>   "$schema": "./pools.schema.json",
+>   "updated": "2026-09-07",
+>   "pools": [
+>     {
+>       "id": "qubic.li",
+>       "label": "Qubic.li Pool",
+>       "url": "https://qubic.li",
+>       "source": "public pool site",
+>       "verified": false,
+>       "computors": [],
+>       "status": "active"
+>     },
+>     {
+>       "id": "apool",
+>       "label": "Apool",
+>       "url": "https://apool.io",
+>       "source": "public pool site; shutdown reported in #computor-operator 2026-09-03 (Vaintor)",
+>       "verified": false,
+>       "computors": [],
+>       "status": "winding_down"
+>     },
+>     {
+>       "id": "minerlab-solutions",
+>       "label": "MinerLab / Solutions",
+>       "url": "",
+>       "source": "community disclosure",
+>       "verified": false,
+>       "computors": [],
+>       "status": "active"
+>     }
+>   ]
 > }
 > ```
 >
-> Für **qubic.li**, **Apool** und **MinerLab/Solutions** liegen die Einträge
-> schon bereit — dort fehlt nur die `computors`-Liste. Andere Pools legen einen
-> neuen Block an.
+> Für **qubic.li**, **Apool** und **MinerLab/Solutions** steht damit der Rahmen —
+> aber wie ihr seht, ist **jede `computors`-Liste leer**. Genau da gehören eure
+> Identitäten hinein, sonst ändert sich am Report nichts:
+>
+> ```json
+>       "computors": [
+>         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+>         "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+>       ],
+> ```
+>
+> (60 Zeichen, nur A–Z, eine Identität pro Zeile.)
+>
+> Andere Pools hängen einen neuen Block an die `pools`-Liste an — dieselben
+> Felder, `id` frei wählbar, `verified` bleibt `false`:
+>
+> ```json
+>     {
+>       "id": "euer-slug",
+>       "label": "Euer Pool",
+>       "url": "https://...",
+>       "source": "wo diese Angabe veröffentlicht ist",
+>       "verified": false,
+>       "computors": ["...", "..."],
+>       "status": "active"
+>     }
+> ```
+>
+> Aktueller Stand jederzeit hier:
+> https://github.com/AndyQus/qubic-decentralization-report/blob/main/data/self_reporting/pools.json
 >
 > Zwei Wege, beide gleich recht:
 > • **Hier im Chat antworten** — ich übernehme es in einen PR.
@@ -95,8 +146,10 @@ statt nach Notwendigkeit.
 > `data/self_reporting/pools.json`. Danach erscheint ihr im Report als Betreiber
 > mit Slot-Anzahl und Umsatzanteil statt als „unattributed".
 >
-> Für qubic.li, Apool und MinerLab/Solutions stehen die Einträge schon bereit,
-> es fehlt nur die Liste der Identitäten.
+> Für qubic.li, Apool und MinerLab/Solutions steht der Rahmen schon in der
+> Datei — die `computors`-Listen sind dort aber alle noch leer, und genau die
+> braucht es:
+> https://github.com/AndyQus/qubic-decentralization-report/blob/main/data/self_reporting/pools.json
 
 ---
 
