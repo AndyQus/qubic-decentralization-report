@@ -986,9 +986,26 @@
     el.textContent=t("statusPartial");
   }
 
+  /* The running build's version is a property of the code, not of the data, so it
+     must not wait for the first report: a fresh deployment with an empty store
+     still has a version, and showing "–" there reads as a broken build. /health
+     answers it before any epoch is sealed; the report only refines it later. */
+  function renderCodeVersion(v){
+    if(!v) return;
+    document.getElementById("code-ver").textContent=v;
+  }
+  function fetchCodeVersion(){
+    if(apiBase==null) return;
+    fetch(apiBase.replace(/\/$/,"")+"/health")
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{ if(d) renderCodeVersion(d.version); })
+      .catch(()=>{});
+  }
+
   function startUI(){
     renderStatusBadge();
-    document.getElementById("code-ver").textContent=report.code_version||"–";
+    renderCodeVersion(report.code_version);
+    fetchCodeVersion();
     document.getElementById("foot-year").textContent=String(new Date().getFullYear());
     range.max=String(Math.max(0,epochs.length-1)); range.value=String(idx);
     if(!series.length){ applyLang(); return; }   // applyLang -> showBuilding
