@@ -24,9 +24,11 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Named volume: Docker creates it with the right ownership for the
-      # container's non-root user. A host bind mount would need a manual chown.
-      - qdr-data:/data
+      # Bind mount under /root, the same shape qubic_spotlight and
+      # qubic_doge_stats use on this host: one predictable directory per
+      # service, inspectable and backup-able without docker. The container runs
+      # as root so it can write a root-owned host directory — see the Dockerfile.
+      - /root/qdr/data:/data
       # Optional: serve a self-maintained pool registry without rebuilding.
       # - /root/qdr/pools.json:/data/pools.json:ro
     restart: unless-stopped
@@ -53,10 +55,7 @@ services:
       # boundary is passing, so this stays well under it.
       - QDR_INGEST_INTERVAL=${QDR_INGEST_INTERVAL:-300}
     volumes:
-      - qdr-data:/data
+      - /root/qdr/data:/data
     depends_on:
       - qubic_decentralization_report
     restart: unless-stopped
-
-volumes:
-  qdr-data:

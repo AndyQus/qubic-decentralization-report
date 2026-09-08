@@ -40,9 +40,23 @@ RUN python scripts/build_how_it_works.py
 
 # The RPC cache and the persistent store both live in the volume (DATA_DIR=/data),
 # not in the image layer: sealed epochs must survive image upgrades.
-RUN mkdir -p /data/raw && useradd -r -u 10001 qdr && chown -R qdr:qdr /app /data
-USER qdr
+RUN mkdir -p /data/raw
 VOLUME ["/data"]
+
+# Runs as root, like the other services on the host this deploys to
+# (qubic_spotlight, qubic_doge_stats). They bind-mount a root-owned host
+# directory — /root/<service>/data:/data — and a non-root container cannot
+# write there: the store failed to open, every store-backed endpoint answered
+# 500, and the report stayed empty. Fixing that from the image side would mean
+# asking the host's admin to chown one directory differently from every other
+# service they run, so the image follows the established convention instead.
+#
+# The trade-off is deliberate and worth naming: this container writes as root,
+# so a compromise of this process is a compromise of the mounted directory. The
+# service is a read-only public report with no authentication, no user input
+# that reaches the filesystem, and no secrets — it fetches public RPC data and
+# serves derived numbers. USER qdr is the better default and is one line away
+# if the host ever mounts a directory this image may own.
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
