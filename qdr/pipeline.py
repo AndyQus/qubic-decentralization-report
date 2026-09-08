@@ -291,8 +291,13 @@ def build_timeseries(store: Store, epochs: Optional[list[int]] = None,
             continue
         if rep.get("status") == STATUS_PARTIAL and not include_partial:
             continue
-        if rep.get("status") == STATUS_LIVE and not rep["totals"].get("total_revenue"):
-            continue   # running epoch: revenue is only credited when it closes
+        # A running epoch is excluded outright, not just when its revenue is still
+        # zero. Payouts land progressively, so a partially-paid epoch yields real
+        # but meaningless figures — epoch 229 mid-flight showed 859M QU against the
+        # ~178,000M it settles at, which reads as extreme concentration purely
+        # because most slots have not been paid yet.
+        if rep.get("status") == STATUS_LIVE:
+            continue   # revenue is only final once the epoch closes
         cbr = rep["concentration_by_revenue"]
         cov = rep.get("linkage_coverage", {})
         series.append({
@@ -353,6 +358,61 @@ def _bubbles(rep: dict) -> list[dict]:
     return bubbles
 
 
+# Slot-level revenue distribution. While operator attribution is empty the operator
+# map has exactly one tile ("unattributed, 676 slots, 100%"), which renders as a
+# blank rectangle and tells the reader nothing. The per-computor revenue behind it
+# is real and varies by a factor of three, so this is what the page can honestly
+# show instead: how revenue is spread across the slots themselves.
+SLOT_BANDS = (
+    ("top1", 0.00, 0.01), ("top10", 0.01, 0.10), ("upper", 0.10, 0.25),
+    ("mid", 0.25, 0.50), ("lower", 0.50, 0.75), ("bottom", 0.75, 1.00),
+)
+
+
+def slot_distribution(store: Store, epoch: int) -> Optional[dict]:
+    """Revenue per computor slot, as ranked bands plus a decile curve.
+
+    Returns None when the epoch has no revenue yet (a running epoch): an empty
+    distribution is not something to draw.
+    """
+    if not store.revenue_is_complete(epoch):
+        return None
+    rev = sorted(store.get_revenue(epoch).values(), reverse=True)
+    total = sum(rev)
+    if not rev or total <= 0:
+        return None
+    n = len(rev)
+    bands = []
+    for name, lo, hi in SLOT_BANDS:
+        a, b = int(n * lo), max(int(n * hi), int(n * lo) + 1)
+        chunk = rev[a:b]
+        if not chunk:
+            continue
+        bands.append({
+            "id": name, "slots": len(chunk),
+            "revenue_share": round(sum(chunk) / total, 6),
+            "min": chunk[-1], "max": chunk[0],
+        })
+    deciles = [round(sum(rev[int(n * i / 10):int(n * (i + 1) / 10)]) / total, 6)
+               for i in range(10)]
+    # The most striking measured fact about Qubic's payouts is how many slots are
+    # paid to the qu: a flat share is worth stating outright rather than leaving
+    # the reader to infer it from a nearly-uniform bar chart.
+    counts: dict[int, int] = {}
+    for v in rev:
+        counts[v] = counts.get(v, 0) + 1
+    mode_value, mode_count = max(counts.items(), key=lambda kv: kv[1])
+    return {
+        "epoch": epoch, "slots": n, "total_revenue": total,
+        "min": rev[-1], "max": rev[0], "median": rev[n // 2],
+        "spread": round(rev[0] / rev[-1], 2) if rev[-1] else None,
+        "flat_value": mode_value, "flat_slots": mode_count,
+        "flat_share": round(mode_count / n, 6),
+        "distinct_values": len(counts),
+        "bands": bands, "deciles": deciles,
+    }
+
+
 def build_dashboard_bundle(store: Store, epochs: Optional[list[int]] = None,
                            limit: Optional[int] = DEFAULT_BUNDLE_EPOCHS) -> dict:
     """Everything the dashboard needs, assembled from the store.
@@ -364,8 +424,15 @@ def build_dashboard_bundle(store: Store, epochs: Optional[list[int]] = None,
     if limit is not None and len(epochs) > limit:
         epochs = sorted(epochs)[-limit:]
     ts = build_timeseries(store, epochs, limit=None)
+    # The epoch slider is driven by the timeseries, so the cluster list has to
+    # cover exactly the same epochs. build_timeseries drops the running epoch
+    # (no revenue until it closes); leaving it in here made the dashboard open on
+    # an epoch the slider had no entry for, showing a half-paid epoch's figures.
+    charted = {p["epoch"] for p in ts["series"]}
     epoch_clusters = []
     for e in sorted(epochs):
+        if e not in charted:
+            continue
         rep = store.get_report(e)
         if not rep:
             continue
@@ -374,6 +441,7 @@ def build_dashboard_bundle(store: Store, epochs: Optional[list[int]] = None,
             "epoch": e, "status": rep.get("status"),
             "nakamoto_one_third": cbr["nakamoto_one_third"],
             "gini": cbr["gini"], "bubbles": _bubbles(rep),
+            "slot_distribution": slot_distribution(store, e),
         })
     latest = store.latest_report()
     return {

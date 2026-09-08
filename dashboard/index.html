@@ -42,6 +42,7 @@
   .spacer{flex:1 1 auto}
   .controls{display:flex;align-items:center;gap:8px}
   .seg{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden;background:var(--surface)}
+  .seg[hidden]{display:none}
   .seg button{background:transparent;border:0;color:var(--muted);padding:7px 11px;font-size:12.5px;
     font-weight:600;cursor:pointer;font-family:var(--sans)}
   .seg button.active{background:var(--accent);color:#04231b}
@@ -127,6 +128,24 @@
   .coverage-note[hidden]{display:none}
   .coverage-note b{color:var(--fg);font-weight:600}
 
+  /* Slot revenue distribution — shown in place of the operator map while
+     attribution is empty, because one grey "unattributed 100%" tile is not a map. */
+  .dist{padding:4px 2px 2px}
+  .dist[hidden]{display:none}
+  .dist-row{display:grid;grid-template-columns:150px 1fr 74px;align-items:center;
+    gap:12px;margin-bottom:9px}
+  .dist-name{font-size:12.5px;color:var(--fg)}
+  .dist-name small{display:block;color:var(--faint);font-size:11px;margin-top:1px}
+  .dist-track{height:26px;border-radius:6px;background:var(--chip-bg,rgba(127,127,127,.13));
+    overflow:hidden}
+  .dist-fill{height:100%;border-radius:6px;background:var(--accent);opacity:.85;
+    transition:width .5s cubic-bezier(.4,0,.2,1)}
+  .dist-pct{font-size:12.5px;font-variant-numeric:tabular-nums;text-align:right;color:var(--fg)}
+  .dist-facts{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);
+    font-size:12.5px;color:var(--muted);line-height:1.6}
+  .dist-facts b{color:var(--fg)}
+  @media (prefers-reduced-motion:reduce){ .dist-fill{transition:none} }
+
   /* kpi grid */
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:14px;margin:20px 0 8px}
   .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:15px 16px;
@@ -134,6 +153,10 @@
   .kpi .k-label{font-size:12px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px}
   .kpi .k-val{font-size:29px;font-weight:720;margin-top:8px;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
   .kpi .k-sub{font-size:11.5px;color:var(--faint);margin-top:3px}
+  /* Scope note on a figure whose unit is easy to misread (slots, not operators). */
+  .kpi .k-note{display:inline-block;margin-top:6px;padding:2px 7px;border-radius:5px;
+    font-size:10.5px;font-weight:600;letter-spacing:.02em;
+    color:var(--muted);background:var(--chip-bg,rgba(127,127,127,.14))}
   .kpi.accent .k-val{color:var(--accent)}
   .kpi.warn .k-val{color:var(--warn)}
   .kpi::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);opacity:.0}
@@ -159,6 +182,7 @@
   /* treemap */
   .treemap{position:relative;width:100%;height:340px;margin-top:6px;border-radius:10px;overflow:hidden;
     background:var(--bg2);border:1px solid var(--border)}
+  .treemap[hidden]{display:none}
   .tile{position:absolute;border-radius:7px;overflow:hidden;cursor:default;
     transition:left .7s cubic-bezier(.4,.05,.2,1),top .7s cubic-bezier(.4,.05,.2,1),
       width .7s cubic-bezier(.4,.05,.2,1),height .7s cubic-bezier(.4,.05,.2,1),background .4s;
@@ -169,6 +193,7 @@
   .tile.tiny .t-label{font-size:10px}
   .tile.hide-text *{display:none}
   .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
+  .legend[hidden]{display:none}
   .legend span{display:inline-flex;align-items:center;gap:6px}
   .legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
 
@@ -299,8 +324,8 @@
   <section class="panel">
     <div class="panel-head">
       <div>
-        <h2 data-i18n="clusterMapTitle">Operator map</h2>
-        <p data-i18n="clusterMapDesc">Each tile is one operator; area = share of the epoch. Declared operators are self-reported; “unattributed” are slots with no proven owner.</p>
+        <h2 id="map-title" data-i18n="clusterMapTitle">Operator map</h2>
+        <p id="map-desc" data-i18n="clusterMapDesc">Each tile is one operator; area = share of the epoch. Declared operators are self-reported; “unattributed” are slots with no proven owner.</p>
       </div>
       <div class="epoch-bar">
         <div class="seg" id="size-seg">
@@ -314,7 +339,11 @@
     </div>
     <div class="panel-body">
       <div class="treemap" id="treemap"></div>
-      <div class="legend">
+      <div class="dist" id="dist" hidden>
+        <div class="dist-bars" id="dist-bars"></div>
+        <div class="dist-facts" id="dist-facts"></div>
+      </div>
+      <div class="legend" id="legend">
         <span><i style="background:var(--declared)"></i><span data-i18n="declared">Declared (self-reported)</span></span>
         <span><i style="background:var(--unattributed)"></i><span data-i18n="unattributed">Unattributed</span></span>
         <span><i style="background:var(--linked)"></i><span data-i18n="linked">On-chain linked</span></span>
@@ -341,7 +370,7 @@
   </section>
 
   <!-- Operator table -->
-  <section class="panel">
+  <section class="panel" id="op-panel">
     <div class="panel-head">
       <div>
         <h2 data-i18n="tableTitle">Operators this epoch</h2>
@@ -414,11 +443,20 @@
         "appear as soon as they are measured — this page never shows placeholder numbers.",
       buildingRetry:"Retrying automatically…",
       liveRunning:"running · revenue is credited when it closes",
-      lead:"Qubic runs on {slots} computor slots. On paper that looks like {slots} independent operators — but a single operator can hold many slots at once. This report groups slots by operator (self-reported first, on-chain-linked next) and measures how concentrated revenue and control really are.",
+      lead:"Qubic runs on {slots} computor slots. On paper that looks like {slots} independent operators — but a single operator can hold many slots at once, and the ledger does not say who holds what. This report measures revenue and concentration per slot from the chain, and groups slots by operator wherever that can be established — self-reported or on-chain-linked.",
       clusterMapTitle:"Operator map", clusterMapDesc:"Each tile is one operator; area = share of the epoch. Declared operators are self-reported; “unattributed” are slots with no proven owner.",
+      distTitle:"Revenue across computor slots",
+      distDesc:"Ranked by revenue this epoch, highest first. Operator attribution is "+
+        "open, so this shows what is measured: what each of the {slots} slots earned. "+
+        "The same view groups by operator as soon as slots are attributed.",
+      distBandTop1:"Top 1%", distBandTop10:"Top 10%", distBandUpper:"Upper quarter",
+      distBandMid:"Second quarter", distBandLower:"Third quarter", distBandBottom:"Bottom quarter",
+      distFlat:"{pct}% of slots were paid exactly the same amount ({amount} QU).",
+      distSpread:"Highest slot earns {x}× the lowest.",
+      distOfRevenue:"of revenue", distSlotsN:"{n} slots",
       byRevenue:"By revenue", bySlots:"By slots",
       declared:"Declared (self-reported)", unattributed:"Unattributed", linked:"On-chain linked",
-      timelineTitle:"Concentration over time", timelineDesc:"The Nakamoto coefficient is how many operators must collude to control one third of revenue — lower means more centralized. Gini measures revenue inequality (0 = even, 1 = one operator takes all).",
+      timelineTitle:"Concentration over time", timelineDesc:"The Nakamoto coefficient is how many computor slots must act together to control one third of revenue — lower means more concentrated. Gini measures how unevenly revenue is spread across slots (0 = even, 1 = one slot takes all). Both count slots; where one operator holds several, the true figures are lower.",
       nakamotoShort:"Nakamoto (⅓)", giniShort:"Gini ×10",
       tableTitle:"Operators this epoch", tableDesc:"Sorted by revenue share. Slots = number of computors the operator controls.",
       thOperator:"Operator", thConfidence:"Basis", thSlots:"Slots", thShare:"Revenue share",
@@ -432,28 +470,30 @@
       discCorrections:"Operators can correct or complete their entry at any time via pull request.",
       discDemo:"Use it for analysis purposes only — not as a basis for investment decisions.",
       sponsored:"Qubic – Sponsored by AndyQus", tos:"Terms of Service", privacy:"Privacy Policy",
-      kOperators:"Operators", kOperatorsSub:"from {slots} computor slots",
-      upperBound:"upper bound",
+      kOperators:"Computor slots", kOperatorsSub:"the network's {slots} slots",
+      kAttribution:"Operator attribution", kAttributionSub:"slots matched to a named operator",
+      slotsNotOperators:"slots, not operators",
       kDeclared:"Declared operators", kDeclaredSub:"self-reported",
       kCoverage:"On-chain linked", kCoverageSub:"slots resolved via payout graph",
       confirmed:"Declared + on-chain confirmed", flagged:"Flagged (behavioral)",
       liveNow:"live", liveTick:"Tick", liveProgress:"Epoch progress",
       liveQuality:"Tick quality", liveAddresses:"Active addresses",
       liveRecent:"last 10k:", perSecond:"ticks/s",
-      coverageWarnTitle:"How to read these figures.",
-      coverageWarnBody:"{pct}% of slots are currently matched to a named operator. "+
-        "Qubic's public ledger pays every computor by protocol emission rather than by "+
-        "a traceable transfer, so ownership is not something the chain discloses on its "+
-        "own. The figures below therefore describe {slots} slots as the upper bound: the "+
-        "real number of operators is lower, and concentration correspondingly higher. "+
-        "Operators can add their slots to the public registry at any time.",
+      coverageWarnTitle:"Slots, not operators — yet.",
+      coverageWarnBody:"Every figure here is measured per computor slot. Who operates "+
+        "those slots is a separate question this report cannot answer from the chain "+
+        "alone: Qubic pays computors by protocol emission rather than by traceable "+
+        "transfers, so the ledger discloses no ownership. One operator holding several "+
+        "of the {slots} slots would make the network more concentrated than the numbers "+
+        "below suggest. Operators can list their slots in the public registry — the "+
+        "report groups by operator as soon as they do.",
       statusLive:"Live — current epoch, refreshed continuously",
       statusSealed:"Sealed — closed epoch, final",
       statusPartial:"Partial — incomplete derivation, excluded from trends",
-      kNak13:"Nakamoto ⅓", kNak13Sub:"operators to control ⅓",
-      kNak12:"Nakamoto ½", kNak12Sub:"operators to control ½",
-      kGini:"Gini (revenue)", kGiniSub:"0 even · 1 concentrated",
-      kTop1:"Top operator", kTop1Sub:"share of revenue"
+      kNak13:"Nakamoto ⅓", kNak13Sub:"slots to control ⅓ of revenue",
+      kNak12:"Nakamoto ½", kNak12Sub:"slots to control ½ of revenue",
+      kGini:"Gini (revenue)", kGiniSub:"across slots · 0 even · 1 concentrated",
+      kTop1:"Top slot", kTop1Sub:"share of revenue"
     },
     de:{
       title:"Qubic Dezentralisierungs-Report", tagline:"wie dezentral Qubic wirklich ist",
@@ -463,11 +503,20 @@
         "erscheinen, sobald sie gemessen sind — diese Seite zeigt niemals Platzhalterwerte.",
       buildingRetry:"Wird automatisch erneut versucht…",
       liveRunning:"läuft · Umsatz wird beim Abschluss gutgeschrieben",
-      lead:"Qubic läuft auf {slots} Computor-Slots. Auf dem Papier wirkt das wie {slots} unabhängige Betreiber — aber ein einzelner Betreiber kann viele Slots gleichzeitig halten. Dieser Report gruppiert Slots nach Betreiber (zuerst self-reported, dann on-chain verknüpft) und misst, wie konzentriert Umsatz und Kontrolle wirklich sind.",
+      lead:"Qubic läuft auf {slots} Computor-Slots. Auf dem Papier wirkt das wie {slots} unabhängige Betreiber — aber ein einzelner Betreiber kann viele Slots gleichzeitig halten, und das Ledger sagt nicht, wer welche hält. Dieser Report misst Umsatz und Konzentration pro Slot aus der Chain und gruppiert Slots nach Betreiber, wo sich das belegen lässt — self-reported oder on-chain verknüpft.",
       clusterMapTitle:"Betreiber-Karte", clusterMapDesc:"Jede Kachel ist ein Betreiber; Fläche = Anteil der Epoche. Deklarierte Betreiber sind self-reported; „unattributed“ sind Slots ohne nachgewiesenen Eigentümer.",
+      distTitle:"Umsatz über die Computor-Slots",
+      distDesc:"Nach Umsatz dieser Epoche sortiert, höchster zuerst. Die Betreiber-Zuordnung "+
+        "ist offen, daher zeigt diese Ansicht das Gemessene: was jeder der {slots} Slots "+
+        "verdient hat. Dieselbe Ansicht gruppiert nach Betreiber, sobald Slots zugeordnet sind.",
+      distBandTop1:"Top 1%", distBandTop10:"Top 10%", distBandUpper:"Oberstes Viertel",
+      distBandMid:"Zweites Viertel", distBandLower:"Drittes Viertel", distBandBottom:"Unterstes Viertel",
+      distFlat:"{pct}% der Slots wurden exakt gleich vergütet ({amount} QU).",
+      distSpread:"Höchster Slot verdient das {x}-fache des niedrigsten.",
+      distOfRevenue:"des Umsatzes", distSlotsN:"{n} Slots",
       byRevenue:"Nach Umsatz", bySlots:"Nach Slots",
       declared:"Deklariert (self-reported)", unattributed:"Nicht zugeordnet", linked:"On-chain verknüpft",
-      timelineTitle:"Konzentration über Zeit", timelineDesc:"Der Nakamoto-Koeffizient sagt, wie viele Betreiber kolludieren müssen, um ein Drittel des Umsatzes zu kontrollieren — niedriger heißt zentraler. Gini misst die Umsatz-Ungleichheit (0 = gleich, 1 = ein Betreiber bekommt alles).",
+      timelineTitle:"Konzentration über Zeit", timelineDesc:"Der Nakamoto-Koeffizient sagt, wie viele Computor-Slots zusammenwirken müssen, um ein Drittel des Umsatzes zu kontrollieren — niedriger heißt konzentrierter. Gini misst, wie ungleich der Umsatz über die Slots verteilt ist (0 = gleich, 1 = ein Slot bekommt alles). Beide zählen Slots; wo ein Betreiber mehrere hält, liegen die echten Werte niedriger.",
       nakamotoShort:"Nakamoto (⅓)", giniShort:"Gini ×10",
       tableTitle:"Betreiber dieser Epoche", tableDesc:"Sortiert nach Umsatzanteil. Slots = Anzahl der Computors des Betreibers.",
       thOperator:"Betreiber", thConfidence:"Basis", thSlots:"Slots", thShare:"Umsatzanteil",
@@ -481,28 +530,30 @@
       discCorrections:"Betreiber können ihren Eintrag jederzeit per Pull Request korrigieren oder ergänzen.",
       discDemo:"Nutzung nur zu Analysezwecken — keine Grundlage für Investitionsentscheidungen.",
       sponsored:"Qubic – Sponsored by AndyQus", tos:"Nutzungsbedingungen", privacy:"Datenschutz",
-      kOperators:"Betreiber", kOperatorsSub:"aus {slots} Computor-Slots",
-      upperBound:"Obergrenze",
+      kOperators:"Computor-Slots", kOperatorsSub:"die {slots} Slots des Netzwerks",
+      kAttribution:"Betreiber-Zuordnung", kAttributionSub:"Slots einem benannten Betreiber zugeordnet",
+      slotsNotOperators:"Slots, nicht Betreiber",
       kDeclared:"Deklarierte Betreiber", kDeclaredSub:"self-reported",
       kCoverage:"On-Chain verknüpft", kCoverageSub:"Slots über Payout-Graph aufgelöst",
       confirmed:"Deklariert + on-chain bestätigt", flagged:"Markiert (Verhalten)",
       liveNow:"live", liveTick:"Tick", liveProgress:"Epochen-Fortschritt",
       liveQuality:"Tick-Qualität", liveAddresses:"Aktive Adressen",
       liveRecent:"letzte 10k:", perSecond:"Ticks/s",
-      coverageWarnTitle:"So sind diese Zahlen zu lesen.",
-      coverageWarnBody:"{pct}% der Slots sind derzeit einem benannten Betreiber zugeordnet. "+
-        "Qubic vergütet jeden Computor über Protokoll-Emission statt über eine nachverfolgbare "+
-        "Überweisung — Eigentümerschaft gibt die Chain von sich aus also nicht preis. Die "+
-        "Zahlen unten beschreiben {slots} Slots daher als Obergrenze: die tatsächliche "+
-        "Betreiberzahl liegt niedriger, die Konzentration entsprechend höher. Betreiber "+
-        "können ihre Slots jederzeit im öffentlichen Registry eintragen.",
+      coverageWarnTitle:"Slots, noch nicht Betreiber.",
+      coverageWarnBody:"Jede Zahl hier ist pro Computor-Slot gemessen. Wer diese Slots "+
+        "betreibt, ist eine eigene Frage, die dieser Report aus der Chain allein nicht "+
+        "beantworten kann: Qubic vergütet Computors über Protokoll-Emission statt über "+
+        "nachverfolgbare Überweisungen, das Ledger gibt also keine Eigentümerschaft preis. "+
+        "Hält ein Betreiber mehrere der {slots} Slots, ist das Netzwerk konzentrierter als "+
+        "die Zahlen unten nahelegen. Betreiber können ihre Slots im öffentlichen Registry "+
+        "eintragen — der Report gruppiert nach Betreiber, sobald sie das tun.",
       statusLive:"Live — laufende Epoche, wird ständig aktualisiert",
       statusSealed:"Versiegelt — abgeschlossene Epoche, final",
       statusPartial:"Unvollständig — Ableitung lückenhaft, nicht im Trend",
-      kNak13:"Nakamoto ⅓", kNak13Sub:"Betreiber für ⅓-Kontrolle",
-      kNak12:"Nakamoto ½", kNak12Sub:"Betreiber für ½-Kontrolle",
-      kGini:"Gini (Umsatz)", kGiniSub:"0 gleich · 1 konzentriert",
-      kTop1:"Top-Betreiber", kTop1Sub:"Umsatzanteil"
+      kNak13:"Nakamoto ⅓", kNak13Sub:"Slots für ⅓ des Umsatzes",
+      kNak12:"Nakamoto ½", kNak12Sub:"Slots für ½ des Umsatzes",
+      kGini:"Gini (Umsatz)", kGiniSub:"über Slots · 0 gleich · 1 konzentriert",
+      kTop1:"Top-Slot", kTop1Sub:"Umsatzanteil"
     }
   };
   let lang = safeGet(LS_LANG) || "en";
@@ -641,20 +692,28 @@
     const s=series[idx]||{};
     // Attribution-dependent figures carry an explicit "upper bound" note when the
     // chain could not link slots: a labelled number informs, an unlabelled one misleads.
-    const bounded = (s.attributed_share!=null && s.attributed_share<0.25);
-    const bsub = sub => bounded ? sub+" · "+t("upperBound") : sub;
+    // Every tile is a measurement. Operator-level figures are not shown while
+    // attribution is empty: a Nakamoto coefficient over 676 unlinked slots would
+    // read as "676 independent operators", which is precisely what we cannot say.
+    const att = s.attributed_share;
+    const attributed = (att!=null && att>=0.25);
     const cards=[
-      {cls:"accent",label:t("kOperators"),val:fmtInt(s.operators),sub:bsub(t("kOperatorsSub"))},
-      {cls:"",label:t("kCoverage"),
-       val:(s.onchain_linked_share!=null?(s.onchain_linked_share*100).toFixed(0)+"%":"–"),
-       sub:t("kCoverageSub")},
-      {cls:"warn",label:t("kNak13"),val:fmtInt(s.nakamoto_one_third_revenue),sub:bsub(t("kNak13Sub"))},
-      {cls:"warn",label:t("kNak12"),val:fmtInt(s.nakamoto_half_revenue),sub:bsub(t("kNak12Sub"))},
-      {cls:"",label:t("kGini"),val:(s.gini_revenue!=null?s.gini_revenue.toFixed(2):"–"),sub:t("kGiniSub")},
-      {cls:"accent",label:t("kTop1"),val:(s.top1_share!=null?(s.top1_share*100).toFixed(1)+"%":"–"),sub:t("kTop1Sub")},
+      {cls:"accent",label:t("kOperators"),val:fmtInt(s.computors||s.operators),
+       sub:t("kOperatorsSub",{slots:fmtInt(s.computors||s.operators)})},
+      {cls:"",label:t("kAttribution"),
+       val:(att!=null?(att*100).toFixed(0)+"%":"–"),
+       sub:t("kAttributionSub")},
+      {cls:"warn",label:t("kNak13"),val:fmtInt(s.nakamoto_one_third_revenue),sub:t("kNak13Sub")},
+      {cls:"warn",label:t("kNak12"),val:fmtInt(s.nakamoto_half_revenue),sub:t("kNak12Sub")},
+      {cls:"",label:t("kGini"),val:(s.gini_revenue!=null?s.gini_revenue.toFixed(3):"–"),sub:t("kGiniSub")},
+      {cls:"accent",label:t("kTop1"),val:(s.top1_share!=null?(s.top1_share*100).toFixed(2)+"%":"–"),sub:t("kTop1Sub")},
     ];
+    // One badge, once, rather than a repeated caveat under every figure.
+    if(!attributed) cards[2].note = cards[3].note = t("slotsNotOperators");
     document.getElementById("kpis").innerHTML=cards.map(c=>
-      `<div class="kpi ${c.cls}"><div class="k-label">${c.label}</div><div class="k-val">${c.val}</div><div class="k-sub">${c.sub}</div></div>`).join("");
+      `<div class="kpi ${c.cls}"><div class="k-label">${c.label}</div><div class="k-val">${c.val}</div>`+
+      `<div class="k-sub">${c.sub}</div>`+
+      (c.note?`<div class="k-note">${escapeHtml(c.note)}</div>`:"")+`</div>`).join("");
   }
 
   /* ---------- treemap (squarified) ---------- */
@@ -697,7 +756,62 @@
     return out;
   }
   const tileEls={};
+  /* ---------- slot revenue distribution ----------
+     Shown instead of the operator map while attribution is empty. The map would
+     be a single grey tile reading "unattributed · 676 slots · 100%", which looks
+     like a rendering failure and says nothing; the per-slot revenue behind it is
+     real, so the panel shows that until operators are known. */
+  function currentDist(){
+    const ec=clByEpoch[epochs[idx]];
+    return (ec && ec.slot_distribution) || null;
+  }
+
+  function renderDistribution(){
+    const d=currentDist();
+    const wrap=document.getElementById("dist");
+    const bars=document.getElementById("dist-bars");
+    const facts=document.getElementById("dist-facts");
+    if(!d){ wrap.hidden=true; return; }
+    wrap.hidden=false;
+    const NAMES={top1:"distBandTop1",top10:"distBandTop10",upper:"distBandUpper",
+                 mid:"distBandMid",lower:"distBandLower",bottom:"distBandBottom"};
+    const max=Math.max(...d.bands.map(b=>b.revenue_share))||1;
+    bars.innerHTML=d.bands.map(b=>{
+      const pct=b.revenue_share*100;
+      return `<div class="dist-row">`+
+        `<div class="dist-name">${escapeHtml(t(NAMES[b.id]||b.id))}`+
+        `<small>${escapeHtml(t("distSlotsN",{n:fmtInt(b.slots)}))}</small></div>`+
+        `<div class="dist-track"><div class="dist-fill" style="width:${(b.revenue_share/max*100).toFixed(1)}%"></div></div>`+
+        `<div class="dist-pct">${pct.toFixed(1)}%</div></div>`;
+    }).join("");
+    const parts=[];
+    if(d.flat_share>0.1){
+      parts.push(t("distFlat",{pct:(d.flat_share*100).toFixed(1),
+                               amount:fmtInt(d.flat_value)}));
+    }
+    if(d.spread){ parts.push(t("distSpread",{x:d.spread})); }
+    facts.innerHTML=parts.map(escapeHtml).join(" ");
+  }
+
   function renderTreemap(){
+    // While nothing is attributed the map has nothing to draw: show the measured
+    // slot distribution in its place and keep the operator legend out of the way.
+    const d=currentDist();
+    const s=series[idx]||{};
+    const useDist = d && !(s.attributed_share>=0.25);
+    document.getElementById("treemap").hidden=!!useDist;
+    const lg=document.getElementById("legend"); if(lg) lg.hidden=!!useDist;
+    const sizeSeg=document.getElementById("size-seg"); if(sizeSeg) sizeSeg.hidden=!!useDist;
+    if(useDist){
+      const n=fmtInt(d.slots);
+      document.getElementById("map-title").textContent=t("distTitle");
+      document.getElementById("map-desc").textContent=t("distDesc",{slots:n});
+      renderDistribution();
+      return;
+    }
+    document.getElementById("map-title").textContent=t("clusterMapTitle");
+    document.getElementById("map-desc").textContent=t("clusterMapDesc");
+    document.getElementById("dist").hidden=true;
     const host=document.getElementById("treemap");
     const W=host.clientWidth||900, H=host.clientHeight||340;
     const items=currentBubbles();
@@ -768,6 +882,10 @@
   /* ---------- table ---------- */
   function renderTable(){
     const ec=clByEpoch[epochs[idx]]; if(!ec) return;
+    const panel=document.getElementById("op-panel");
+    const named=ec.bubbles.filter(b=>b.confidence!=="unattributed");
+    if(panel) panel.hidden = named.length===0;   // nothing to list yet
+    if(!named.length) return;
     const rows=ec.bubbles.slice().sort((a,b)=>(b.revenue_share||0)-(a.revenue_share||0));
     const maxShare=Math.max(...rows.map(r=>r.revenue_share||0))||1;
     document.getElementById("op-table").innerHTML=rows.map(r=>{
