@@ -4,7 +4,7 @@
 Bericht „Wie dezentral ist Qubic?" erzeugt und ihn als API bereitstellt, die Explorer
 einbinden können.*
 
-Status: Entwurf v0.3.0 · Owner: (Qubic-Community-Projekt) · Sprachen: Diese Datei ist die
+Status: Entwurf v0.4.0 · Owner: (Qubic-Community-Projekt) · Sprachen: Diese Datei ist die
 deutsche Fassung; die englische liegt unter `docs/CONCEPT.md`. Beide werden synchron
 gehalten.
 
@@ -593,7 +593,52 @@ Teil der Bewegung er nicht erklären konnte.
 
 ---
 
-## 8. Offene Fragen für den nächsten Schritt
+## 8. Wo der Report steht
+
+Zwei der drei Ebenen sind fertig und laufen auf Live-Daten. Die dritte — die Frage, *wer*
+einen Slot betreibt — ist die, die die Chain nicht beantworten kann, und an dieser Stelle
+hängt das Projekt jetzt an der Community und nicht an weiterem Code.
+
+**Funktioniert, auf Live-Daten:**
+
+- Umsatz pro Computor-Slot, aus dem End-Epoch-Log eines Bob-Nodes. Die Epochen 225–228
+  sind versiegelt, mit je 676/676 bezahlten Computors. (§4.3)
+- Konzentration und ihre Dynamik: Gini, HHI, Nakamoto ⅓/½, Top-N-Anteil, pro Epoche und
+  als Zeitreihe. (§3)
+- Ein Store, der sich selbst aktuell hält: Historie beim ersten Start nachgefüllt, jede
+  Epoche beim Abschluss versiegelt, und jede Epoche, die eine ältere Code-Version
+  berechnet hat, wird beim Deploy neu abgeleitet — eine Korrektur zieht die Zahlen zurück,
+  die sie behebt. (§5.1)
+- API und Dashboard zeigen nie eine Zahl, die niemand gemessen hat: kein Sample-Fallback,
+  ein ungefüllter Store antwortet mit 503, und jede Zahl ist danach beschriftet, was sie
+  zählt.
+
+**Offen — und das ist der Befund, kein Mangel:**
+
+Das Clustering läuft in jeder Epoche und ergibt derzeit **einen Cluster: 676 nicht
+zugeordnete Slots**, weil keine der beiden Attributionsebenen etwas auflöst.
+
+- *On-Chain-Verknüpfung* (§4.2) ist implementiert und findet nichts Beweisbares. Jeder
+  Computor wird von derselben Null-Adresse vergütet — Protokoll-Emission, keine Wallet —
+  und seine ausgehenden Transfers sind einheitlich 1.000.000-QU-Burns an dieselbe Adresse.
+  Kein Transfer-Graph verbindet zwei Computors. Ausgewiesen als `linkage_coverage: 0`
+  statt als Unabhängigkeit dargestellt.
+- *Self-Reporting* (§4.1), CFBs eigener Anti-Sybil-Punkt, ist leer: kein Pool hat seine
+  Slots deklariert. Registry, Schema und Validator stehen bereit und warten.
+
+Der Report misst daher Umsatz **pro Slot** und beschriftet das durchgehend so: Ein
+Nakamoto-Koeffizient von 222 bedeutet 222 von 676 *Slots*, nicht 222 unabhängige Betreiber.
+Hält ein Betreiber mehrere Slots, ist die echte Konzentration höher — und die Seite sagt das.
+
+Das ist eine Messung für sich — **die Self-Reporting-Beteiligung liegt derzeit bei null** —
+und das Werkzeug ist die Infrastruktur, um das zu ändern. Ein Pool öffnet einen Pull Request
+auf `data/self_reporting/pools.json`; die Betreiber-Ansicht (Treemap, Betreiber-Tabelle,
+Nakamoto auf Betreiber-Ebene) schaltet sich für diesen Pool ohne Code-Änderung ein, und die
+Git-Historie ist der Prüfpfad. Das ist „Self-Reporting to the fullest" konkret gemacht.
+
+---
+
+## 9. Offene Fragen für den nächsten Schritt
 
 - Genaue RPC-Endpoints und Rate-Limits für die Revenue-Historie pro Computor (in
   `docs/DATA_SOURCES.md` festhalten).
@@ -613,7 +658,7 @@ Teil der Bewegung er nicht erklären konnte.
 
 ---
 
-## 9. Roadmap
+## 10. Roadmap
 
 1. **Konzept** (dieses Dokument) ✅
 2. **Data Mapping** — Endpoints gegen die Live-RPC bestätigt, in `docs/DATA_SOURCES.md`

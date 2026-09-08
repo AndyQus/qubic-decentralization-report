@@ -14,7 +14,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.build_how_it_works import OUT, SOURCES, build, render  # noqa: E402
+from scripts.build_how_it_works import (  # noqa: E402
+    OUT, SKIP_SECTIONS, SOURCES, build, render)
 
 
 def test_page_is_in_sync_with_the_concept():
@@ -48,8 +49,15 @@ def test_concept_sections_reach_the_page():
         body, toc, _ = render(md, lang)
         # section 4.4 is the slot-transition logic; it must survive the render
         assert "4.4" in " ".join(t for _, t in toc) or "4.4" in body
-        # internal bookkeeping sections stay off the public page
-        assert not any(t.startswith(("8.", "9.")) for _, t in toc)
+        # Internal bookkeeping stays off the public page — asserted against the
+        # generator's own skip list rather than hardcoded numbers, so renumbering
+        # the concept cannot silently publish the roadmap.
+        assert not any(t.startswith(SKIP_SECTIONS[lang]) for _, t in toc)
+        # ...while the reader-facing status section must reach it: it is what says
+        # what the figures can and cannot claim today.
+        titles = " ".join(t for _, t in toc)
+        assert ("Where the report stands" in titles
+                or "Wo der Report steht" in titles), f"{lang}: status section missing"
 
 
 def test_no_unbalanced_markup():

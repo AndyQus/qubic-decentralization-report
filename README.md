@@ -20,11 +20,54 @@ cluster** — built on Qubic's **self-reporting** anti-Sybil approach and extend
 on-chain and behavioral signals to quantify concentration/collusion among the 676
 Computors.
 
-**Run it in one line** (details under [Docker](#docker--publishing)):
+**Run it** (details under [Docker](#docker--publishing)). Two services share one volume:
+the ingest worker writes the store, the API serves it.
 
 ```bash
-docker run -d -p 8000:8000 -v qdr-data:/data andyqus/qubic_decentralization_report:latest
+docker compose up -d
+docker compose logs -f qubic_decentralization_report_ingest   # watch the first backfill
 ```
+
+The API alone starts too, but without the worker nothing fills the store and the page
+stays on "building the report" — the worker is what makes it self-updating.
+
+### What works today, and what is still open
+
+| | |
+|---|---|
+| ✅ **Revenue per computor slot** | From a Bob node's end-epoch log. Epochs 225-228 sealed with 676/676 computors paid — the public RPC does not expose these payouts at all (they are protocol emission, not transfers). |
+| ✅ **Concentration metrics + dynamics** | Gini, HHI, Nakamoto ⅓/½, top-N share, per epoch and over time. |
+| ✅ **Keeps itself current** | The worker backfills on first start, seals each epoch as it closes, and re-derives any epoch an older code version computed — a deploy retires the figures it corrects. |
+| ✅ **Honest about its limits** | No sample data, ever. An unfilled store answers 503 and the page says it is building. Every figure is labelled for what it measures. |
+| 🔶 **Operator attribution: 0%** | **The one thing still missing, and it needs the community, not more code.** See below. |
+| 🔶 **Explorer embedding** | Widget, iframe and raw API are shipped (`docs/EMBEDDING.md`); no explorer has adopted it yet. |
+
+### The open question: who operates the 676 slots?
+
+CFB's request was clustering — "number of computors in each cluster". The machinery for
+that is built and runs on every epoch. It currently produces **one cluster: 676
+unattributed slots**, because neither attribution layer can resolve anything:
+
+- **On-chain linkage** finds nothing provable. Every computor is credited by the same
+  null address (protocol emission, not a wallet), and their outgoing transfers are
+  uniformly 1,000,000 QU burns to that same address. No transfer graph links two
+  computors, so the ledger discloses no ownership. Reported as `linkage_coverage: 0`
+  rather than dressed up as independence.
+- **Self-reporting** — CFB's own anti-Sybil point, "let's use it to the fullest" — is
+  empty: no pool has declared its slots yet.
+
+So the report currently measures revenue **per slot**, and says so on every figure
+("slots, not operators"). A Nakamoto coefficient of 222 means 222 of 676 *slots*, not 222
+independent operators; where one operator holds several, the real concentration is higher.
+
+Ready-to-post announcement text for `#computor-operator` — long and short — is in
+[`docs/ANNOUNCEMENT.md`](docs/ANNOUNCEMENT.md).
+
+**This is the finding, not a gap in the tool.** It measures that self-reporting adoption is
+currently zero, and it is the infrastructure for changing that: a pool opens a pull request
+against [`data/self_reporting/pools.json`](data/self_reporting/pools.json), and the
+operator view — treemap, per-operator table, operator-level Nakamoto — turns itself on for
+that pool with no code change. Git history is the audit trail.
 
 ## How the pieces fit together
 

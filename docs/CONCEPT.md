@@ -4,7 +4,7 @@
 Qubic" report from self-reported and on-chain data, and exposes it as an API that
 explorers can embed.*
 
-Status: draft v0.3.0 · Owner: (Qubic community project) · Language: English (spec is for
+Status: draft v0.4.0 · Owner: (Qubic community project) · Language: English (spec is for
 the Qubic community / bounty reviewers; happy to keep a German copy alongside)
 
 ---
@@ -556,7 +556,49 @@ plainly how much of the movement it could not explain.
 
 ---
 
-## 8. Open questions to resolve next
+## 8. Where the report stands
+
+Two of the three layers are finished and running on live data. The third — deciding *who*
+operates a slot — is the one the chain cannot answer, and it is where the project now
+depends on the community rather than on more code.
+
+**Working, on live data:**
+
+- Revenue per computor slot, from a Bob node's end-epoch log. Epochs 225-228 are sealed
+  with 676/676 computors paid each. (§4.3)
+- Concentration and its dynamics: Gini, HHI, Nakamoto ⅓/½, top-N share, per epoch and as
+  a time series. (§3)
+- A store that keeps itself current: history backfilled on first start, each epoch sealed
+  as it closes, and any epoch computed by an older code version re-derived on deploy, so
+  a correctness fix retires the figures it corrects. (§5.1)
+- An API and dashboard that never show a figure nobody measured: no sample fallback, an
+  unfilled store answers 503, and every number is labelled for what it counts.
+
+**Open — and this is the finding, not a defect:**
+
+Clustering runs on every epoch and currently yields **one cluster: 676 unattributed
+slots**, because neither attribution layer resolves anything.
+
+- *On-chain linkage* (§4.2) is implemented and finds nothing provable. Every computor is
+  credited by the same null address — protocol emission, not a wallet — and their outgoing
+  transfers are uniformly 1,000,000 QU burns to that same address. No transfer graph links
+  two computors. Reported as `linkage_coverage: 0` rather than presented as independence.
+- *Self-reporting* (§4.1), CFB's own anti-Sybil point, is empty: no pool has declared its
+  slots. The registry, its schema and its validator are in place and waiting.
+
+The report therefore measures revenue **per slot** and labels it that way throughout: a
+Nakamoto coefficient of 222 means 222 of 676 *slots*, not 222 independent operators. Where
+one operator holds several slots the true concentration is higher, and the page says so.
+
+That is a measurement in its own right — **self-reporting adoption is currently zero** —
+and the tool is the infrastructure for changing it. A pool opens a pull request against
+`data/self_reporting/pools.json`; the operator view (treemap, per-operator table,
+operator-level Nakamoto) turns itself on for that pool with no code change, and git history
+is the audit trail. That is "using self-reporting to the fullest" made concrete.
+
+---
+
+## 9. Open questions to resolve next
 
 - Confirm the arbitrator identity against boundary-tick transfers and pin it with evidence
   (blocks §4.3; currently an unverified constant).
@@ -579,7 +621,7 @@ plainly how much of the movement it could not explain.
 
 ---
 
-## 9. Roadmap
+## 10. Roadmap
 
 1. **Concept** (this doc) ✅
 2. **Data mapping** — endpoints confirmed against live RPC, documented in `docs/DATA_SOURCES.md` ✅

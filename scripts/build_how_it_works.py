@@ -25,8 +25,10 @@ SOURCES = {"en": ROOT / "docs" / "CONCEPT.md", "de": ROOT / "docs" / "CONCEPT.de
 OUT = ROOT / "dashboard" / "how-it-works.html"
 
 # Sections that are internal project bookkeeping rather than "how it works".
-# Roadmap/open-questions age badly on a public page and duplicate the repo.
-SKIP_SECTIONS = {"en": ("8.", "9."), "de": ("8.", "9.")}
+# Open questions (9) and the roadmap (10) age badly on a public page and duplicate
+# the repo. Section 8 ("Where the report stands") IS for readers: it is what a
+# visitor needs to know about what the figures can and cannot say today.
+SKIP_SECTIONS = {"en": ("9.", "10."), "de": ("9.", "10.")}
 
 
 # --------------------------------------------------------------------------
