@@ -69,17 +69,18 @@ Nakamoto ⅓ = 222 von 676 Slots, eingetragene Betreiber: **0**.
 
 ## X
 
-> Pools, eine Bitte: tragt eure Computor-Slots ein.
+> 🌐$QUBIC Decentralization Report updated.
 >
-> Der Report misst den Umsatz je Slot. Wer sie betreibt, gibt das Ledger nicht
-> her — und keine API zeigt es.
+> Pools: tragt eure Computor-Slots ein. Wer sie betreibt, gibt das Ledger nicht
+> her — keine API zeigt es.
 >
 > Darum: Nakamoto 222 von 676 *Slots*, nicht Betreiber.
 >
-> Die Listen stehen bereit und sind leer:
+> Einträge nehme ich nur im Discord entgegen. Registry:
 > https://github.com/AndyQus/qubic-decentralization-report/blob/main/data/self_reporting/pools.json
 
-*(277/280, URL als 23 Zeichen gerechnet.)*
+*(279/280, URL als 23 Zeichen gerechnet — praktisch am Anschlag, jede Ergänzung
+muss also gleich viel wieder einsparen.)*
 
 ---
 
@@ -138,17 +139,17 @@ Nakamoto ⅓ = 222 von 676 Slots, eingetragene Betreiber: **0**.
 
 ## X
 
-> Pools, a request: declare your computor slots.
+> 🌐$QUBIC Decentralization Report updated.
 >
-> The report measures revenue per slot. Who operates them, the ledger does not
+> Pools: declare your computor slots. Who operates them, the ledger does not
 > disclose — and no API exposes it.
 >
 > So: Nakamoto 222 of 676 *slots*, not operators.
 >
-> The lists are there, and empty:
+> Declarations via Discord only. Registry:
 > https://github.com/AndyQus/qubic-decentralization-report/blob/main/data/self_reporting/pools.json
 
-*(264/280, URL counted as 23 characters.)*
+*(265/280, URL counted as 23 characters.)*
 
 ---
 
@@ -162,5 +163,10 @@ Nakamoto ⅓ = 222 von 676 Slots, eingetragene Betreiber: **0**.
   es sei nichts zu tun.
 - Der X-Post nennt bewusst die Registry, nicht das Dashboard: die Bitte ist die
   Botschaft, nicht der Report.
+- **X leitet Einträge ausdrücklich nach Discord.** Damit bleiben die Angaben an
+  einem Ort, an dem nachgefragt werden kann — auf X wären sie verstreut und
+  schwer zuzuordnen. Die Discord-Fassungen nennen die Chat-Antwort deshalb
+  zuerst und den eigenen PR als zweiten Weg; wer selbst einen PR öffnet, ist
+  natürlich weiterhin willkommen.
 - Zahlen ändern sich an jeder Epochengrenze (~4,4 Tage). Bei späterem Posten neu
   aus `https://report.qubic.tools/v1/dashboard-data` lesen.
