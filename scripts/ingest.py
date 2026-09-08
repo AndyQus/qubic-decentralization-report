@@ -28,7 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from qdr import pipeline
+from qdr import __version__, pipeline
 from qdr.bob import BOB_URL, BobClient, BobError
 from qdr.client import CachedClient, QubicRPCError
 from qdr.clustering import load_registry
@@ -86,6 +86,10 @@ def main() -> int:
     ap.add_argument("--snapshot", action="store_true",
                     help="snapshot computor balances (input for balance-delta revenue)")
     ap.add_argument("--status", action="store_true", help="show what the store holds")
+    ap.add_argument("--refresh-stale", action="store_true",
+                    help="re-derive every epoch computed by an older code version, "
+                         "then exit (run on startup so a deploy never serves figures "
+                         "its own code has since corrected)")
     ap.add_argument("--export", action="store_true", help="write static snapshots from the store")
     ap.add_argument("--export-each", action="store_true",
                     help="with --watch: re-export the static snapshots after every pass, "
@@ -153,6 +157,20 @@ def main() -> int:
         print(describe(rep))
         for w in rep.get("warnings", []):
             print(f"  ! {w}")
+        return 0
+
+    if args.refresh_stale:
+        stale = store.stale_epochs()
+        if not stale:
+            print(f"nothing stale — every epoch is at code_version {__version__}")
+            return 0
+        print(f"re-deriving {len(stale)} epoch(s) computed by an older version: "
+              f"{stale[0]}..{stale[-1]} -> {__version__}")
+        out = pipeline.backfill(client, store, stale, registry, force=True, bob=bob)
+        for d in out["computed"]:
+            print(f"  epoch {d['epoch']}: {d['status']}, {d['operators']} operators")
+        for e, err in out["failed"].items():
+            print(f"  FAILED epoch {e}: {err}", file=sys.stderr)
         return 0
 
     if args.backfill:

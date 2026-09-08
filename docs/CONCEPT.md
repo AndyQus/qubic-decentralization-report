@@ -4,7 +4,7 @@
 Qubic" report from self-reported and on-chain data, and exposes it as an API that
 explorers can embed.*
 
-Status: draft v0.2.1 · Owner: (Qubic community project) · Language: English (spec is for
+Status: draft v0.3.0 · Owner: (Qubic community project) · Language: English (spec is for
 the Qubic community / bounty reviewers; happy to keep a German copy alongside)
 
 ---

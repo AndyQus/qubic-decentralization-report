@@ -9,6 +9,12 @@
 #      lasts ~4.4 days — without this, a new instance would sit on "building"
 #      until the next epoch boundary. Bob's end-epoch logs reach back far
 #      enough to seal real history within minutes of first start.
+#   1b. Re-derive stale epochs on start. A sealed epoch is normally immutable,
+#      but a correctness fix changes what the right answer is — an epoch computed
+#      by an older code version is not "already done", it is wrong and still on
+#      the page. Every start compares each epoch's code_version against the
+#      running code and recomputes whatever disagrees, so deploying new code is
+#      all it takes to retire the numbers it corrects.
 #   2. Watch. Refreshes the running epoch, takes the balance snapshots that
 #      revenue derivation needs (an epoch boundary is not replayable, so a
 #      missed one is missed for good), and seals each epoch as it closes.
@@ -24,6 +30,12 @@ echo "[worker] backfilling last ${BACKFILL} epochs …"
 # current epoch, and a transient RPC outage is not a reason to stay down.
 python scripts/ingest.py --backfill "${BACKFILL}" || \
   echo "[worker] backfill incomplete; continuing into watch" >&2
+
+# Anything the previous version computed differently is now wrong on the page.
+# This is what makes a deploy self-correcting: no operator has to know that a
+# fix changed a figure, or remember to pass --force by hand.
+echo "[worker] checking for epochs computed by an older code version …"
+python scripts/ingest.py --refresh-stale ||   echo "[worker] stale refresh incomplete; watch will retry the live epoch" >&2
 
 python scripts/ingest.py --export || true
 

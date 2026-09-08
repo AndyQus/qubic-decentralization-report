@@ -211,6 +211,15 @@ docker image prune -f              # remove the superseded image
   measurements are indistinguishable from them once rendered, and this report is read
   as a statement about the network. An unfilled store answers `503` and the dashboard
   says it is still building — it never shows a number nobody measured.
+- **A deploy corrects itself.** Sealed epochs are normally immutable, but a fix
+  that changes a published figure makes the epochs computed before it wrong, not
+  done. Every worker start compares each epoch's `code_version` against the
+  running code and re-derives whatever disagrees, so shipping new code is all it
+  takes to retire the numbers it corrects — no `--force` by hand, nothing stale
+  left on the page. The superseded computation is kept beside the new one
+  (reports are keyed by `(epoch, code_version)`), so a changed number has a
+  recorded before and after. Run it manually with
+  `python scripts/ingest.py --refresh-stale`.
 - **First start** takes a few minutes: the worker seals `QDR_BACKFILL_EPOCHS` (default
   10) epochs before the dashboard has anything to show. Watch it with
   `docker compose logs -f qubic_decentralization_report_ingest`.

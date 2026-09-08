@@ -4,7 +4,7 @@
 Bericht „Wie dezentral ist Qubic?" erzeugt und ihn als API bereitstellt, die Explorer
 einbinden können.*
 
-Status: Entwurf v0.2.1 · Owner: (Qubic-Community-Projekt) · Sprachen: Diese Datei ist die
+Status: Entwurf v0.3.0 · Owner: (Qubic-Community-Projekt) · Sprachen: Diese Datei ist die
 deutsche Fassung; die englische liegt unter `docs/CONCEPT.md`. Beide werden synchron
 gehalten.
 

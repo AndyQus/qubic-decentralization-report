@@ -432,8 +432,9 @@ class Store:
                 ).fetchone()
             else:
                 r = self._conn.execute(
-                    "SELECT * FROM reports WHERE epoch=? ORDER BY computed_at DESC LIMIT 1",
-                    (epoch,),
+                    "SELECT * FROM reports WHERE epoch=? "
+                    "ORDER BY (code_version = ?) DESC, computed_at DESC LIMIT 1",
+                    (epoch, __version__),
                 ).fetchone()
         if not r:
             return None
@@ -466,6 +467,31 @@ class Store:
                 "SELECT epoch FROM reports ORDER BY epoch DESC, computed_at DESC LIMIT 1"
             ).fetchone()
         return self.get_report(r["epoch"]) if r else None
+
+    def stale_epochs(self, code_version: Optional[str] = None) -> list[int]:
+        """Epochs whose newest report was computed by an older code version.
+
+        A correctness fix changes what the right answer is, so an epoch sealed by
+        the previous version is not "already done" — it is wrong and still on the
+        page. The ingest worker re-derives these on startup; the prior computation
+        is kept beside the new one (reports are keyed by (epoch, code_version)),
+        so a changed number always has a recorded before and after.
+        """
+        want = code_version or __version__
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT epoch, MAX(computed_at) AS t, code_version FROM reports "
+                "GROUP BY epoch ORDER BY epoch"
+            ).fetchall()
+        stale = []
+        for r in rows:
+            # the row MAX() picked may not be the newest version's, so ask directly
+            match = self._conn.execute(
+                "SELECT 1 FROM reports WHERE epoch=? AND code_version=? LIMIT 1",
+                (r["epoch"], want)).fetchone()
+            if not match:
+                stale.append(r["epoch"])
+        return stale
 
     def report_epochs(self) -> list[int]:
         with self._lock:

@@ -11,4 +11,8 @@ Modules:
   report      Stateless single-epoch assembly (tests / ad-hoc recomputation).
 """
 
-__version__ = "0.2.1"
+# Bumped whenever a change alters a published figure. The ingest worker compares
+# this against each stored epoch's code_version on startup and re-derives anything
+# computed by an older version, so a deployment can never keep serving numbers its
+# own code no longer agrees with.
+__version__ = "0.3.0"
