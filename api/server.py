@@ -12,7 +12,8 @@ Reads go through the persistent store (CONCEPT §5.1), not a rebuild-per-request
     without hammering the RPC once per request.
 
 If the store is empty (fresh install) and the RPC is unreachable, the bundled
-sample snapshots in api/sample are used as a cold-start fallback (`sample: true`).
+an empty store answers 503 rather than serving example figures, so nothing this
+API returns is ever anything but measured.
 
 Run:
     pip install -r requirements.txt
@@ -41,7 +42,6 @@ from qdr.clustering import load_registry
 from qdr.store import STATUS_SEALED, Store
 
 ROOT = Path(__file__).resolve().parent.parent
-SAMPLE = ROOT / "api" / "sample"
 
 # How stale the live epoch may get before a request triggers a recompute.
 LIVE_MAX_AGE_S = int(os.environ.get("QDR_LIVE_MAX_AGE", "300"))
@@ -103,13 +103,18 @@ def get_client() -> CachedClient | None:
         return None
 
 
-def _sample(name: str) -> dict:
-    p = SAMPLE / name
-    if not p.exists():
-        raise HTTPException(status_code=503, detail=f"no data available ({name})")
-    data = json.loads(p.read_text(encoding="utf-8"))
-    data["sample"] = True
-    return data
+# There is deliberately no sample fallback. Example figures that are shaped like
+# real ones are indistinguishable from measurements once rendered, and this report
+# is read as a statement about the network. An empty store is a normal state (a
+# fresh deployment, before the ingest worker's first pass) and is reported as such:
+# 503 with a reason, so the dashboard can say "building" instead of showing numbers
+# nobody measured.
+def _no_data(what: str) -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail=(f"no {what} yet — the store is still being filled. "
+                "Run scripts/ingest.py (the ingest service does this automatically)."),
+    )
 
 
 @app.on_event("shutdown")
@@ -173,7 +178,7 @@ def health():
     except Exception:
         stored = 0
     return {"status": "ok", "version": app.version,
-            "stored_reports": stored, "sample_available": SAMPLE.exists()}
+            "stored_reports": stored}
 
 
 # The live pulse is cached for a few seconds: many dashboards may poll it, but
@@ -242,7 +247,7 @@ def report_latest():
     rep = pipeline.get_report(store, None, client=get_client(),
                               registry=load_registry(), max_live_age_s=LIVE_MAX_AGE_S)
     if rep is None:
-        return _sample("report_latest.json")
+        raise _no_data("report")
     return rep
 
 
@@ -253,9 +258,6 @@ def report_epoch(epoch: int):
     rep = pipeline.get_report(store, epoch, client=get_client(),
                               registry=load_registry(), max_live_age_s=LIVE_MAX_AGE_S)
     if rep is None:
-        data = _sample("report_latest.json")
-        if data.get("epoch") == epoch:
-            return data
         raise HTTPException(status_code=404, detail=f"epoch {epoch} not available")
     return rep
 
@@ -299,7 +301,7 @@ def metrics_timeseries(
     store = get_store()
     ts = pipeline.build_timeseries(store, include_partial=include_partial, limit=epochs)
     if not ts["series"]:
-        return _sample("timeseries.json")
+        raise _no_data("timeseries")
     return ts
 
 
@@ -327,16 +329,7 @@ def dashboard_data():
     bundle = pipeline.build_dashboard_bundle(store)
     if bundle.get("report"):
         return bundle
-
-    # cold start: nothing computed yet -> bundled samples
-    rep = _sample("report_latest.json")
-    ts = _sample("timeseries.json")
-    try:
-        ec = _sample("epoch_clusters.json")
-    except HTTPException:
-        ec = {"epochs": []}
-    return {"report": rep, "timeseries": {"series": ts.get("series", [])},
-            "epoch_clusters": {"epochs": ec.get("epochs", [])}, "sample": True}
+    raise _no_data("report")
 
 
 # Serve the reference dashboard as static files at /dashboard (mounted last so the

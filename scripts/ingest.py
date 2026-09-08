@@ -87,6 +87,9 @@ def main() -> int:
                     help="snapshot computor balances (input for balance-delta revenue)")
     ap.add_argument("--status", action="store_true", help="show what the store holds")
     ap.add_argument("--export", action="store_true", help="write static snapshots from the store")
+    ap.add_argument("--export-each", action="store_true",
+                    help="with --watch: re-export the static snapshots after every pass, "
+                         "so dashboard/data.js never lags the store")
     args = ap.parse_args()
 
     store = Store(args.db) if args.db else Store()
@@ -180,6 +183,10 @@ def main() -> int:
                     done = pipeline.finalize(client, store, prev, registry, bob=bob)
                     if done:
                         print(f"           finalized epoch {prev}: {done['status']}")
+                if args.export_each:
+                    # the static snapshots are a projection of the store; refreshing
+                    # them here is what keeps the two from drifting apart
+                    export_snapshots(store)
             except QubicRPCError as e:
                 print(f"[{time.strftime('%H:%M:%S')}] RPC error: {e}", file=sys.stderr)
             except KeyboardInterrupt:

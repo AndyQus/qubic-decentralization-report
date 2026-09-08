@@ -600,7 +600,11 @@ plainly how much of the movement it could not explain.
 4f. **Slot transitions** — epoch-over-epoch identity diff, successor detection, churn metric
    with an explicit unexplained share, registry `status` field (§4.4) 🔶
 5. **API** — FastAPI service serving the report (`api/server.py`), CORS-open, with a
-   `/v1/dashboard-data` bundle and a static-sample fallback ✅
+   `/v1/dashboard-data` bundle. No sample fallback: an unfilled store answers 503 so
+   the page can say it is building rather than render figures nobody measured ✅
+5b. **Ingest worker** — own container (`scripts/worker.sh`): backfills history on first
+   start, refreshes the running epoch, seals each epoch as it closes, re-exports the
+   static snapshots every pass, and rides out RPC rate limits ✅
 6. **Dashboard** — self-contained SPA (`dashboard/index.html`): animated operator treemap,
    Nakamoto/Gini timeline, operator table, DE/EN + dark/light with localStorage ✅
 7. **Explorer integration** — embed format shipped (widget + iframe + raw API,
@@ -611,5 +615,6 @@ registry with a validator (`data/self_reporting/`, `scripts/validate_registry.py
 (`tests/`, all passing); the API service (`api/`, which also serves the dashboard and
 examples); the reference dashboard (`dashboard/`); an embeddable widget (`dashboard/embed.js`);
 a live-pull CLI (`scripts/build_report.py`); and VS Code F5→Chrome configs (`.vscode/`).
-Live runs need network access to `rpc.qubic.org` (blocked in the Cowork sandbox, fine from a
-normal machine); everything else runs today on generated sample data.
+Live runs need network access to `rpc.qubic.org` and, for revenue, a Bob node
+(`QDR_BOB_URL`). The report runs on live data end to end: epochs 225-228 are sealed from
+Bob end-epoch logs with 676/676 computors paid.

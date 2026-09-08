@@ -83,6 +83,7 @@
     box-shadow:var(--shadow)}
   .live[hidden]{display:none}
   .live-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .live-running{font-size:11.5px;color:var(--muted);white-space:nowrap}
   .live-epoch{font-size:.8125rem;font-weight:700;font-variant-numeric:tabular-nums;
     letter-spacing:.02em;padding:.15rem .5rem;border-radius:6px;white-space:nowrap;
     color:var(--live-edge);background:color-mix(in srgb,var(--live-edge) 16%,transparent)}
@@ -120,11 +121,11 @@
   /* Attribution caveat. With no declarations and no provable linkage, a high
      Nakamoto number means "we could not link them", not "they are independent" —
      the page has to say so rather than let the figure be misread. */
-  .coverage-note{margin-top:14px;padding:10px 13px;border-radius:10px;font-size:12.5px;
-    color:var(--warn-fg);background:var(--warn-bg);
-    border:1px solid color-mix(in srgb,var(--warn) 32%,transparent)}
+  .coverage-note{margin-top:14px;padding:11px 14px;border-radius:10px;font-size:12.5px;
+    line-height:1.55;color:var(--muted);background:var(--panel);
+    border:1px solid var(--border);border-left:3px solid var(--accent)}
   .coverage-note[hidden]{display:none}
-  .coverage-note b{color:var(--warn)}
+  .coverage-note b{color:var(--fg);font-weight:600}
 
   /* kpi grid */
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:14px;margin:20px 0 8px}
@@ -250,7 +251,7 @@
 </header>
 
 <div class="wrap">
-  <div id="sample-badge" class="sample-badge" hidden><span class="dot"></span><span data-i18n="sample">Sample data — not live yet</span></div>
+  <div id="building-note" class="coverage-note" hidden></div>
   <div id="status-badge" class="sample-badge status-badge" hidden><span class="dot"></span><span id="status-text"></span></div>
   <p class="lead" data-i18n="lead">Qubic runs on {slots} computor slots. On paper that looks like {slots} independent operators — but a single operator can hold many slots at once. This report groups slots by operator (self-reported first, on-chain-linked next) and measures how concentrated revenue and control really are.</p>
 
@@ -261,6 +262,7 @@
   <section class="live" id="live" hidden>
     <div class="live-head">
       <span class="live-epoch" id="live-epoch">&ndash;</span>
+      <span class="live-running" id="live-running"></span>
       <span class="live-rule"></span>
       <span class="live-pulse" id="live-pulse" title="live"><i></i><span data-i18n="liveNow">live</span></span>
     </div>
@@ -406,7 +408,12 @@
   const I18N={
     en:{
       title:"Qubic Decentralization Report", tagline:"how decentralized Qubic really is",
-      epochLabel:"Epoch", sample:"Sample data — not live yet",
+      epochLabel:"Epoch",
+      buildingTitle:"Building the report.",
+      buildingBody:"The ingest service is pulling this epoch from the chain. Figures "+
+        "appear as soon as they are measured — this page never shows placeholder numbers.",
+      buildingRetry:"Retrying automatically…",
+      liveRunning:"running · revenue is credited when it closes",
       lead:"Qubic runs on {slots} computor slots. On paper that looks like {slots} independent operators — but a single operator can hold many slots at once. This report groups slots by operator (self-reported first, on-chain-linked next) and measures how concentrated revenue and control really are.",
       clusterMapTitle:"Operator map", clusterMapDesc:"Each tile is one operator; area = share of the epoch. Declared operators are self-reported; “unattributed” are slots with no proven owner.",
       byRevenue:"By revenue", bySlots:"By slots",
@@ -426,17 +433,20 @@
       discDemo:"Use it for analysis purposes only — not as a basis for investment decisions.",
       sponsored:"Qubic – Sponsored by AndyQus", tos:"Terms of Service", privacy:"Privacy Policy",
       kOperators:"Operators", kOperatorsSub:"from {slots} computor slots",
+      upperBound:"upper bound",
       kDeclared:"Declared operators", kDeclaredSub:"self-reported",
       kCoverage:"On-chain linked", kCoverageSub:"slots resolved via payout graph",
       confirmed:"Declared + on-chain confirmed", flagged:"Flagged (behavioral)",
       liveNow:"live", liveTick:"Tick", liveProgress:"Epoch progress",
       liveQuality:"Tick quality", liveAddresses:"Active addresses",
       liveRecent:"last 10k:", perSecond:"ticks/s",
-      coverageWarnTitle:"Attribution is thin.",
-      coverageWarnBody:"Only {pct}% of slots are attributed to an operator, so the "+
-        "operator count and Nakamoto coefficient below read as an upper bound on "+
-        "decentralization — unlinked slots are counted as separate operators, which they "+
-        "may not be. Pool self-reports would sharpen this.",
+      coverageWarnTitle:"How to read these figures.",
+      coverageWarnBody:"{pct}% of slots are currently matched to a named operator. "+
+        "Qubic's public ledger pays every computor by protocol emission rather than by "+
+        "a traceable transfer, so ownership is not something the chain discloses on its "+
+        "own. The figures below therefore describe {slots} slots as the upper bound: the "+
+        "real number of operators is lower, and concentration correspondingly higher. "+
+        "Operators can add their slots to the public registry at any time.",
       statusLive:"Live — current epoch, refreshed continuously",
       statusSealed:"Sealed — closed epoch, final",
       statusPartial:"Partial — incomplete derivation, excluded from trends",
@@ -447,7 +457,12 @@
     },
     de:{
       title:"Qubic Dezentralisierungs-Report", tagline:"wie dezentral Qubic wirklich ist",
-      epochLabel:"Epoche", sample:"Beispieldaten — noch nicht live",
+      epochLabel:"Epoche",
+      buildingTitle:"Report wird aufgebaut.",
+      buildingBody:"Der Ingest-Dienst holt diese Epoche gerade von der Chain. Die Zahlen "+
+        "erscheinen, sobald sie gemessen sind — diese Seite zeigt niemals Platzhalterwerte.",
+      buildingRetry:"Wird automatisch erneut versucht…",
+      liveRunning:"läuft · Umsatz wird beim Abschluss gutgeschrieben",
       lead:"Qubic läuft auf {slots} Computor-Slots. Auf dem Papier wirkt das wie {slots} unabhängige Betreiber — aber ein einzelner Betreiber kann viele Slots gleichzeitig halten. Dieser Report gruppiert Slots nach Betreiber (zuerst self-reported, dann on-chain verknüpft) und misst, wie konzentriert Umsatz und Kontrolle wirklich sind.",
       clusterMapTitle:"Betreiber-Karte", clusterMapDesc:"Jede Kachel ist ein Betreiber; Fläche = Anteil der Epoche. Deklarierte Betreiber sind self-reported; „unattributed“ sind Slots ohne nachgewiesenen Eigentümer.",
       byRevenue:"Nach Umsatz", bySlots:"Nach Slots",
@@ -467,17 +482,20 @@
       discDemo:"Nutzung nur zu Analysezwecken — keine Grundlage für Investitionsentscheidungen.",
       sponsored:"Qubic – Sponsored by AndyQus", tos:"Nutzungsbedingungen", privacy:"Datenschutz",
       kOperators:"Betreiber", kOperatorsSub:"aus {slots} Computor-Slots",
+      upperBound:"Obergrenze",
       kDeclared:"Deklarierte Betreiber", kDeclaredSub:"self-reported",
       kCoverage:"On-Chain verknüpft", kCoverageSub:"Slots über Payout-Graph aufgelöst",
       confirmed:"Deklariert + on-chain bestätigt", flagged:"Markiert (Verhalten)",
       liveNow:"live", liveTick:"Tick", liveProgress:"Epochen-Fortschritt",
       liveQuality:"Tick-Qualität", liveAddresses:"Aktive Adressen",
       liveRecent:"letzte 10k:", perSecond:"Ticks/s",
-      coverageWarnTitle:"Zuordnung ist dünn.",
-      coverageWarnBody:"Nur {pct}% der Slots sind einem Betreiber zugeordnet. Betreiberzahl "+
-        "und Nakamoto-Koeffizient unten sind daher eine Obergrenze der Dezentralisierung "+
-        "— nicht verknüpfte Slots zählen als eigene Betreiber, was sie nicht sein müssen. "+
-        "Self-Reports der Pools würden das schärfen.",
+      coverageWarnTitle:"So sind diese Zahlen zu lesen.",
+      coverageWarnBody:"{pct}% der Slots sind derzeit einem benannten Betreiber zugeordnet. "+
+        "Qubic vergütet jeden Computor über Protokoll-Emission statt über eine nachverfolgbare "+
+        "Überweisung — Eigentümerschaft gibt die Chain von sich aus also nicht preis. Die "+
+        "Zahlen unten beschreiben {slots} Slots daher als Obergrenze: die tatsächliche "+
+        "Betreiberzahl liegt niedriger, die Konzentration entsprechend höher. Betreiber "+
+        "können ihre Slots jederzeit im öffentlichen Registry eintragen.",
       statusLive:"Live — laufende Epoche, wird ständig aktualisiert",
       statusSealed:"Versiegelt — abgeschlossene Epoche, final",
       statusPartial:"Unvollständig — Ableitung lückenhaft, nicht im Trend",
@@ -515,7 +533,7 @@
   function safeSet(k,v){ try{localStorage.setItem(k,v);}catch(e){} }
 
   /* ---------- data (mutable: filled from data.js or the API) ---------- */
-  let DATA={}, report={}, series=[], epochClusters=[], clByEpoch={}, epochs=[], isSample=false;
+  let DATA={}, report={}, series=[], epochClusters=[], clByEpoch={}, epochs=[];
   let idx=0;                               // current epoch index (default latest)
   let sizeBy = "revenue";                  // "revenue" | "slots"
   let playing = false, playTimer=null;
@@ -524,7 +542,6 @@
     DATA=d||{}; report=DATA.report||{};
     series=(DATA.timeseries&&DATA.timeseries.series)||[];
     epochClusters=(DATA.epoch_clusters&&DATA.epoch_clusters.epochs)||[];
-    isSample=!!DATA.sample || !!report._sample;
     clByEpoch={}; epochClusters.forEach(e=>clByEpoch[e.epoch]=e);
     epochs=series.map(s=>s.epoch);
     idx=Math.max(0,epochs.length-1);
@@ -546,6 +563,9 @@
     renderI18nText();
     document.querySelectorAll("#lang-seg button").forEach(b=>b.classList.toggle("active",b.dataset.lang===lang));
     renderStatusBadge();   // its text is data-driven, not a static data-i18n node
+    const lr=document.getElementById("live-running");
+    if(lr && lr.textContent) lr.textContent=t("liveRunning");
+    if(!series.length){ showBuilding(); return; }
     renderAll();
   }
   document.querySelectorAll("#lang-seg button").forEach(b=>{
@@ -591,6 +611,19 @@
     return c ? String(c) : t("unattributed");   // show the raw level, do not fake one
   }
 
+  /* ---------- empty-store state ----------
+     A fresh deployment has no measurements yet. That is a normal, temporary state,
+     so it reads as progress rather than as breakage — and it never fills the gap
+     with numbers nobody measured. */
+  function showBuilding(){
+    const el=document.getElementById("building-note");
+    el.hidden=false;
+    el.innerHTML="<b>"+escapeHtml(t("buildingTitle"))+"</b> "+
+      escapeHtml(t("buildingBody"))+" <span class=\"muted\">"+
+      escapeHtml(t("buildingRetry"))+"</span>";
+    document.getElementById("kpis").innerHTML="";
+  }
+
   /* ---------- attribution caveat ---------- */
   function renderCoverageNote(){
     const el=document.getElementById("coverage-note");
@@ -599,19 +632,24 @@
     if(att==null || att>=0.25){ el.hidden=true; return; }
     el.hidden=false;
     el.innerHTML="<b>"+escapeHtml(t("coverageWarnTitle"))+"</b> "+
-      escapeHtml(t("coverageWarnBody",{pct:(att*100).toFixed(0)}));
+      escapeHtml(t("coverageWarnBody",{pct:(att*100).toFixed(0),
+                                       slots:fmtInt(s.computors||s.operators)}));
   }
 
   /* ---------- KPIs ---------- */
   function renderKpis(){
     const s=series[idx]||{};
+    // Attribution-dependent figures carry an explicit "upper bound" note when the
+    // chain could not link slots: a labelled number informs, an unlabelled one misleads.
+    const bounded = (s.attributed_share!=null && s.attributed_share<0.25);
+    const bsub = sub => bounded ? sub+" · "+t("upperBound") : sub;
     const cards=[
-      {cls:"accent",label:t("kOperators"),val:fmtInt(s.operators),sub:t("kOperatorsSub")},
+      {cls:"accent",label:t("kOperators"),val:fmtInt(s.operators),sub:bsub(t("kOperatorsSub"))},
       {cls:"",label:t("kCoverage"),
        val:(s.onchain_linked_share!=null?(s.onchain_linked_share*100).toFixed(0)+"%":"–"),
        sub:t("kCoverageSub")},
-      {cls:"warn",label:t("kNak13"),val:fmtInt(s.nakamoto_one_third_revenue),sub:t("kNak13Sub")},
-      {cls:"warn",label:t("kNak12"),val:fmtInt(s.nakamoto_half_revenue),sub:t("kNak12Sub")},
+      {cls:"warn",label:t("kNak13"),val:fmtInt(s.nakamoto_one_third_revenue),sub:bsub(t("kNak13Sub"))},
+      {cls:"warn",label:t("kNak12"),val:fmtInt(s.nakamoto_half_revenue),sub:bsub(t("kNak12Sub"))},
       {cls:"",label:t("kGini"),val:(s.gini_revenue!=null?s.gini_revenue.toFixed(2):"–"),sub:t("kGiniSub")},
       {cls:"accent",label:t("kTop1"),val:(s.top1_share!=null?(s.top1_share*100).toFixed(1)+"%":"–"),sub:t("kTop1Sub")},
     ];
@@ -776,7 +814,7 @@
   function renderStatusBadge(){
     const el=document.getElementById("status-badge"), txt=document.getElementById("status-text");
     const st=report&&report.status;
-    if(!st||isSample){ el.hidden=true; return; }
+    if(!st){ el.hidden=true; return; }
     el.hidden=false;
     el.classList.remove("sealed","partial");
     if(st!=="live") el.classList.add(st==="sealed"?"sealed":"partial");
@@ -784,16 +822,12 @@
   }
 
   function startUI(){
-    document.getElementById("sample-badge").hidden=!isSample;
     renderStatusBadge();
     document.getElementById("code-ver").textContent=report.code_version||"–";
     document.getElementById("foot-year").textContent=String(new Date().getFullYear());
     range.max=String(Math.max(0,epochs.length-1)); range.value=String(idx);
-    if(!series.length){
-      document.getElementById("kpis").innerHTML="<div class='kpi'><div class='k-label'>No data</div><div class='k-sub'>Load data.js or add ?api=&lt;base-url&gt;.</div></div>";
-      applyLang();
-      return;
-    }
+    if(!series.length){ applyLang(); return; }   // applyLang -> showBuilding
+    document.getElementById("building-note").hidden=true;
     applyLang();                 // sets text + calls renderAll (renderEpoch)
     setTimeout(renderTreemap,60); // ensure layout width is measured
   }
@@ -822,6 +856,9 @@
     live.classList.toggle("stale", !!d.stale);
 
     document.getElementById("live-epoch").textContent=t("epochLabel")+" "+d.epoch;
+    // say why this number differs from the report's epoch below
+    const lr=document.getElementById("live-running");
+    if(lr) lr.textContent=t("liveRunning");
 
     const tickEl=document.getElementById("live-tick");
     tickEl.textContent=fmtInt(d.tick);
@@ -889,13 +926,30 @@
   let apiBase = new URLSearchParams(location.search).get("api");
   if(apiBase==null && typeof window.QDR_API!=="undefined") apiBase=window.QDR_API;
   if(apiBase==null && location.protocol.indexOf("http")===0) apiBase="";  // same origin
-  if(apiBase!=null){
+  // An empty store answers 503 while the ingest service fills it. That is a state
+  // to wait out, not to paper over, so the page keeps asking (backing off to a
+  // minute) and shows the building notice meanwhile.
+  let bootDelay=4000;
+  function boot(){
     fetch(apiBase.replace(/\/$/,"")+"/v1/dashboard-data")
       .then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); })
-      .then(d=>{ loadData(d); startUI(); startLive(); })
-      .catch(()=>{ loadData(window.QDR_DATA||{}); startUI(); }); // fall back to bundled data
+      .then(d=>{
+        if(!(d && d.report && d.timeseries && (d.timeseries.series||[]).length)) throw new Error("empty");
+        loadData(d); startUI(); startLive(); bootDelay=4000;
+      })
+      .catch(()=>{
+        if(!series.length){ loadData({}); startUI(); }   // renders the building notice
+        setTimeout(boot, bootDelay);
+        bootDelay=Math.min(bootDelay*2, 60000);
+      });
+  }
+
+  if(apiBase!=null){
+    boot();
+  } else if(window.QDR_DATA){
+    loadData(window.QDR_DATA); startUI();   // file:// with a bundled export
   } else {
-    loadData(window.QDR_DATA||{}); startUI();
+    loadData({}); startUI();
   }
 })();
 </script>

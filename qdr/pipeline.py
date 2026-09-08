@@ -298,6 +298,7 @@ def build_timeseries(store: Store, epochs: Optional[list[int]] = None,
         series.append({
             "epoch": e,
             "status": rep.get("status"),
+            "computors": rep["totals"].get("computors", rep["totals"]["operators"]),
             "operators": rep["totals"]["operators"],
             "declared_operators": rep["totals"]["declared_operators"],
             "unattributed_slots": rep["totals"]["unattributed_slots"],

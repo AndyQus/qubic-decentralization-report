@@ -38,6 +38,15 @@ DEFAULT_CACHE = (
 )
 
 
+# Retry policy for the public RPC: 429 is the common one (rate limit), 5xx the
+# occasional one. Five attempts with 2s..32s backoff rides out both without
+# hammering a server that already asked us to slow down.
+RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
+RETRY_ATTEMPTS = 5
+RETRY_BASE_S = 2.0
+RETRY_MAX_S = 60.0
+
+
 class QubicRPCError(RuntimeError):
     pass
 
@@ -81,10 +90,30 @@ class CachedClient:
         if dt < self.min_interval_s:
             time.sleep(self.min_interval_s - dt)
         url = f"{self.base_url}{path}"
-        try:
-            resp = requests.get(url, timeout=self.timeout)
-        except requests.RequestException as e:
-            raise QubicRPCError(f"GET {path} failed: {e}") from e
+        # The public RPC rate-limits (429) and has transient 5xx spells. A worker
+        # that polls for months hits both routinely, and treating them as fatal
+        # would take the whole ingest down until someone restarts it — so retry
+        # with a backoff, honouring Retry-After when the server sends one.
+        resp = None
+        for attempt in range(RETRY_ATTEMPTS):
+            try:
+                resp = requests.get(url, timeout=self.timeout)
+            except requests.RequestException as e:
+                if attempt == RETRY_ATTEMPTS - 1:
+                    raise QubicRPCError(f"GET {path} failed: {e}") from e
+                time.sleep(RETRY_BASE_S * (2 ** attempt))
+                continue
+            self._last_call = time.time()
+            if resp.status_code not in RETRY_STATUS:
+                break
+            if attempt == RETRY_ATTEMPTS - 1:
+                break
+            wait = RETRY_BASE_S * (2 ** attempt)
+            try:                                  # server-specified wait wins
+                wait = max(wait, float(resp.headers.get("Retry-After", 0)))
+            except (TypeError, ValueError):
+                pass
+            time.sleep(min(wait, RETRY_MAX_S))
         self._last_call = time.time()
         if resp.status_code != 200:
             raise QubicRPCError(f"GET {path} -> {resp.status_code}: {resp.text[:200]}")

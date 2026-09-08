@@ -27,5 +27,32 @@ services:
       # - /root/qdr/pools.json:/data/pools.json:ro
     restart: unless-stopped
 
+  # The ingest worker is what makes the report keep itself current: it backfills
+  # history on first start, refreshes the running epoch, and seals each epoch as
+  # it closes. It is a separate service on purpose — if it dies on an RPC outage
+  # the dashboard stays up serving the last sealed epochs, and `docker compose
+  # logs` shows which of the two is unhappy. Both share one volume; the API only
+  # ever reads what this writes.
+  qubic_decentralization_report_ingest:
+    image: andyqus/qubic_decentralization_report:latest
+    container_name: qubic_decentralization_report_ingest
+    entrypoint: ["sh", "scripts/worker.sh"]
+    environment:
+      - QUBIC_RPC_BASE=${QUBIC_RPC_BASE:-https://rpc.qubic.org}
+      - DATA_DIR=/data
+      - QDR_BOB_URL=${QDR_BOB_URL:-https://bob.qubic.li/qubic}
+      # How many epochs to seal on first start. Bob keeps end-epoch logs well
+      # past this, so a new deployment has real history within minutes.
+      - QDR_BACKFILL_EPOCHS=${QDR_BACKFILL_EPOCHS:-10}
+      # How often the running epoch is refreshed. The analysis only changes at an
+      # epoch boundary (~4.4 days), but balance snapshots must be taken while the
+      # boundary is passing, so this stays well under it.
+      - QDR_INGEST_INTERVAL=${QDR_INGEST_INTERVAL:-300}
+    volumes:
+      - qdr-data:/data
+    depends_on:
+      - qubic_decentralization_report
+    restart: unless-stopped
+
 volumes:
   qdr-data:

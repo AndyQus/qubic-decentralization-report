@@ -635,7 +635,13 @@ Teil der Bewegung er nicht erklären konnte.
    begrenzte API-Fenster, getestet mit 100–2048 Slots (§5.2) ✅
    implementiert + getestet (`qdr/clustering.py`); On-chain-Ebene wird noch angereichert 🔶
 5. **API** — FastAPI-Service, der den Report ausliefert (`api/server.py`), CORS-offen, mit
-   einem `/v1/dashboard-data`-Bundle und statischem Sample-Fallback ✅
+   einem `/v1/dashboard-data`-Bundle. Kein Sample-Fallback: ein ungefüllter Store
+   antwortet mit 503, damit die Seite sagen kann, dass sie aufbaut, statt Zahlen zu
+   zeigen, die niemand gemessen hat ✅
+5b. **Ingest-Worker** — eigener Container (`scripts/worker.sh`): füllt beim ersten Start
+   Historie nach, aktualisiert die laufende Epoche, versiegelt jede Epoche beim
+   Abschluss, exportiert die statischen Snapshots nach jedem Durchlauf und übersteht
+   RPC-Rate-Limits ✅
 6. **Dashboard** — eigenständige SPA (`dashboard/index.html`): animierte Betreiber-Treemap,
    Nakamoto/Gini-Timeline, Betreiber-Tabelle, DE/EN + Dark/Light mit localStorage ✅
 7. **Explorer-Integration** — Einbettungsformat fertig (Widget + iframe + rohe API,
@@ -646,5 +652,6 @@ mit Validator (`data/self_reporting/`, `scripts/validate_registry.py`); Tests (`
 grün); der API-Service (`api/`, der auch Dashboard und Beispiele ausliefert); das
 Referenz-Dashboard (`dashboard/`); ein einbettbares Widget (`dashboard/embed.js`); eine
 Live-Pull-CLI (`scripts/build_report.py`); und VS-Code-F5→Chrome-Konfigs (`.vscode/`).
-Live-Läufe brauchen Netzzugang zu `rpc.qubic.org` (in der Cowork-Sandbox blockiert, von einem
-normalen Rechner aus problemlos); alles Übrige läuft heute auf den generierten Beispieldaten.
+Live-Läufe brauchen Netzzugang zu `rpc.qubic.org` und, für den Umsatz, einen Bob-Node
+(`QDR_BOB_URL`). Der Report läuft durchgehend auf Live-Daten: die Epochen 225–228 sind aus
+Bob-End-Epoch-Logs versiegelt, mit 676/676 bezahlten Computors.

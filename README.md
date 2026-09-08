@@ -200,13 +200,24 @@ docker image prune -f              # remove the superseded image
 
 **Important for operation:**
 
-- **Network access:** the container must be able to reach `rpc.qubic.org` (or whatever
-  `QUBIC_RPC_BASE` points at). Without it the service still starts and serves the
-  bundled sample snapshots, so the dashboard never renders empty — but the numbers are
-  then **not live**. The `sample` badge in the dashboard shows this state.
-- **Persistent data** lives in the named volume `qdr-data` → `/data` (the RPC cache).
-  Inspect it with `docker volume inspect qdr-data`. The cache is rebuildable from RPC,
-  so a backup is nice-to-have, not critical.
+- **Two services, one volume.** `qubic_decentralization_report` serves the API and
+  dashboard; `qubic_decentralization_report_ingest` keeps the store current — it
+  backfills history on first start, refreshes the running epoch every
+  `QDR_INGEST_INTERVAL` seconds, and seals each epoch as it closes. The API only ever
+  reads what the worker writes, so without the worker the report never advances.
+- **Network access:** both containers must reach `rpc.qubic.org` (or whatever
+  `QUBIC_RPC_BASE` points at), and the worker additionally reaches `QDR_BOB_URL` for
+  the epoch-end payouts. There is **no sample fallback**: figures shaped like real
+  measurements are indistinguishable from them once rendered, and this report is read
+  as a statement about the network. An unfilled store answers `503` and the dashboard
+  says it is still building — it never shows a number nobody measured.
+- **First start** takes a few minutes: the worker seals `QDR_BACKFILL_EPOCHS` (default
+  10) epochs before the dashboard has anything to show. Watch it with
+  `docker compose logs -f qubic_decentralization_report_ingest`.
+- **Persistent data** lives in the named volume `qdr-data` → `/data`: the RPC cache and
+  the SQLite store of sealed epochs. Inspect it with `docker volume inspect qdr-data`.
+  Sealed epochs are re-derivable from a Bob node, so a backup is nice-to-have rather
+  than critical — but re-deriving costs a backfill.
 - The app listens on port `8000` inside the container (mapped to host `8000`). A reverse
   proxy (e.g. Caddy/Nginx) for HTTPS belongs in front of it, especially since explorers
   embedding the widget will load it over HTTPS.
