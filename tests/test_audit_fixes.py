@@ -65,7 +65,10 @@ def test_a_live_epoch_is_refused_even_if_rows_say_complete(store):
     store.upsert_epoch(200, "live", 1, 2, 10)
     ids = [f"ID{i:03d}" for i in range(10)]
     store.put_revenue(200, {i: 100 for i in ids}, 1, 2, complete=True)
-    assert store.revenue_is_complete(200) is True      # the stale flag is there
+    # revenue_is_complete now refuses a live epoch outright, so the stale flag
+    # cannot even be observed as True — which is the point: no stored flag
+    # survives the epoch's own lifecycle.
+    assert store.revenue_is_complete(200) is False
     assert pipeline.slot_distribution(store, 200) is None
 
 

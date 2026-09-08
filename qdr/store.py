@@ -265,6 +265,8 @@ class Store:
         return {r["identity"]: r["revenue"] for r in rows}
 
     def revenue_is_complete(self, epoch: int) -> bool:
+        if self.epoch_status(epoch) == STATUS_LIVE:
+            return False   # still accruing; no stored flag can override that
         with self._lock:
             r = self._conn.execute(
                 "SELECT COUNT(*) n, SUM(complete) c FROM computor_revenue WHERE epoch=?", (epoch,)
@@ -489,7 +491,11 @@ class Store:
             match = self._conn.execute(
                 "SELECT 1 FROM reports WHERE epoch=? AND code_version=? LIMIT 1",
                 (r["epoch"], want)).fetchone()
-            if not match:
+            row = self._conn.execute(
+                "SELECT code_version FROM epochs WHERE epoch=?", (r["epoch"],)).fetchone()
+            # An older build that touched this epoch after us leaves its version
+            # on the epoch row, and it rewrote the unversioned tables too.
+            if not match or (row and row["code_version"] != want):
                 stale.append(r["epoch"])
         return stale
 
