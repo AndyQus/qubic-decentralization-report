@@ -3,6 +3,10 @@
 Copy-paste text for the moment the page is actually reachable, as distinct from
 `docs/ANNOUNCEMENT.md`, which announced the project itself.
 
+German version: `docs/ANNOUNCEMENT_LIVE.de.md` — the same claims, cut
+differently, because the English posts sit at the character limit and the German
+wording does not fit the same shape.
+
 All figures below were read from the live deployment before writing, not carried
 over from the earlier draft:
 
