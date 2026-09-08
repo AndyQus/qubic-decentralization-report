@@ -245,7 +245,8 @@ def report_latest():
     """The running epoch, refreshed from the chain when the stored copy is stale."""
     store = get_store()
     rep = pipeline.get_report(store, None, client=get_client(),
-                              registry=load_registry(), max_live_age_s=LIVE_MAX_AGE_S)
+                              registry=load_registry(), max_live_age_s=LIVE_MAX_AGE_S,
+                              allow_write=False)
     if rep is None:
         raise _no_data("report")
     return rep
@@ -256,7 +257,8 @@ def report_epoch(epoch: int):
     """A sealed epoch comes from the store untouched; a live/missing one is built."""
     store = get_store()
     rep = pipeline.get_report(store, epoch, client=get_client(),
-                              registry=load_registry(), max_live_age_s=LIVE_MAX_AGE_S)
+                              registry=load_registry(), max_live_age_s=LIVE_MAX_AGE_S,
+                              allow_write=False)
     if rep is None:
         raise HTTPException(status_code=404, detail=f"epoch {epoch} not available")
     return rep
@@ -317,15 +319,9 @@ DASHBOARD_DIR = ROOT / "dashboard"
 def dashboard_data():
     """One bundle for the SPA: latest report + timeseries + per-epoch bubbles."""
     store = get_store()
-    # keep the live epoch fresh before assembling the bundle
-    client = get_client()
-    if client is not None:
-        try:
-            pipeline.get_report(store, None, client=client, registry=load_registry(),
-                                max_live_age_s=LIVE_MAX_AGE_S)
-        except (QubicRPCError, KeyError, ValueError):
-            pass
-
+    # No refresh here. The bundle is assembled from settled epochs, so recomputing
+    # the running one changed nothing it uses — while writing to a store the
+    # ingest worker owns. One writer, many readers.
     bundle = pipeline.build_dashboard_bundle(store)
     if bundle.get("report"):
         return bundle

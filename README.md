@@ -200,6 +200,11 @@ docker image prune -f              # remove the superseded image
 
 **Important for operation:**
 
+- **One writer, many readers.** Only the ingest worker writes to the store; the
+  API is a pure reader and never recomputes on request. That separation is load-
+  bearing: an API process running an older build would otherwise rebuild epochs
+  behind the worker's back and stamp them with its own `code_version`, undoing
+  corrections the worker had just applied.
 - **Two services, one volume.** `qubic_decentralization_report` serves the API and
   dashboard; `qubic_decentralization_report_ingest` keeps the store current — it
   backfills history on first start, refreshes the running epoch every

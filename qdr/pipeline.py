@@ -214,12 +214,19 @@ def get_report(
     registry: Optional[dict] = None,
     max_live_age_s: int = 300,
     bob: Optional[BobClient] = None,
+    allow_write: bool = True,
 ) -> Optional[dict]:
     """Serve an epoch's report: from the store when sealed, recomputed when live.
 
     A sealed epoch is immutable, so it never touches the network. The live epoch
     is refreshed when the stored copy is older than `max_live_age_s`, so the
     running epoch is always current without hammering the RPC per request.
+
+    `allow_write=False` makes this a pure read. The API passes it: one writer
+    (the ingest worker) keeps the store, everything else reads. Otherwise any
+    API process — including one still running an older build, which is exactly
+    what happened — recomputes and overwrites epochs behind the worker's back,
+    stamping them with its own code_version and undoing corrections.
     """
     if epoch is None:
         if client is not None:
@@ -235,7 +242,7 @@ def get_report(
     if stored and stored.get("status") == STATUS_SEALED:
         return stored
 
-    if client is not None:
+    if client is not None and allow_write:
         stale = (not stored) or (int(time.time()) - int(stored.get("computed_at", 0)) > max_live_age_s)
         if stale:
             try:
