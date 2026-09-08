@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from pathlib import Path
 
 try:
@@ -301,7 +302,18 @@ def diagnostics():
             "The RPC is unreachable from this host, so there is nothing to ingest. "
             "Check outbound HTTPS and QUBIC_RPC_BASE."
         )
-    if not problems and sealed == 0:
+    if sealed == 0 and not _log_file().exists():
+        # No sealed epoch AND no worker log: nothing is filling the store. On a
+        # deployment that runs the image directly this used to be invisible —
+        # the API is its own healthy service, and the ingest simply was not
+        # there. QDR_ROLE=both (the default) runs it in this container.
+        problems.append(
+            "The ingest worker has not run: there is no worker log. Nothing is "
+            "filling the store, so the report will stay empty indefinitely. This "
+            "container runs the worker unless QDR_ROLE is set to 'api' — check "
+            f"that variable (currently {os.environ.get('QDR_ROLE', 'both')!r})."
+        )
+    elif not problems and sealed == 0:
         problems.append(
             "No sealed epoch yet. The first backfill takes a few minutes; the "
             "report appears once at least one epoch is sealed."
@@ -320,6 +332,16 @@ def diagnostics():
 
 _LOG_FILE = Path(os.environ.get(
     "QDR_LOG_FILE", str(Path(os.environ.get("DATA_DIR", "/data")) / "worker.log")))
+# The worker moves its log to the same fallback the store uses when DATA_DIR is
+# unwritable. Reading only the configured path would hide the log in exactly the
+# situation it is needed, so fall back the same way the writer did.
+_LOG_FALLBACK = Path(tempfile.gettempdir()) / "qdr-fallback" / "worker.log"
+
+
+def _log_file() -> Path:
+    if _LOG_FILE.exists():
+        return _LOG_FILE
+    return _LOG_FALLBACK if _LOG_FALLBACK.exists() else _LOG_FILE
 
 
 @app.get("/v1/log", tags=["service"], summary="Tail of the ingest worker log")
@@ -327,18 +349,19 @@ def worker_log(lines: int = Query(200, ge=1, le=2000)):
     """The ingest worker's own output, so an operator can see what it is doing
     without shell access to the host. The worker tees stdout here; `docker
     compose logs` remains the complete record."""
-    if not _LOG_FILE.exists():
-        return {"path": str(_LOG_FILE), "exists": False, "lines": [],
+    log_file = _log_file()
+    if not log_file.exists():
+        return {"path": str(log_file), "exists": False, "lines": [],
                 "note": ("No log yet. The ingest service writes this on start — "
                          "if it stays missing, that service is not running.")}
     try:
-        text = _LOG_FILE.read_text(encoding="utf-8", errors="replace")
+        text = log_file.read_text(encoding="utf-8", errors="replace")
     except Exception as e:                      # noqa: BLE001
-        return {"path": str(_LOG_FILE), "exists": True, "lines": [],
+        return {"path": str(log_file), "exists": True, "lines": [],
                 "error": f"{type(e).__name__}: {e}"}
     tail = text.splitlines()[-lines:]
-    return {"path": str(_LOG_FILE), "exists": True,
-            "mtime": int(_LOG_FILE.stat().st_mtime), "lines": tail}
+    return {"path": str(log_file), "exists": True,
+            "mtime": int(log_file.stat().st_mtime), "lines": tail}
 
 
 # The live pulse is cached for a few seconds: many dashboards may poll it, but

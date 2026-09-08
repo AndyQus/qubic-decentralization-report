@@ -36,13 +36,33 @@ def client(tmp_path, monkeypatch):
     return TestClient(server.app)
 
 
-def test_empty_store_reads_as_building_not_broken(client):
+def test_empty_store_with_a_running_worker_reads_as_building(client, tmp_path):
+    """Empty + the worker is demonstrably alive = wait, not a fault."""
+    (tmp_path / "worker.log").write_text("[worker] backfilling …", encoding="utf-8")
+
     d = client.get("/v1/diagnostics").json()
 
     assert d["store"]["ok"] and d["writable"]["ok"]
     assert d["healthy"] is False, "an empty store is not yet serving a report"
     assert any("backfill" in p for p in d["problems"]), (
         "an empty-but-healthy store must be explained as waiting, not as a fault"
+    )
+
+
+def test_empty_store_with_no_worker_log_names_the_missing_ingest(client):
+    """The failure that kept a deployment empty for days.
+
+    The image's default entrypoint only started the API; the ingest lived solely
+    in docker-compose.yaml, so a host that just runs the image had a perfectly
+    healthy API in front of a store nothing was ever going to fill. "Still
+    building" was the wrong story — nothing was building.
+    """
+    d = client.get("/v1/diagnostics").json()
+
+    assert d["healthy"] is False
+    assert any("ingest worker has not run" in p for p in d["problems"]), (
+        "an empty store with no worker log must be reported as a missing ingest, "
+        "not as a backfill still in progress"
     )
 
 

@@ -3,6 +3,10 @@ services:
     image: andyqus/qubic_decentralization_report:latest
     container_name: qubic_decentralization_report
     environment:
+      # This service is the reader; the ingest service below owns the writing.
+      # Without this the image would run both halves in one container, which is
+      # the right default for a plain `docker run` but not here.
+      - QDR_ROLE=api
       # Public Qubic RPC endpoint the report is built from.
       - QUBIC_RPC_BASE=${QUBIC_RPC_BASE:-https://rpc.qubic.org}
       # RPC response cache (and any derived artefacts) live in the volume.
@@ -36,8 +40,8 @@ services:
   qubic_decentralization_report_ingest:
     image: andyqus/qubic_decentralization_report:latest
     container_name: qubic_decentralization_report_ingest
-    entrypoint: ["sh", "scripts/worker.sh"]
     environment:
+      - QDR_ROLE=ingest
       - QUBIC_RPC_BASE=${QUBIC_RPC_BASE:-https://rpc.qubic.org}
       - DATA_DIR=/data
       - QDR_BOB_URL=${QDR_BOB_URL:-https://bob.qubic.li/qubic}

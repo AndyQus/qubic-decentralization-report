@@ -48,4 +48,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=4).status==200 else 1)"
 
-ENTRYPOINT ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "8000"]
+# Runs the API and the ingest worker together by default, so that pulling this
+# image and starting one container produces a working report. Set QDR_ROLE=api
+# or =ingest to run just one half (docker-compose.yaml does exactly that).
+ENTRYPOINT ["sh", "scripts/entrypoint.sh"]
