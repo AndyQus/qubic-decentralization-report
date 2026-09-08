@@ -82,3 +82,91 @@ The clustering is built and waiting on declarations, not code. Pools: one pull r
 against `data/self_reporting/pools.json` and the operator view turns on for you.
 
 Repo: <link>
+
+---
+
+## X / Twitter
+
+### Thread (5 posts)
+
+**1/**
+The Qubic Decentralization Report is live.
+
+Revenue per computor slot, per epoch, measured from the chain. Epochs 225-228 sealed,
+676/676 computors paid each.
+
+And an honest answer to the harder question: we still cannot tell you who operates
+those slots. 🧵
+
+**2/**
+Why this was hard: the public RPC does not expose computor payouts at all.
+
+They are protocol emission, not transfers — ~4,500 txs per computor per epoch show no
+inbound payments, yet balances grow by 0.5-1.6B QU.
+
+A Bob node's end-epoch log carries it.
+
+**3/**
+One measured result, epoch 228:
+
+61.8% of all 676 slots were paid exactly the same amount — 268,701,925 QU.
+Highest-earning slot: 3.02× the lowest.
+
+Payouts are close to flat per slot. Gini 0.014.
+
+**4/**
+What it will NOT tell you: how many independent operators there are.
+
+Every computor is credited by the same null address, and their outflows are uniform
+1,000,000 QU burns. No transfer graph links two computors.
+
+The ledger discloses no ownership.
+
+**5/**
+Every figure is therefore labelled slots, not operators.
+
+Nakamoto ⅓ = 222 means 222 of 676 *slots*. If one operator holds several, real
+concentration is higher.
+
+Pools: declare your slots via PR and the operator view turns on for you.
+
+<repo link>
+
+### Single post (if you prefer one)
+
+Qubic Decentralization Report — live on chain data.
+
+Revenue per computor slot, per epoch. In epoch 228, 61.8% of slots were paid
+identically.
+
+What it won't claim: who operates them. The ledger discloses no ownership — so every
+figure says "slots, not operators".
+
+<repo link>
+
+---
+
+## Discord — short version for a general channel
+
+**Qubic Decentralization Report is live** 📊
+
+Revenue per computor slot, per epoch, straight from chain data — epochs 225-228
+sealed with 676/676 computors paid each. Plus Gini, Nakamoto ⅓/½ and how they move
+over time.
+
+One thing it measured that I did not expect: **61.8% of slots in epoch 228 were paid
+exactly the same amount** (268,701,925 QU), with the top slot earning 3.02× the
+lowest. Payouts are close to flat per slot.
+
+One thing it deliberately does **not** claim: how many independent operators are
+behind those 676 slots. Every computor is credited by the same null address and their
+outflows are uniform burns, so the ledger discloses no ownership — and no pool has
+self-declared yet. Every figure on the page is labelled **slots, not operators**:
+Nakamoto ⅓ = 222 means 222 of 676 slots, and wherever one operator holds several, the
+real concentration is higher.
+
+That last part is where the community comes in. The clustering is built and runs every
+epoch — it needs declarations, not more code. One PR against
+`data/self_reporting/pools.json` and the operator view switches on for your pool.
+
+Repo: <link> · Live: <link>
