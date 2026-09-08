@@ -73,12 +73,12 @@
       "unattributed_slots": 676,
       "onchain_linked_share": 0.0,
       "attributed_share": 0.0,
-      "gini_revenue": 0.920683,
-      "hhi_revenue": 0.016141,
+      "gini_revenue": 0.920624,
+      "hhi_revenue": 0.016123,
       "nakamoto_one_third_revenue": 14,
       "nakamoto_half_revenue": 23,
       "nakamoto_one_third_slots": 226,
-      "top1_share": 0.033137
+      "top1_share": 0.032978
     }
   ]
 }
