@@ -25,6 +25,36 @@ set -eu
 BACKFILL="${QDR_BACKFILL_EPOCHS:-10}"
 INTERVAL="${QDR_INGEST_INTERVAL:-300}"
 
+# Everything this worker prints also goes to a file in the shared volume, so the
+# API can serve it at /v1/log and /log.html can answer "is it doing anything?"
+# without shell access to the host. `docker compose logs` stays the full record;
+# this is the tail an operator can reach from a browser. Kept bounded (the last
+# LOG_MAX lines are retained on start) so a long-running deployment cannot fill
+# the volume with its own log.
+LOG_FILE="${QDR_LOG_FILE:-${DATA_DIR:-/data}/worker.log}"
+LOG_MAX="${QDR_LOG_MAX_LINES:-2000}"
+if [ -f "$LOG_FILE" ]; then
+  tail -n "$LOG_MAX" "$LOG_FILE" > "$LOG_FILE.tmp" 2>/dev/null && mv "$LOG_FILE.tmp" "$LOG_FILE" || true
+fi
+# Send stdout/stderr to both the container log and the file. Process
+# substitution (`> >(tee …)`) is a bashism and this runs under dash, so a
+# named pipe does the same job portably.
+mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
+if : > "$LOG_FILE" 2>/dev/null || [ -w "$LOG_FILE" ]; then
+  FIFO="$(dirname "$LOG_FILE")/.worker.fifo"
+  rm -f "$FIFO"
+  if mkfifo "$FIFO" 2>/dev/null; then
+    tee -a "$LOG_FILE" < "$FIFO" &
+    exec > "$FIFO" 2>&1
+  else
+    exec >> "$LOG_FILE" 2>&1     # no fifo: the file still gets everything
+  fi
+else
+  echo "[worker] WARNING: cannot write $LOG_FILE — /data is not writable by uid $(id -u)." >&2
+  echo "[worker] The ingest cannot store anything either; see /log.html." >&2
+fi
+echo "[worker] --- start $(date -u +%Y-%m-%dT%H:%M:%SZ) ---"
+
 echo "[worker] backfilling last ${BACKFILL} epochs …"
 # A failed backfill must not stop the service: --watch would still recover the
 # current epoch, and a transient RPC outage is not a reason to stay down.

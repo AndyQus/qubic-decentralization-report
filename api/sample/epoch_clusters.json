@@ -67,8 +67,8 @@
     {
       "epoch": 229,
       "status": "live",
-      "nakamoto_one_third": 13,
-      "gini": 0.92651,
+      "nakamoto_one_third": 14,
+      "gini": 0.920034,
       "bubbles": [
         {
           "id": "unattributed",

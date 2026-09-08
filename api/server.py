@@ -171,14 +171,152 @@ def api_index():
 @app.get("/health", tags=["service"], summary="Liveness probe")
 def health():
     """Liveness probe for Docker/orchestrators. Deliberately does no RPC call —
-    it answers whether the process serves, not whether upstream data is fresh."""
+    it answers whether the process serves, not whether upstream data is fresh.
+
+    A store that cannot be read is reported as such. This used to swallow the
+    exception and answer `stored_reports: 0`, which is what an empty store on a
+    fresh deployment also looks like — so a read-only volume was indistinguishable
+    from "the backfill has not finished yet", and the dashboard showed its
+    "building" notice for a deployment that was never going to fill.
+    """
+    store_error = None
+    stored = 0
     try:
-        st = get_store().stats()
-        stored = st["reports"]
-    except Exception:
-        stored = 0
-    return {"status": "ok", "version": app.version,
+        stored = get_store().stats()["reports"]
+    except Exception as e:                      # noqa: BLE001 - reported, not raised
+        store_error = f"{type(e).__name__}: {e}"
+    body = {"status": "ok" if store_error is None else "degraded",
+            "version": app.version,
             "stored_reports": stored}
+    if store_error:
+        body["store_error"] = store_error
+    return body
+
+
+def _probe_store() -> dict:
+    """What the store can tell us, or why it cannot."""
+    try:
+        store = get_store()
+    except Exception as e:                      # noqa: BLE001
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    out: dict = {"ok": True}
+    try:
+        out["stats"] = store.stats()
+    except Exception as e:                      # noqa: BLE001
+        return {"ok": False, "error": f"{type(e).__name__}: {e}",
+                "db": str(getattr(store, "path", "?"))}
+    try:
+        out["epochs"] = store.list_epochs(limit=30)
+    except Exception as e:                      # noqa: BLE001
+        out["epochs_error"] = f"{type(e).__name__}: {e}"
+    return out
+
+
+def _probe_writable() -> dict:
+    """Can the ingest actually write? A read-only volume is the failure that
+    looks exactly like an empty one from the outside."""
+    data_dir = Path(os.environ.get("DATA_DIR", "/data"))
+    probe = data_dir / ".write-probe"
+    try:
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        return {"ok": True, "path": str(data_dir)}
+    except Exception as e:                      # noqa: BLE001
+        return {"ok": False, "path": str(data_dir),
+                "error": f"{type(e).__name__}: {e}"}
+
+
+def _probe_rpc() -> dict:
+    """Can this host reach the RPC the report is built from?
+
+    Deliberately a plain one-shot request rather than the ingest's client: that
+    one retries five times with a backoff, which is right for an ingest riding
+    out a blip and wrong here — a diagnostics page must answer fastest exactly
+    when the network is the thing that is broken.
+    """
+    base = os.environ.get("QUBIC_RPC_BASE", "https://rpc.qubic.org").rstrip("/")
+    try:
+        import requests
+        r = requests.get(f"{base}/v1/tick-info", timeout=5)
+        r.raise_for_status()
+        tick = (r.json() or {}).get("tickInfo", {})
+        return {"ok": True, "base": base,
+                "epoch": tick.get("epoch"), "tick": tick.get("tick")}
+    except Exception as e:                      # noqa: BLE001
+        return {"ok": False, "base": base, "error": f"{type(e).__name__}: {e}"}
+
+
+@app.get("/v1/diagnostics", tags=["service"], summary="Why is the report empty?")
+def diagnostics():
+    """One call that answers "is it building, or is it broken?".
+
+    The dashboard shows the same "still building" notice whether the ingest is
+    mid-backfill or cannot write at all, and from a browser there is no way to
+    tell those apart. This checks the three things that actually differ: can the
+    store be read, can the volume be written, and is the RPC reachable.
+    """
+    store = _probe_store()
+    writable = _probe_writable()
+    rpc = _probe_rpc()
+
+    stats = store.get("stats") or {}
+    sealed = stats.get("sealed", 0)
+    problems: list[str] = []
+    if not store["ok"]:
+        problems.append(
+            "The store cannot be read. If this says 'readonly database' or "
+            "'unable to open', the /data volume is not writable by the container "
+            "user (uid 10001). A host bind mount needs 'chown -R 10001:10001'; "
+            "a named volume gets this right by itself."
+        )
+    if not writable["ok"]:
+        problems.append(
+            "The data volume is not writable, so the ingest cannot store anything "
+            "it fetches. Same fix as above: chown the mounted directory to uid 10001."
+        )
+    if not rpc["ok"]:
+        problems.append(
+            "The RPC is unreachable from this host, so there is nothing to ingest. "
+            "Check outbound HTTPS and QUBIC_RPC_BASE."
+        )
+    if not problems and sealed == 0:
+        problems.append(
+            "No sealed epoch yet. The first backfill takes a few minutes; the "
+            "report appears once at least one epoch is sealed."
+        )
+
+    return {
+        "version": app.version,
+        "healthy": not problems,
+        "store": store,
+        "writable": writable,
+        "rpc": rpc,
+        "problems": problems,
+        "log": f"/v1/log  ({_LOG_FILE})",
+    }
+
+
+_LOG_FILE = Path(os.environ.get(
+    "QDR_LOG_FILE", str(Path(os.environ.get("DATA_DIR", "/data")) / "worker.log")))
+
+
+@app.get("/v1/log", tags=["service"], summary="Tail of the ingest worker log")
+def worker_log(lines: int = Query(200, ge=1, le=2000)):
+    """The ingest worker's own output, so an operator can see what it is doing
+    without shell access to the host. The worker tees stdout here; `docker
+    compose logs` remains the complete record."""
+    if not _LOG_FILE.exists():
+        return {"path": str(_LOG_FILE), "exists": False, "lines": [],
+                "note": ("No log yet. The ingest service writes this on start — "
+                         "if it stays missing, that service is not running.")}
+    try:
+        text = _LOG_FILE.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:                      # noqa: BLE001
+        return {"path": str(_LOG_FILE), "exists": True, "lines": [],
+                "error": f"{type(e).__name__}: {e}"}
+    tail = text.splitlines()[-lines:]
+    return {"path": str(_LOG_FILE), "exists": True,
+            "mtime": int(_LOG_FILE.stat().st_mtime), "lines": tail}
 
 
 # The live pulse is cached for a few seconds: many dashboards may poll it, but

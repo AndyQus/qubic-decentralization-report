@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Status &amp; Log — Qubic Decentralization Report</title>
+<!--
+  The operator's view of a deployment that is not showing numbers.
+
+  The dashboard shows one "still building" notice for two very different states:
+  an ingest mid-backfill (wait) and an ingest that cannot write, or cannot reach
+  the RPC (act). From a browser there was no way to tell those apart — this page
+  exists to answer exactly that question, and to say what to do about it.
+-->
+<style>
+  :root{
+    --bg:#0c141b; --bg2:#101820; --surface:#16232e; --surface2:#1b2c38;
+    --border:#263846; --text:#e6eef2; --muted:#8aa0ab; --faint:#5c7180;
+    --accent:#22d3a6; --accent2:#3b9dff; --warn:#f5a623; --danger:#ff5c7a;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  :root[data-theme="light"]{
+    --bg:#eef3f6; --bg2:#f6f9fb; --surface:#ffffff; --surface2:#f1f5f8;
+    --border:#d8e2e8; --text:#132430; --muted:#546773; --faint:#8698a2;
+    --accent:#0aa17e; --accent2:#1f7fe0; --warn:#c9820f; --danger:#e0435f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
+       font-size:14px;line-height:1.5}
+  a{color:var(--accent2);text-decoration:none}
+  a:hover{text-decoration:underline}
+  header.top{position:sticky;top:0;z-index:20;padding:14px 20px;
+    background:linear-gradient(180deg,var(--bg2),var(--bg2) 70%,transparent);
+    border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:11px;min-width:0}
+  .dot{width:30px;height:30px;border-radius:8px;flex:none;
+    background:radial-gradient(circle at 30% 30%,var(--accent),#0b7d63)}
+  .brand h1{font-size:16px;margin:0;font-weight:650;letter-spacing:-.01em}
+  .brand .sub{font-size:12px;color:var(--muted);margin-top:1px}
+  .spacer{flex:1}
+  .btn{border:1px solid var(--border);background:var(--surface);color:var(--muted);
+    padding:7px 12px;border-radius:9px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .btn:hover{color:var(--text);border-color:var(--accent)}
+  main{max-width:1100px;margin:0 auto;padding:20px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+    padding:16px 18px;margin-bottom:16px}
+  .card h2{font-size:14.5px;margin:0 0 4px;font-weight:650}
+  .card p.hint{margin:0 0 14px;color:var(--muted);font-size:13px}
+
+  /* Verdict: the one line that says wait or act. */
+  .verdict{border-left:4px solid var(--muted);padding:14px 18px;border-radius:12px;
+    background:var(--surface);border:1px solid var(--border);margin-bottom:16px}
+  .verdict.ok{border-left-color:var(--accent)}
+  .verdict.warn{border-left-color:var(--warn)}
+  .verdict.bad{border-left-color:var(--danger)}
+  .verdict h2{margin:0 0 6px;font-size:15px}
+  .verdict p{margin:0;color:var(--muted);font-size:13.5px}
+  .problems{margin:12px 0 0;padding-left:20px}
+  .problems li{margin:7px 0;color:var(--text);font-size:13.5px}
+
+  .checks{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+  .check{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 14px}
+  .check .lbl{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:650}
+  .check .val{font-size:15px;font-weight:650;margin-top:5px;display:flex;align-items:center;gap:7px}
+  .pill{width:9px;height:9px;border-radius:50%;flex:none;background:var(--faint)}
+  .pill.ok{background:var(--accent)} .pill.bad{background:var(--danger)} .pill.warn{background:var(--warn)}
+  .check .sub{font-size:12px;color:var(--muted);margin-top:4px;word-break:break-word}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+     color:var(--faint);font-weight:650;padding:6px 8px;border-bottom:1px solid var(--border)}
+  td{padding:6px 8px;border-bottom:1px solid var(--border)}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .tag{font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--border);color:var(--muted)}
+  .tag.sealed{color:var(--accent);border-color:var(--accent)}
+  .tag.live{color:var(--accent2);border-color:var(--accent2)}
+  .tag.partial{color:var(--warn);border-color:var(--warn)}
+  .scroll{overflow-x:auto}
+
+  pre.log{background:#080e13;color:#d5e3ea;border:1px solid var(--border);border-radius:11px;
+    padding:14px;font-family:var(--mono);font-size:12.5px;line-height:1.55;
+    max-height:460px;overflow:auto;margin:0;white-space:pre-wrap;word-break:break-word}
+  :root[data-theme="light"] pre.log{background:#0c141b}
+  .fix{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 14px;margin-top:12px}
+  .fix code{font-family:var(--mono);font-size:12.5px;color:var(--accent);display:block;
+    padding:8px 10px;background:var(--bg);border-radius:7px;margin-top:7px;overflow-x:auto}
+  .muted{color:var(--muted)}
+  footer{max-width:1100px;margin:0 auto;padding:8px 20px 30px;color:var(--faint);font-size:12px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="dot"></div>
+    <div>
+      <h1>Status &amp; Log</h1>
+      <div class="sub">Was macht der Ingest-Dienst gerade?</div>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn" id="refresh">Neu laden</button>
+  <a class="btn" href="./" style="display:inline-block">← Zum Report</a>
+</header>
+
+<main>
+  <div class="verdict" id="verdict">
+    <h2 id="v-title">Prüfe…</h2>
+    <p id="v-text">Diagnose wird geladen.</p>
+    <ul class="problems" id="v-problems" hidden></ul>
+    <div id="v-fix"></div>
+  </div>
+
+  <div class="card">
+    <h2>Die drei Dinge, die schiefgehen können</h2>
+    <p class="hint">Der Report bleibt leer, wenn eines davon nicht stimmt. Alles grün und
+      trotzdem keine Zahlen heißt: der erste Backfill läuft noch.</p>
+    <div class="checks" id="checks"></div>
+  </div>
+
+  <div class="card">
+    <h2>Epochen im Speicher</h2>
+    <p class="hint">Der Report erscheint, sobald mindestens eine Epoche
+      <strong>sealed</strong> ist. <em>live</em> und <em>partial</em> zählen dafür nicht —
+      eine laufende Epoche ist erst nach ihrem Ende vollständig bezahlt.</p>
+    <div class="scroll"><table>
+      <thead><tr><th>Epoche</th><th>Status</th><th class="num">Computors</th>
+        <th>Code-Version</th><th>Zuletzt berechnet</th><th>Notiz</th></tr></thead>
+      <tbody id="epochs"><tr><td colspan="6" class="muted">lädt…</td></tr></tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <h2>Ingest-Log</h2>
+    <p class="hint" id="log-path">Die Ausgabe des Ingest-Dienstes.</p>
+    <pre class="log" id="log">lädt…</pre>
+  </div>
+</main>
+
+<footer>
+  Diese Seite fragt <code>/v1/diagnostics</code> und <code>/v1/log</code> ab und
+  aktualisiert sich alle 15&nbsp;Sekunden selbst.
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  // Same data-source rule as the dashboard: ?api=<base>, else same origin.
+  var apiBase = new URLSearchParams(location.search).get("api");
+  if(apiBase==null && typeof window.QDR_API!=="undefined") apiBase=window.QDR_API;
+  if(apiBase==null) apiBase="";
+  function url(p){ return apiBase.replace(/\/$/,"")+p; }
+
+  function esc(s){ return (s==null?"":""+s).replace(/[&<>"]/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function when(ts){
+    if(!ts) return "–";
+    var d=new Date(ts*1000), age=Math.floor(Date.now()/1000-ts);
+    var rel = age<60 ? "gerade eben"
+            : age<3600 ? "vor "+Math.floor(age/60)+" Min"
+            : age<86400 ? "vor "+Math.floor(age/3600)+" Std"
+            : "vor "+Math.floor(age/86400)+" Tagen";
+    return d.toLocaleString()+" ("+rel+")";
+  }
+  function check(label, ok, value, sub){
+    return '<div class="check"><div class="lbl">'+esc(label)+'</div>'+
+      '<div class="val"><span class="pill '+(ok===null?"":ok?"ok":"bad")+'"></span>'+esc(value)+'</div>'+
+      (sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div>';
+  }
+
+  /* The volume-permission fix is the one failure an operator cannot guess from
+     the error text alone, so this page spells the command out. */
+  function fixFor(d){
+    var perm = (d.writable && !d.writable.ok) ||
+               (d.store && !d.store.ok && /readonly|unable to open|not a database/i.test(d.store.error||""));
+    if(perm){
+      return '<div class="fix"><strong>Wahrscheinliche Ursache:</strong> Das Verzeichnis '+
+        '<code style="display:inline;padding:1px 5px">/data</code> gehört nicht dem Container-Benutzer '+
+        '(uid&nbsp;10001). Bei einem Bind-Mount auf dem Host:'+
+        '<code>chown -R 10001:10001 /pfad/zum/data &amp;&amp; docker compose restart</code>'+
+        '<span class="muted">Ein <em>named volume</em> (wie in der mitgelieferten docker-compose.yaml) '+
+        'bekommt die Rechte automatisch richtig.</span></div>';
+    }
+    if(d.rpc && !d.rpc.ok){
+      return '<div class="fix"><strong>Wahrscheinliche Ursache:</strong> Der Host erreicht den '+
+        'RPC-Endpunkt nicht ('+esc(d.rpc.base||"")+'). Ausgehendes HTTPS und '+
+        '<code style="display:inline;padding:1px 5px">QUBIC_RPC_BASE</code> prüfen:'+
+        '<code>docker compose exec qubic_decentralization_report_ingest \\\n'+
+        '  python -c "from qdr.client import CachedClient; print(CachedClient().tick_info())"</code></div>';
+    }
+    return "";
+  }
+
+  function renderDiag(d){
+    var box=document.getElementById("verdict"),
+        title=document.getElementById("v-title"),
+        text=document.getElementById("v-text"),
+        list=document.getElementById("v-problems");
+    var stats=(d.store&&d.store.stats)||{}, sealed=stats.sealed||0;
+    var broken = (d.store&&!d.store.ok) || (d.writable&&!d.writable.ok) || (d.rpc&&!d.rpc.ok);
+
+    box.className="verdict "+(d.healthy?"ok":broken?"bad":"warn");
+    if(d.healthy){
+      title.textContent="Alles in Ordnung";
+      text.textContent="Der Report hat "+sealed+" abgeschlossene Epoche(n). Die Seite zeigt Zahlen.";
+    } else if(broken){
+      title.textContent="Der Dienst kann so nicht arbeiten";
+      text.textContent="Das ist kein Wartezustand — hier muss etwas geändert werden.";
+    } else {
+      title.textContent="Der Report wird gerade aufgebaut";
+      text.textContent="Nichts ist kaputt. Der erste Backfill dauert einige Minuten; "+
+        "sobald eine Epoche abgeschlossen ist, erscheinen die Zahlen.";
+    }
+    var ps=d.problems||[];
+    list.hidden=!ps.length;
+    list.innerHTML=ps.map(function(p){return "<li>"+esc(p)+"</li>";}).join("");
+    document.getElementById("v-fix").innerHTML=fixFor(d);
+
+    var st=d.store||{}, w=d.writable||{}, rpc=d.rpc||{};
+    document.getElementById("checks").innerHTML=
+      check("Datenbank lesbar", !!st.ok, st.ok?"ja":"nein", st.ok?(st.stats&&st.stats.db):st.error)+
+      check("Volume beschreibbar", !!w.ok, w.ok?"ja":"nein", w.ok?w.path:w.error)+
+      check("RPC erreichbar", !!rpc.ok, rpc.ok?"ja":"nein",
+            rpc.ok?("Epoche "+rpc.epoch+" · Tick "+rpc.tick):rpc.error)+
+      check("Abgeschlossene Epochen", sealed>0, String(sealed),
+            sealed>0?"Report kann angezeigt werden":"Report bleibt leer, bis eine Epoche sealed ist");
+
+    var rows=(st.epochs)||[];
+    document.getElementById("epochs").innerHTML = rows.length
+      ? rows.map(function(e){
+          var s=e.status||"?";
+          return "<tr><td><strong>"+esc(e.epoch)+"</strong></td>"+
+            '<td><span class="tag '+esc(s)+'">'+esc(s)+"</span></td>"+
+            '<td class="num">'+esc(e.computor_count==null?"–":e.computor_count)+"</td>"+
+            "<td>"+esc(e.code_version||"–")+"</td>"+
+            '<td class="muted">'+esc(when(e.last_computed))+"</td>"+
+            '<td class="muted">'+esc(e.note||"–")+"</td></tr>";
+        }).join("")
+      : '<tr><td colspan="6" class="muted">Noch keine Epoche im Speicher.</td></tr>';
+  }
+
+  function renderLog(d){
+    var pre=document.getElementById("log"), path=document.getElementById("log-path");
+    path.innerHTML = "Ausgabe des Ingest-Dienstes · <code>"+esc(d.path||"")+"</code>"+
+      (d.mtime?' · zuletzt geschrieben '+esc(when(d.mtime)):"");
+    if(d.error){ pre.textContent="Log nicht lesbar: "+d.error; return; }
+    if(!d.exists){
+      pre.textContent = (d.note||"Noch kein Log vorhanden.")+
+        "\n\nLäuft der Ingest-Dienst?\n  docker compose ps\n  docker compose logs -f qubic_decentralization_report_ingest";
+      return;
+    }
+    var lines=d.lines||[];
+    pre.textContent = lines.length ? lines.join("\n") : "(Log ist leer)";
+    pre.scrollTop = pre.scrollHeight;
+  }
+
+  function load(){
+    fetch(url("/v1/diagnostics")).then(function(r){return r.json();}).then(renderDiag)
+      .catch(function(e){
+        document.getElementById("verdict").className="verdict bad";
+        document.getElementById("v-title").textContent="Die API antwortet nicht";
+        document.getElementById("v-text").textContent=
+          "Diese Seite erreicht /v1/diagnostics nicht ("+e+"). Läuft der API-Container?";
+      });
+    fetch(url("/v1/log?lines=400")).then(function(r){return r.json();}).then(renderLog)
+      .catch(function(){ document.getElementById("log").textContent="Log nicht abrufbar."; });
+  }
+
+  document.getElementById("refresh").addEventListener("click", load);
+  load();
+  setInterval(load, 15000);
+})();
+</script>
+</body>
+</html>

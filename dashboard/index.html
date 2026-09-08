@@ -443,6 +443,7 @@
       buildingBody:"The ingest service is pulling this epoch from the chain. Figures "+
         "appear as soon as they are measured — this page never shows placeholder numbers.",
       buildingRetry:"Retrying automatically…",
+      buildingDiag:"Status & log →",
       liveRunning:"running · revenue is credited when it closes",
       distPending:"This epoch is still running — its payouts are credited when it "+
         "closes, so there is nothing to distribute yet. Pick an earlier epoch to see "+
@@ -506,6 +507,7 @@
       buildingBody:"Der Ingest-Dienst holt diese Epoche gerade von der Chain. Die Zahlen "+
         "erscheinen, sobald sie gemessen sind — diese Seite zeigt niemals Platzhalterwerte.",
       buildingRetry:"Wird automatisch erneut versucht…",
+      buildingDiag:"Status & Log →",
       liveRunning:"läuft · Umsatz wird beim Abschluss gutgeschrieben",
       distPending:"Diese Epoche läuft noch — ihre Auszahlungen werden beim Abschluss "+
         "gutgeschrieben, es gibt also noch nichts zu verteilen. Wähle eine frühere "+
@@ -678,7 +680,8 @@
     el.hidden=false;
     el.innerHTML="<b>"+escapeHtml(t("buildingTitle"))+"</b> "+
       escapeHtml(t("buildingBody"))+" <span class=\"muted\">"+
-      escapeHtml(t("buildingRetry"))+"</span>";
+      escapeHtml(t("buildingRetry"))+"</span> "+
+      "<a href=\"log.html\">"+escapeHtml(t("buildingDiag"))+"</a>";
     document.getElementById("kpis").innerHTML="";
   }
 
