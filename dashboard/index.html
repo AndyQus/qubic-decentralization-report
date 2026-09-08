@@ -62,12 +62,8 @@
   /* display:inline-flex above would otherwise defeat the hidden attribute */
   .sample-badge[hidden]{display:none}
   /* epoch lifecycle: live = fresh from chain, sealed = settled history, partial = gaps */
-  .status-badge{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 35%,transparent)}
-  .status-badge .dot{background:var(--accent)}
-  .status-badge.sealed{color:var(--muted)} .status-badge.sealed .dot{background:var(--muted)}
-  .status-badge.partial{color:var(--warn)} .status-badge.partial .dot{background:var(--warn)}
 
-  .lead{margin:18px 0 6px;font-size:14.5px;color:var(--muted);max-width:760px}
+  .lead{margin:18px 0 6px;font-size:14.5px;color:var(--muted)}
   .lead-more{margin:2px 0 0;font-size:13.5px}
   .lead-more a{font-weight:600}
 
@@ -280,7 +276,7 @@
 
 <div class="wrap">
   <div id="building-note" class="coverage-note" hidden></div>
-  <div id="status-badge" class="sample-badge status-badge" hidden><span class="dot"></span><span id="status-text"></span></div>
+  <div id="partial-note" class="coverage-note" hidden></div>
   <p class="lead" data-i18n="lead">Qubic runs on {slots} computor slots. On paper that looks like {slots} independent operators — but a single operator can hold many slots at once. This report groups slots by operator (self-reported first, on-chain-linked next) and measures how concentrated revenue and control really are.</p>
 
   <p class="lead-more"><a href="./how-it-works.html" data-i18n="howItWorksLong">How this report works &rarr;</a></p>
@@ -494,8 +490,6 @@
         "of the {slots} slots would make the network more concentrated than the numbers "+
         "below suggest. Operators can list their slots in the public registry — the "+
         "report groups by operator as soon as they do.",
-      statusLive:"Live — current epoch, refreshed continuously",
-      statusSealed:"Sealed — closed epoch, final",
       statusPartial:"Partial — incomplete derivation, excluded from trends",
       kNak13:"Nakamoto ⅓", kNak13Sub:"slots to control ⅓ of revenue",
       kNak12:"Nakamoto ½", kNak12Sub:"slots to control ½ of revenue",
@@ -558,8 +552,6 @@
         "Hält ein Betreiber mehrere der {slots} Slots, ist das Netzwerk konzentrierter als "+
         "die Zahlen unten nahelegen. Betreiber können ihre Slots im öffentlichen Registry "+
         "eintragen — der Report gruppiert nach Betreiber, sobald sie das tun.",
-      statusLive:"Live — laufende Epoche, wird ständig aktualisiert",
-      statusSealed:"Versiegelt — abgeschlossene Epoche, final",
       statusPartial:"Unvollständig — Ableitung lückenhaft, nicht im Trend",
       kNak13:"Nakamoto ⅓", kNak13Sub:"Slots für ⅓ des Umsatzes",
       kNak12:"Nakamoto ½", kNak12Sub:"Slots für ½ des Umsatzes",
@@ -968,14 +960,17 @@
 
   /* Epoch lifecycle badge: the store serves sealed epochs unchanged and keeps the
      current one live, so say which the reader is looking at. */
+  /* The epoch's lifecycle needs no badge of its own: the header names the epoch
+     the report describes, and the live panel above says the current one is still
+     running. Only an incomplete derivation is worth interrupting the reader for,
+     because then the figures themselves carry a caveat. */
   function renderStatusBadge(){
-    const el=document.getElementById("status-badge"), txt=document.getElementById("status-text");
+    const el=document.getElementById("partial-note");
+    if(!el) return;
     const st=report&&report.status;
-    if(!st){ el.hidden=true; return; }
+    if(st!=="partial"){ el.hidden=true; return; }
     el.hidden=false;
-    el.classList.remove("sealed","partial");
-    if(st!=="live") el.classList.add(st==="sealed"?"sealed":"partial");
-    txt.textContent=t(st==="live"?"statusLive":st==="sealed"?"statusSealed":"statusPartial");
+    el.textContent=t("statusPartial");
   }
 
   function startUI(){
