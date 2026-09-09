@@ -1,0 +1,1765 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mining Live — Qubic Decentralization Report</title>
+
+<!--
+  dashboard/mining.html — Live-Blick auf die Ant-Colony-Mining-Maschinerie.
+
+  Datenquelle: GET /v1/mining
+  Polling-Intervall: aus next_refresh_in (Server gibt vor).
+  Kein Build-Schritt, keine externe Library, keine CDN-Schriften.
+
+  Abschnitte:
+    1. Hero  — solution_count, delta/min, Epochenfortschritt
+    2. Node  — IP, Latenz, Version, Peers
+    3. Aufgabe — Task-Profil, dataHash, Zielverteilung
+    4. Revenue — Slot-Histogramm, nonzero-Zähler
+    5. Einordnung — was das Mining NICHT ist (prominent)
+-->
+
+<style>
+/* ─── Design Tokens ────────────────────────────────────────────────────────── */
+:root {
+  /* Light theme (baseline) */
+  --bg:       #eef3f6;
+  --bg2:      #f6f9fb;
+  --surface:  #ffffff;
+  --surface2: #f1f5f8;
+  --border:   #d8e2e8;
+  --text:     #132430;
+  --muted:    #546773;
+  --faint:    #8698a2;
+  --accent:   #0aa17e;
+  --accent2:  #1f7fe0;
+  --warn:     #c9820f;
+  --danger:   #e0435f;
+  --shadow:   0 6px 20px rgba(20,40,55,.10);
+  /* Panels are translucent so the colony shows through them. Light needs a higher
+     floor than dark: dark text over a busy light ground loses contrast fastest. */
+  --panel:    color-mix(in srgb, var(--surface) 62%, transparent);
+  --warn-bg:  rgba(201,130,15,.10); --warn-fg: #8a5c07; --warn-link: #1f7fe0;
+  --radius:   14px;
+  --mono:     ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:     system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+
+  /* Semantic colours (mining-specific) */
+  --hero-glow:  rgba(10,161,126,.18);
+  --pulse-ring: rgba(10,161,126,.45);
+}
+
+/* Dark — system default */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:       #0c141b;
+    --bg2:      #101820;
+    --surface:  #16232e;
+    --surface2: #1b2c38;
+    --border:   #263846;
+    --text:     #e6eef2;
+    --muted:    #8aa0ab;
+    --faint:    #5c7180;
+    --accent:   #22d3a6;
+    --accent2:  #3b9dff;
+    --warn:     #f5a623;
+    --danger:   #ff5c7a;
+    --shadow:   0 6px 24px rgba(0,0,0,.35);
+    --panel:    color-mix(in srgb, var(--surface) 50%, transparent);
+  --warn-bg:  rgba(245,166,35,.09); --warn-fg: #c8993f; --warn-link: #3b9dff;
+    --warn-bg:  rgba(245,166,35,.09); --warn-fg: #c8993f; --warn-link: #3b9dff;
+    --hero-glow:  rgba(34,211,166,.15);
+    --pulse-ring: rgba(34,211,166,.45);
+  }
+}
+
+/* Dark — explicit toggle */
+:root[data-theme="dark"] {
+  --bg:       #0c141b;
+  --bg2:      #101820;
+  --surface:  #16232e;
+  --surface2: #1b2c38;
+  --border:   #263846;
+  --text:     #e6eef2;
+  --muted:    #8aa0ab;
+  --faint:    #5c7180;
+  --accent:   #22d3a6;
+  --accent2:  #3b9dff;
+  --warn:     #f5a623;
+  --danger:   #ff5c7a;
+  --shadow:   0 6px 24px rgba(0,0,0,.35);
+  --panel:    color-mix(in srgb, var(--surface) 50%, transparent);
+  --hero-glow:  rgba(34,211,166,.15);
+  --pulse-ring: rgba(34,211,166,.45);
+}
+
+/* ─── Reset & Base ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+a { color: var(--accent2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ─── Header ────────────────────────────────────────────────────────────────── */
+header.top {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: linear-gradient(180deg, var(--bg2) 70%, transparent);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.top-inner {
+  max-width: 100%;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.logo {
+  width: 32px; height: 32px; border-radius: 9px; flex: 0 0 auto;
+  background: radial-gradient(circle at 30% 30%, var(--accent), #0b7d63);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset;
+}
+.brand h1 {
+  font-size: 15px; margin: 0; font-weight: 650;
+  letter-spacing: .2px; white-space: nowrap;
+}
+.brand .sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.spacer { flex: 1 1 auto; }
+.controls { display: flex; align-items: center; gap: 8px; }
+/* Language switch — same control as the report's header, so the two pages read
+   as one site rather than two. */
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px;
+  overflow: hidden; background: var(--surface); }
+.seg button { background: transparent; border: 0; color: var(--muted);
+  padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
+  font-family: var(--sans); }
+.seg button.active { background: var(--accent); color: #04231b; }
+:root[data-theme="light"] .seg button.active { color: #fff; }
+
+.icon-btn {
+  width: 36px; height: 32px; border: 1px solid var(--border);
+  border-radius: 9px; background: var(--surface);
+  color: var(--text); cursor: pointer; font-size: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.how-link {
+  display: inline-flex; align-items: center; height: 32px;
+  padding: 0 12px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--muted);
+  font-size: 12.5px; font-weight: 600; white-space: nowrap;
+}
+.how-link:hover {
+  color: var(--text); border-color: var(--accent); text-decoration: none;
+}
+
+/* ─── Refresh Ticker ────────────────────────────────────────────────────────── */
+.refresh-bar {
+  font-size: 11.5px; color: var(--muted);
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 12px 4px 10px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--surface);
+  white-space: nowrap;
+}
+.refresh-bar .r-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); flex: 0 0 auto;
+  box-shadow: 0 0 0 0 var(--pulse-ring);
+  animation: rpulse 2s ease-out infinite;
+}
+.refresh-bar.stale .r-dot { animation: none; background: var(--warn); }
+.refresh-bar.error .r-dot { animation: none; background: var(--danger); }
+@keyframes rpulse {
+  0%   { box-shadow: 0 0 0 0 var(--pulse-ring); }
+  70%  { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .refresh-bar .r-dot { animation: none; }
+}
+
+/* ─── Flash on new data ─────────────────────────────────────────────────────── */
+@keyframes dataflash {
+  0%   { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent); }
+  100% { box-shadow: none; }
+}
+.flash { animation: dataflash .7s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .flash { animation: none; }
+}
+
+/* ─── Hero Section ──────────────────────────────────────────────────────────── */
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 52px 24px 44px;
+  background: var(--bg);
+}
+/* The colony runs behind the whole page, not just the hero: the swarm is what the
+   page is about, and a viewport-fixed canvas keeps it present while scrolling
+   without ever growing the document or scrolling with it. Behind everything
+   (z-index 0 against the cards' own stacking), and never interactive. */
+.hero-canvas {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: .9;
+}
+/* Content sits above the canvas. Cards keep their own solid backgrounds, so the
+   animation reads as depth behind them rather than texture through them. */
+.hero, .main-grid, footer, header.top { position: relative; z-index: 1; }
+/* The hero no longer paints over it. */
+.hero { background: transparent; }
+/* Light keeps nearly the same opacity as dark -- the old .3 made the colony
+   invisible on a pale ground. The contrast is fixed in the canvas colours
+   instead (darker, more saturated strokes), not by fading the layer out. */
+:root[data-theme="light"] .hero-canvas { opacity: .8; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .hero-canvas { opacity: .8; }
+}
+
+.hero-inner {
+  position: relative; z-index: 2;
+  max-width: 1440px; margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px 48px;
+  align-items: center;
+}
+@media (max-width: 900px) {
+  .hero-inner { grid-template-columns: 1fr; gap: 28px; }
+}
+
+/* Left: big number */
+.hero-left {}
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11.5px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--accent);
+  margin-bottom: 16px;
+}
+.hero-eyebrow .e-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 0 var(--pulse-ring);
+  animation: rpulse 2s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-eyebrow .e-dot { animation: none; }
+}
+.hero-label {
+  font-size: 13.5px; color: var(--muted); font-weight: 500; margin-bottom: 8px;
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.hero-count-wrap {
+  display: flex; align-items: baseline; gap: 12px;
+  margin-bottom: 8px;
+}
+/* The big rolling number */
+.hero-count {
+  font-size: clamp(52px, 9vw, 96px);
+  font-weight: 760;
+  letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  line-height: 1;
+  /* Soft text glow only in dark theme */
+  text-shadow: 0 0 40px var(--hero-glow);
+  transition: color .3s;
+}
+.hero-count-unit {
+  font-size: 18px; font-weight: 600; color: var(--muted); white-space: nowrap;
+}
+.hero-delta {
+  font-size: 15px; color: var(--muted); margin-bottom: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.hero-delta .delta-num {
+  font-weight: 700; color: var(--accent);
+}
+.hero-threshold {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; color: var(--muted); margin-top: 6px;
+}
+.threshold-pct {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700; color: var(--text);
+}
+
+/* Right: epoch progress + node status */
+.hero-right {
+  display: flex; flex-direction: column; gap: 20px;
+}
+
+/* Epoch progress bar */
+.epoch-card {
+  background: var(--panel);
+  backdrop-filter: blur(7px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+}
+.ec-label {
+  font-size: 11.5px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); margin-bottom: 10px;
+}
+.ec-numbers {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 10px;
+}
+.ec-cur {
+  font-size: 22px; font-weight: 720;
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+}
+.ec-of {
+  font-size: 13px; color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.epoch-bar-track {
+  height: 8px; border-radius: 99px;
+  background: color-mix(in srgb, var(--muted) 20%, transparent);
+  overflow: hidden; margin-bottom: 8px;
+}
+.epoch-bar-fill {
+  height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent2), var(--accent));
+  width: 0;
+  transition: width 1s cubic-bezier(.4,.05,.2,1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .epoch-bar-fill { transition: none; }
+}
+.ec-sub {
+  font-size: 12px; color: var(--faint); display: flex;
+  justify-content: space-between;
+}
+
+/* ─── Main Content Grid ─────────────────────────────────────────────────────── */
+.main-grid {
+  max-width: 1440px; margin: 0 auto; padding: 0 24px 64px;
+}
+
+/* ─── Section Card ──────────────────────────────────────────────────────────── */
+.section-card {
+  /* Translucent, with a blur so text keeps its contrast over moving particles. */
+  background: var(--panel); backdrop-filter: blur(7px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  margin-top: 20px; overflow: hidden;
+}
+.sc-head {
+  padding: 16px 20px 0;
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+}
+.sc-title {
+  font-size: 14px; font-weight: 650; margin: 0; color: var(--text);
+}
+.sc-desc {
+  font-size: 12.5px; color: var(--muted); margin: 4px 20px 0;
+  line-height: 1.55; max-width: 760px;
+}
+.sc-body { padding: 16px 20px 20px; }
+
+/* ─── Two-column layout for Node + Aufgabe ──────────────────────────────────── */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 20px;
+}
+@media (max-width: 800px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+/* ─── Node Status Section ───────────────────────────────────────────────────── */
+.node-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.node-cell {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.nc-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--faint); font-weight: 650; margin-bottom: 5px;
+}
+.nc-val {
+  font-size: 18px; font-weight: 700;
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+  color: var(--text); word-break: break-all;
+}
+.nc-val.accent { color: var(--accent); }
+.nc-val.code {
+  font-family: var(--mono); font-size: 13.5px;
+  font-weight: 600; letter-spacing: 0; word-break: break-all;
+}
+.nc-sub { font-size: 11.5px; color: var(--faint); margin-top: 3px; }
+.nc-full { grid-column: 1 / -1; }
+
+/* Connection indicator */
+.conn-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px; padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.conn-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent); flex: 0 0 auto;
+  box-shadow: 0 0 0 0 var(--pulse-ring);
+  animation: rpulse 2.5s ease-out infinite;
+}
+.conn-dot.dead { animation: none; background: var(--danger); }
+.conn-dot.warn { animation: none; background: var(--warn); }
+@media (prefers-reduced-motion: reduce) {
+  .conn-dot { animation: none; }
+}
+.conn-label {
+  font-size: 12.5px; font-weight: 600; color: var(--muted);
+}
+.conn-label strong { color: var(--text); }
+
+/* ─── Peers bar ─────────────────────────────────────────────────────────────── */
+.peers-bar {
+  display: flex; gap: 3px; margin-top: 8px;
+}
+.peer-pip {
+  height: 6px; border-radius: 2px; flex: 1;
+  background: color-mix(in srgb, var(--muted) 25%, transparent);
+  transition: background .3s;
+}
+.peer-pip.on { background: var(--accent); }
+.peer-pip.off { background: color-mix(in srgb, var(--danger) 45%, transparent); }
+
+/* ─── Task Section ──────────────────────────────────────────────────────────── */
+.task-params {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.tp-row {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.tp-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--faint); font-weight: 650;
+}
+.tp-val {
+  font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--text); letter-spacing: -.01em;
+}
+.tp-unit { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 3px; }
+
+.hash-row {
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+}
+.hash-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--faint); font-weight: 650; margin-bottom: 5px;
+}
+.hash-val {
+  font-family: var(--mono); font-size: 12px; color: var(--muted);
+  word-break: break-all; line-height: 1.6;
+}
+.hash-check {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-top: 5px; font-size: 11.5px; color: var(--accent);
+  font-weight: 600;
+}
+.hash-check.unverified { color: var(--warn); }
+
+/* Trit distribution visualisation */
+.trit-dist {
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+}
+.trit-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--faint); font-weight: 650; margin-bottom: 10px;
+}
+.trit-bars { display: flex; gap: 0; border-radius: 8px; overflow: hidden; height: 26px; }
+.trit-seg {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+  transition: width .8s cubic-bezier(.4,.05,.2,1);
+  white-space: nowrap; min-width: 28px;
+}
+.trit-seg.zero    { background: var(--accent2); }
+.trit-seg.one     { background: var(--accent); }
+.trit-seg.unknown { background: var(--border); color: var(--faint); }
+.trit-legend {
+  display: flex; gap: 16px; margin-top: 8px; font-size: 11.5px; color: var(--muted);
+  flex-wrap: wrap;
+}
+.trit-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.trit-legend i {
+  width: 10px; height: 10px; border-radius: 3px; display: inline-block;
+}
+.trit-note {
+  margin-top: 8px; font-size: 11.5px; color: var(--muted); line-height: 1.5;
+}
+@media (prefers-reduced-motion: reduce) {
+  .trit-seg { transition: none; }
+}
+
+/* ─── Revenue Section ───────────────────────────────────────────────────────── */
+.rev-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.rev-kpi {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px;
+}
+.rk-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--faint); font-weight: 650; margin-bottom: 5px;
+}
+.rk-val {
+  font-size: 22px; font-weight: 720; font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em; color: var(--text);
+}
+.rk-of { font-size: 13px; font-weight: 500; color: var(--faint); }
+.rk-sub { font-size: 11.5px; color: var(--faint); margin-top: 2px; }
+.rk-val.accent { color: var(--accent); }
+
+/* Histogram */
+.histogram-wrap {
+  position: relative;
+}
+.histogram-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--faint); font-weight: 650; margin-bottom: 8px;
+}
+#histogram-canvas {
+  width: 100%; height: 120px;
+  display: block; border-radius: 8px;
+}
+.histogram-note {
+  margin-top: 8px; font-size: 11.5px; color: var(--muted); line-height: 1.5;
+}
+
+/* ─── Einordnung (Disclaimer) ───────────────────────────────────────────────── */
+.context-box {
+  margin-top: 20px;
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--border));
+  border-left: 4px solid var(--warn);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  background: color-mix(in srgb, var(--warn) 7%, var(--surface));
+  box-shadow: var(--shadow);
+}
+.context-box h2 {
+  font-size: 14px; font-weight: 650; margin: 0 0 10px;
+  color: var(--text);
+}
+.context-box p {
+  margin: 0 0 10px; font-size: 13.5px; line-height: 1.6; color: var(--muted);
+  max-width: 860px;
+}
+.context-box p:last-child { margin-bottom: 0; }
+.context-box strong { color: var(--text); font-weight: 650; }
+
+/* ─── Unavailable State ─────────────────────────────────────────────────────── */
+.unavailable {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+}
+.unavailable .u-icon {
+  font-size: 36px; margin-bottom: 14px;
+}
+.unavailable h2 {
+  font-size: 17px; font-weight: 650; margin: 0 0 8px; color: var(--text);
+}
+.unavailable p { font-size: 13.5px; margin: 0; line-height: 1.6; }
+[hidden] { display: none !important; }
+
+/* ─── Footer ─────────────────────────────────────────────────────────────────  */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 20px 24px 32px;
+  font-size: 12px; color: var(--faint);
+  display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between;
+  align-items: center; max-width: 100%;
+}
+footer code { font-family: var(--mono); color: var(--muted); }
+footer { flex-direction: column; align-items: stretch; gap: 14px; }
+.fdisc { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
+  gap: 4px; text-align: center; padding: 8px 10px; border-radius: 6px; line-height: 1.55;
+  background: var(--warn-bg); color: var(--warn-fg); }
+.fdisc a { color: var(--warn-link); }
+.fdisc a:hover { text-decoration: underline; }
+.fbar { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between;
+  align-items: center; }
+.flinks { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.flinks a { color: var(--accent); }
+.flinks a:hover { text-decoration: underline; }
+.fsep { color: var(--faint); }
+
+/* ─── Responsive ─────────────────────────────────────────────────────────────  */
+@media (max-width: 600px) {
+  .hero { padding: 36px 16px 32px; }
+  .hero-count { font-size: clamp(44px, 14vw, 72px); }
+  .top-inner { padding: 12px 16px; }
+  .main-grid { padding: 0 16px 48px; }
+  .sc-body { padding: 12px 16px 16px; }
+  .sc-head { padding: 14px 16px 0; }
+  .sc-desc { margin: 4px 16px 0; }
+  .task-params { grid-template-columns: 1fr; }
+  .node-grid { grid-template-columns: 1fr; }
+  .rev-kpis { grid-template-columns: 1fr 1fr; }
+  footer { flex-direction: column; text-align: center; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     HEADER
+═══════════════════════════════════════════════════════════ -->
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+      <div>
+        <h1>Mining Live</h1>
+        <div class="sub"><span data-i18n="subtitle">Ant Colony · Qubic Decentralization Report</span></div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="controls">
+      <!-- Refresh ticker: Countdown + Zeitstempel der letzten Aktualisierung -->
+      <div class="refresh-bar" id="refresh-bar" aria-live="polite">
+        <span class="r-dot" id="r-dot"></span>
+        <span id="r-ago">–</span>
+        <span style="color:var(--faint)">·</span>
+        <span><span data-i18n="inWord">in</span> <span id="r-countdown">–</span>s</span>
+      </div>
+      <a class="how-link" href="./"><span data-i18n="backToReport">← Report</span></a>
+      <div class="seg" id="lang-seg">
+        <button data-lang="en">EN</button><button data-lang="de">DE</button>
+      </div>
+      <button class="icon-btn" id="theme-btn" title="Farbschema wechseln" aria-label="Farbschema wechseln">🌙</button>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════
+     HERO — Der Schwarm arbeitet
+═══════════════════════════════════════════════════════════ -->
+<!-- Ameisenkolonie-Animation: Hintergrund der gesamten Seite, viewport-fixiert.
+     Steht vor dem Inhalt im Markup und hinter ihm in der Stapelreihenfolge. -->
+<canvas class="hero-canvas" id="ant-canvas" aria-hidden="true"></canvas>
+
+<section class="hero" id="hero-section">
+  <div class="hero-inner">
+    <!-- Linke Seite: die große Zahl -->
+    <div class="hero-left">
+      <div class="hero-eyebrow">
+        <span class="e-dot" id="hero-dot"></span>
+        <span id="hero-epoch-badge">Epoche –</span>
+      </div>
+      <div class="hero-label" data-i18n="heroLabel">Akzeptierte Lösungen (Schwarm)</div>
+      <div class="hero-count-wrap">
+        <div class="hero-count num" id="hero-count" aria-label="Akzeptierte Lösungen">–</div>
+        <div class="hero-count-unit" data-i18n="solutionsWord">Lösungen</div>
+      </div>
+      <div class="hero-delta">
+        <span data-i18n="growth">Zuwachs:</span> <span class="delta-num" id="hero-delta">–</span> <span data-i18n="perMin">/ Min.</span>
+      </div>
+      <div class="hero-threshold">
+        <span data-i18n="thresholdWord">Schwelle:</span>
+        <span class="threshold-pct num" id="hero-threshold">–</span>
+        <span id="hero-threshold-pct" style="color:var(--faint);font-size:12px"></span>
+      </div>
+    </div>
+
+    <!-- Rechte Seite: Epochenfortschritt -->
+    <div class="hero-right">
+      <div class="epoch-card" id="epoch-card">
+        <div class="ec-label" data-i18n="epochProgress">Epochenfortschritt</div>
+        <div class="ec-numbers">
+          <span class="ec-cur num" id="ep-ticks">–</span>
+          <span class="ec-of" id="ep-of">von – Ticks</span>
+        </div>
+        <div class="epoch-bar-track">
+          <div class="epoch-bar-fill" id="ep-fill"></div>
+        </div>
+        <div class="ec-sub">
+          <span id="ep-pct">–</span>
+          <span id="ep-tick-abs">Tick –</span>
+        </div>
+      </div>
+
+      <!-- Leerzustand (bei unavailable) -->
+      <div id="hero-unavail" hidden>
+        <div class="unavailable" style="padding:24px 0 0">
+          <div class="u-icon">📡</div>
+          <h2 data-i18n="noNode">Kein Node erreichbar</h2>
+          <p id="hero-unavail-reason">Daten werden automatisch erneut abgerufen.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     HAUPTINHALT
+═══════════════════════════════════════════════════════════ -->
+<div class="main-grid">
+
+  <!-- Zweispaltige Karten: Node + Aufgabe -->
+  <div class="two-col">
+
+    <!-- ── Node-Status ──────────────────────────────────────────── -->
+    <section class="section-card" id="node-card">
+      <div class="sc-head">
+        <h2 class="sc-title" data-i18n="nodeTitle">Node-Status</h2>
+      </div>
+      <p class="sc-desc">
+        <span data-i18n="nodeDesc">Welcher Peer gerade abgefragt wurde, seine Latenz und wie viele Nachbarn antworten.</span>
+      </p>
+      <div class="sc-body" id="node-body">
+        <div class="conn-row">
+          <span class="conn-dot" id="conn-dot"></span>
+          <span class="conn-label" id="conn-label" data-i18n="connecting">Verbindungsaufbau…</span>
+        </div>
+        <div class="node-grid">
+          <div class="node-cell">
+            <div class="nc-label" data-i18n="ipAddr">IP-Adresse</div>
+            <div class="nc-val code" id="node-ip">–</div>
+          </div>
+          <div class="node-cell">
+            <div class="nc-label" data-i18n="latency">Latenz</div>
+            <div class="nc-val accent" id="node-latency">–</div>
+            <div class="nc-sub" data-i18n="latencySub">TCP-Roundtrip zum Node</div>
+          </div>
+          <div class="node-cell">
+            <div class="nc-label" data-i18n="nodeVersion">Node-Version</div>
+            <div class="nc-val" id="node-version">–</div>
+          </div>
+          <div class="node-cell">
+            <div class="nc-label" data-i18n="peersWord">Peers</div>
+            <div class="nc-val" id="node-peers">–</div>
+            <div class="nc-sub" id="node-peers-sub"></div>
+          </div>
+          <div class="node-cell nc-full">
+            <div class="nc-label" data-i18n="peerConns">Peer-Verbindungen</div>
+            <div class="peers-bar" id="peers-bar" aria-label="Peer-Status-Visualisierung"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Die Aufgabe ─────────────────────────────────────────── -->
+    <section class="section-card" id="task-card">
+      <div class="sc-head">
+        <h2 class="sc-title" data-i18n="taskTitle">Die Aufgabe</h2>
+      </div>
+      <p class="sc-desc">
+        <span data-i18n="taskDesc">Gegen diese Parameter rechnet der Schwarm — dieselben für alle Nodes weltweit.</span>
+      </p>
+      <div class="sc-body">
+        <div class="task-params">
+          <div class="tp-row">
+            <span class="tp-label" data-i18n="inputTrits">Eingangs-Trits</span>
+            <span class="tp-val"><span id="t-inputs">–</span></span>
+          </div>
+          <div class="tp-row">
+            <span class="tp-label" data-i18n="seqLen">Sequenzlänge</span>
+            <span class="tp-val"><span id="t-seq">–</span><span class="tp-unit">h</span></span>
+          </div>
+          <div class="tp-row">
+            <span class="tp-label" data-i18n="ctxWin">Kontextfenster</span>
+            <span class="tp-val"><span id="t-win">–</span><span class="tp-unit">h</span></span>
+          </div>
+          <div class="tp-row">
+            <span class="tp-label" data-i18n="gradedWin">Bew. Fenster</span>
+            <span class="tp-val"><span id="t-graded">–</span></span>
+          </div>
+          <div class="tp-row">
+            <span class="tp-label" data-i18n="thrLabel">Schwelle (max. Fehler)</span>
+            <span class="tp-val"><span id="t-threshold">–</span></span>
+          </div>
+          <div class="tp-row">
+            <span class="tp-label" data-i18n="freeSlots">Freie ANN-Slots</span>
+            <span class="tp-val" style="font-size:14px"><span id="t-free">–</span></span>
+          </div>
+        </div>
+
+        <div class="hash-row">
+          <div class="hash-label" data-i18n="hashLabel">Daten-Hash (byteweise Verifikation)</div>
+          <div class="hash-val" id="t-hash">–</div>
+          <div class="hash-check" id="t-hash-check">–</div>
+        </div>
+
+        <div class="trit-dist">
+          <div class="trit-label" data-i18n="tritLabel">Zielverteilung — rein binär (0/1, kein „weiß nicht")</div>
+          <div class="trit-bars" id="trit-bars">
+            <div class="trit-seg zero"  id="trit-zero"  style="width:49.4%">0</div>
+            <div class="trit-seg one"   id="trit-one"   style="width:50.6%">1</div>
+            <div class="trit-seg unknown" id="trit-unk" style="width:0%"></div>
+          </div>
+          <div class="trit-legend">
+            <span><i style="background:var(--accent2)"></i> <span data-i18n="target0">Ziel 0:</span> <span id="tl-zero">–</span></span>
+            <span><i style="background:var(--accent)"></i> <span data-i18n="target1">Ziel 1:</span> <span id="tl-one">–</span></span>
+            <span><i style="background:var(--border)"></i> <span data-i18n="targetUnk">Unbekannt (Ziel):</span> <span id="tl-unk">–</span></span>
+          </div>
+          <div class="trit-note">
+            <span data-i18n="tritNote">„Weiß nicht" (Trit 2) ist interner Netzwerkzustand, aber niemals Zielwert — Abweichung zählt schlicht als Fehler.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ── Revenue ──────────────────────────────────────────────────── -->
+  <section class="section-card" id="revenue-card">
+    <div class="sc-head">
+      <h2 class="sc-title" data-i18n="revTitle">Revenue-Verteilung (näherungsweise bis Epochenende)</h2>
+    </div>
+    <p class="sc-desc">
+      <span data-i18n="revDesc">Direkt vom Node: drei Score-Dimensionen über alle 676 Computor-Slots. Mid-Epoch-Werte sind laut Core-Dokumentation näherungsweise — erst am Epochenende exakt.</span>
+    </p>
+    <div class="sc-body">
+      <div class="rev-kpis">
+        <div class="rev-kpi">
+          <div class="rk-label" data-i18n="slotsTotal">Slots gesamt</div>
+          <div class="rk-val accent" id="rev-slots">–</div>
+        </div>
+        <div class="rev-kpi">
+          <div class="rk-label">TX nonzero</div>
+          <div class="rk-val" id="rev-tx">–</div>
+          <div class="rk-of">/ 676</div>
+        </div>
+        <div class="rev-kpi">
+          <div class="rk-label">Oracle nonzero</div>
+          <div class="rk-val" id="rev-oracle">–</div>
+          <div class="rk-of">/ 676</div>
+        </div>
+        <div class="rev-kpi">
+          <div class="rk-label">Doge nonzero</div>
+          <div class="rk-val" id="rev-doge">–</div>
+          <div class="rk-of">/ 676</div>
+        </div>
+        <div class="rev-kpi">
+          <div class="rk-label" data-i18n="top10">Top-10-Anteil</div>
+          <div class="rk-val" id="rev-top10">–</div>
+          <div class="rk-sub" data-i18n="top10Sub">sehr gleichmäßig wenn &lt; 5%</div>
+        </div>
+        <div class="rev-kpi">
+          <div class="rk-label">IPC</div>
+          <div class="rk-val" style="font-size:15px;letter-spacing:-.01em" id="rev-ipc">–</div>
+        </div>
+      </div>
+
+      <div class="histogram-wrap" id="histogram-wrap">
+        <div class="histogram-label" data-i18n="histLabel">Verteilung der Slot-Summen (tx + oracle + doge) über alle 676 Slots</div>
+        <canvas id="histogram-canvas" role="img"
+                aria-label="Histogramm: Revenue-Verteilung der 676 Computor-Slots"></canvas>
+        <div class="histogram-note">
+          <span data-i18n="histNote">Jeder Balken repräsentiert einen Slot, sortiert nach Gesamtscore. Gleichmäßige Verteilung deutet auf gute Dezentralisierung hin.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Kurze Einordnung als Abschluss. Bewusst knapp: die Seite zeigt Messwerte,
+       keine Deutung. Was der Task inhaltlich darstellt, sagt das Protokoll nicht --
+       deshalb steht hier auch keine Behauptung darüber. -->
+  <div class="context-box" id="context-box">
+    <p style="margin-bottom:0" data-i18n="contextNote">Was diese Seite zeigt: direkt gemessene Fakten über die Mining-Maschinerie — Schwarmaktivität, Node-Zustand, Task-Profil, Revenue-Verteilung. Alles kommt live von einem Qubic-Node, nichts ist geschätzt oder erfunden.</p>
+  </div>
+
+</div><!-- /main-grid -->
+
+<!-- ═══════════════════════════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════════════════════════ -->
+<footer>
+  <!-- Same disclaimer treatment as the report's footer: this page is read as a
+       statement about the network, so the caveats travel with it. -->
+  <div class="fdisc">
+    <b data-i18n="discLabel">Disclaimer:</b>
+    <span data-i18n="discBeta">This page is currently in beta status.</span>
+    <span data-i18n="discData">Mining state is read live from a public Qubic node over the peer port (21841); the peer list comes from</span>
+    <span><a href="https://api.qubic.li/Public/Peers" target="_blank" rel="noreferrer">api.qubic.li</a>.</span>
+    <span data-i18n="discApprox">Revenue scores are approximate until an epoch closes, as the core's own documentation states.</span>
+    <span data-i18n="discNoGuarantee">We do not guarantee the completeness, accuracy, or availability of the data.</span>
+    <b data-i18n="discDemo">Use it for analysis purposes only — not as a basis for investment decisions.</b>
+  </div>
+
+  <div class="fbar">
+    <span>
+      Mining Live · <a href="./">Qubic Decentralization Report</a>
+      &nbsp;·&nbsp; <span data-i18n="dataWord">Daten:</span> <code>/v1/mining</code>
+    </span>
+    <div class="flinks">
+      <a href="https://qubic.org" target="_blank" rel="noreferrer">Qubic.org</a>
+      <span class="fsep">·</span>
+      <a href="https://github.com/AndyQus/qubic-decentralization-report"
+         target="_blank" rel="noreferrer">GitHub</a>
+      <span class="fsep">·</span>
+      <a href="https://qubic.org/terms-of-service" target="_blank" rel="noreferrer" data-i18n="tos">Terms of Service</a>
+      <span class="fsep">·</span>
+      <a href="https://qubic.org/privacy-policy" target="_blank" rel="noreferrer" data-i18n="privacy">Privacy Policy</a>
+      <span class="fsep">·</span>
+      <a href="./log.html">Status &amp; Log</a>
+    </div>
+    <span>© <span id="foot-year"></span> <span data-i18n="sponsored">Qubic – Sponsored by AndyQus</span></span>
+  </div>
+</footer>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Mining Live — dashboard/mining.html
+   Qubic Decentralization Report
+
+   Polling: GET /v1/mining, Intervall aus next_refresh_in.
+   Kein externer Code, kein CDN.
+═══════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  "use strict";
+
+  /* ── Helpers ──────────────────────────────────────────────────────────── */
+  const LS_THEME = "qdr.theme";
+  const root = document.documentElement;
+
+  function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function safeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+
+  /* -- i18n ---------------------------------------------------------------
+     Same mechanism as index.html: data-i18n attributes plus a two-key table.
+     The preference shares the qdr.lang key with the report, so switching the
+     language on one page carries over to the other. English is the default,
+     matching index.html. */
+  const LS_LANG = "qdr.lang";
+  const I18N = {
+    en: {
+      subtitle: "Ant Colony \u00B7 Qubic Decentralization Report",
+      backToReport: "\u2190 Report", inWord: "in",
+      heroLabel: "Accepted solutions (swarm)", solutionsWord: "solutions",
+      growth: "Growth:", perMin: "/ min", thresholdWord: "Threshold:",
+      thresholdHint: "max. errors of {graded} (\u225C {pct} % hits)",
+      epochProgress: "Epoch progress", epochWord: "Epoch",
+      ofTicks: "of {n} ticks", tickWord: "Tick",
+      noNode: "No node reachable",
+      unavailDefault: "Data will be fetched again automatically.",
+      unavailFile: "This page was opened as a file (file://) and has no API. Start the server and open it through that: python -m uvicorn api.server:app --port 8000 \u2192 http://127.0.0.1:8000/dashboard/mining.html",
+      unavailApi: "API not reachable",
+      nodeTitle: "Node status",
+      nodeDesc: "Which peer was queried, its latency, and how many neighbours answer.",
+      connecting: "Connecting\u2026", connLive: "Connection active",
+      connFresh: "\u2014 data fresh from the node",
+      connLost: "No connection", connLostSub: "\u2014 no node is answering",
+      ipAddr: "IP address", latency: "Latency", latencySub: "TCP round trip to the node",
+      nodeVersion: "Node version", peersWord: "Peers", peerConns: "Peer connections",
+      peersSub: "answering of {n} peers",
+      taskTitle: "The task",
+      taskDesc: "These are the parameters the swarm computes against \u2014 the same for every node worldwide.",
+      inputTrits: "Input trits", seqLen: "Sequence length", ctxWin: "Context window",
+      gradedWin: "Graded windows", thrLabel: "Threshold (max. errors)",
+      freeSlots: "Free ANN slots",
+      hashLabel: "Data hash (byte-for-byte verification)",
+      hashOk: "\u2713 Matches the core byte for byte",
+      hashBad: "\u26A0 Differs from the core \u2014 the task has changed",
+      tritLabel: "Target distribution \u2014 purely binary (0/1, no \u201Cunknown\u201D)",
+      target0: "Target 0:", target1: "Target 1:", targetUnk: "Unknown (target):",
+      tritNote: "\u201CUnknown\u201D (trit 2) is an internal network state, but never a target value \u2014 a deviation simply counts as an error.",
+      revTitle: "Revenue distribution (approximate until the epoch closes)",
+      revDesc: "Straight from the node: three score dimensions across all 676 computor slots. Mid-epoch values are approximate per the core documentation \u2014 exact only when the epoch closes.",
+      slotsTotal: "Slots total", top10: "Top-10 share", top10Sub: "very even when < 5%",
+      histLabel: "Distribution of slot sums (tx + oracle + doge) across all 676 slots",
+      histNote: "Each bar is one slot, sorted by total score. An even distribution indicates good decentralization.",
+      contextNote: "What this page shows: directly measured facts about the mining machinery \u2014 swarm activity, node state, task profile, revenue distribution. Everything comes live from a Qubic node; nothing is estimated or invented.",
+      discLabel: "Disclaimer:", discBeta: "This page is currently in beta status.",
+      discData: "Mining state is read live from a public Qubic node over the peer port (21841); the peer list comes from",
+      discApprox: "Revenue scores are approximate until an epoch closes, as the core's own documentation states.",
+      discNoGuarantee: "We do not guarantee the completeness, accuracy, or availability of the data.",
+      discDemo: "Use it for analysis purposes only \u2014 not as a basis for investment decisions.",
+      dataWord: "Data:", tos: "Terms of Service", privacy: "Privacy Policy",
+      sponsored: "Qubic \u2013 Sponsored by AndyQus",
+      loading: "loading", noData: "no data", agoNow: "just now",
+      agoS: "{n} s ago", agoMin: "{n} min ago", agoStd: "{n} h ago"
+    },
+    de: {
+      subtitle: "Ant Colony \u00B7 Qubic Decentralization Report",
+      backToReport: "\u2190 Report", inWord: "in",
+      heroLabel: "Akzeptierte L\u00F6sungen (Schwarm)", solutionsWord: "L\u00F6sungen",
+      growth: "Zuwachs:", perMin: "/ Min.", thresholdWord: "Schwelle:",
+      thresholdHint: "max. Fehler von {graded} (\u225C {pct} % Treffer)",
+      epochProgress: "Epochenfortschritt", epochWord: "Epoche",
+      ofTicks: "von {n} Ticks", tickWord: "Tick",
+      noNode: "Kein Node erreichbar",
+      unavailDefault: "Daten werden automatisch erneut abgerufen.",
+      unavailFile: "Diese Seite wurde als Datei ge\u00F6ffnet (file://) und hat keine API. Starte den Server und \u00F6ffne sie dar\u00FCber: python -m uvicorn api.server:app --port 8000 \u2192 http://127.0.0.1:8000/dashboard/mining.html",
+      unavailApi: "API nicht erreichbar",
+      nodeTitle: "Node-Status",
+      nodeDesc: "Welcher Peer gerade abgefragt wurde, seine Latenz und wie viele Nachbarn antworten.",
+      connecting: "Verbindungsaufbau\u2026", connLive: "Verbindung aktiv",
+      connFresh: "\u2014 Daten frisch vom Node",
+      connLost: "Keine Verbindung", connLostSub: "\u2014 kein Node antwortet",
+      ipAddr: "IP-Adresse", latency: "Latenz", latencySub: "TCP-Roundtrip zum Node",
+      nodeVersion: "Node-Version", peersWord: "Peers", peerConns: "Peer-Verbindungen",
+      peersSub: "antworten von {n} Peers",
+      taskTitle: "Die Aufgabe",
+      taskDesc: "Gegen diese Parameter rechnet der Schwarm \u2014 dieselben f\u00FCr alle Nodes weltweit.",
+      inputTrits: "Eingangs-Trits", seqLen: "Sequenzl\u00E4nge", ctxWin: "Kontextfenster",
+      gradedWin: "Bew. Fenster", thrLabel: "Schwelle (max. Fehler)",
+      freeSlots: "Freie ANN-Slots",
+      hashLabel: "Daten-Hash (byteweise Verifikation)",
+      hashOk: "\u2713 Stimmt byteweise mit dem Core \u00FCberein",
+      hashBad: "\u26A0 Weicht vom Core ab \u2014 die Aufgabe hat sich ge\u00E4ndert",
+      tritLabel: "Zielverteilung \u2014 rein bin\u00E4r (0/1, kein \u201Ewei\u00DF nicht\u201C)",
+      target0: "Ziel 0:", target1: "Ziel 1:", targetUnk: "Unbekannt (Ziel):",
+      tritNote: "\u201EWei\u00DF nicht\u201C (Trit 2) ist interner Netzwerkzustand, aber niemals Zielwert \u2014 Abweichung z\u00E4hlt schlicht als Fehler.",
+      revTitle: "Revenue-Verteilung (n\u00E4herungsweise bis Epochenende)",
+      revDesc: "Direkt vom Node: drei Score-Dimensionen \u00FCber alle 676 Computor-Slots. Mid-Epoch-Werte sind laut Core-Dokumentation n\u00E4herungsweise \u2014 erst am Epochenende exakt.",
+      slotsTotal: "Slots gesamt", top10: "Top-10-Anteil",
+      top10Sub: "sehr gleichm\u00E4\u00DFig wenn < 5%",
+      histLabel: "Verteilung der Slot-Summen (tx + oracle + doge) \u00FCber alle 676 Slots",
+      histNote: "Jeder Balken repr\u00E4sentiert einen Slot, sortiert nach Gesamtscore. Gleichm\u00E4\u00DFige Verteilung deutet auf gute Dezentralisierung hin.",
+      contextNote: "Was diese Seite zeigt: direkt gemessene Fakten \u00FCber die Mining-Maschinerie \u2014 Schwarmaktivit\u00E4t, Node-Zustand, Task-Profil, Revenue-Verteilung. Alles kommt live von einem Qubic-Node, nichts ist gesch\u00E4tzt oder erfunden.",
+      discLabel: "Hinweis:", discBeta: "Diese Seite befindet sich im Beta-Status.",
+      discData: "Der Mining-Zustand wird live von einem \u00F6ffentlichen Qubic-Node \u00FCber den Peer-Port (21841) gelesen; die Peer-Liste stammt von",
+      discApprox: "Revenue-Werte sind bis zum Epochenende n\u00E4herungsweise \u2014 so steht es in der Core-Dokumentation.",
+      discNoGuarantee: "Wir garantieren weder Vollst\u00E4ndigkeit noch Richtigkeit oder Verf\u00FCgbarkeit der Daten.",
+      discDemo: "Nur zu Analysezwecken verwenden \u2014 nicht als Grundlage f\u00FCr Investitionsentscheidungen.",
+      dataWord: "Daten:", tos: "Nutzungsbedingungen", privacy: "Datenschutz",
+      sponsored: "Qubic \u2013 Sponsored by AndyQus",
+      loading: "wird geladen", noData: "keine Daten", agoNow: "gerade eben",
+      agoS: "vor {n} s", agoMin: "vor {n} Min", agoStd: "vor {n} Std"
+    }
+  };
+  let lang = safeGet(LS_LANG) || "en";
+  function t(k, vars) {
+    let str = (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
+    if (typeof str !== "string" || str.indexOf("{") < 0) return str;
+    return str.replace(/\{(\w+)\}/g, (m, name) => (vars && vars[name] != null) ? vars[name] : m);
+  }
+  function renderI18nText() {
+    document.querySelectorAll("[data-i18n]").forEach(el => {
+      el.textContent = t(el.getAttribute("data-i18n"));
+    });
+  }
+
+  function escHtml(s) {
+    return (s == null ? "" : String(s))
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function fmtInt(n) {
+    if (n == null) return "–";
+    return Number(n).toLocaleString("de-DE");
+  }
+
+  function fmtMs(ms) {
+    if (ms == null) return "–";
+    return Number(ms).toFixed(0) + " ms";
+  }
+
+  /* Tabular-nums formatter for the hero counter (animated rolling) */
+  function fmtCount(n) {
+    if (n == null) return "–";
+    return Number(n).toLocaleString("de-DE");
+  }
+
+  /* Ago-Text: "vor X Sekunden / Minuten" */
+  function fmtAgo(ts) {
+    /* No timestamp means nothing was ever measured -- say so rather than showing an
+       age, which would imply a reading that did not happen. */
+    if (!ts) return t("noData");
+    const age = Math.floor(Date.now() / 1000 - ts);
+    if (age < 5)   return t("agoNow");
+    if (age < 60)  return t("agoS", { n: age });
+    if (age < 3600) return t("agoMin", { n: Math.floor(age / 60) });
+    return t("agoStd", { n: Math.floor(age / 3600) });
+  }
+
+  /* prefers-reduced-motion */
+  const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ── State ────────────────────────────────────────────────────────────────
+     Declared before anything that reads it: applyTheme() runs during setup and
+     redraws the histogram from lastData, which would otherwise be in the
+     temporal dead zone and abort the whole init. */
+  let lastData     = null;    // letzter erfolgreicher API-Response
+  let lastFetchTs  = null;    // Unix-TS der letzten erfolgreichen Antwort
+  let nextIn       = 30;      // Sekunden bis zur nächsten Aktualisierung
+  let countdownVal = 30;
+  let pollTimer    = null;
+  let countdownTimer = null;
+
+  /* ── Theme ────────────────────────────────────────────────────────────── */
+  /* `redraw` is off for the initial call: the canvas routines live further down and
+     would be in the temporal dead zone here, and there is nothing to draw yet anyway.
+     The bottom of the script starts them once everything is defined. */
+  function applyTheme(th, redraw) {
+    root.setAttribute("data-theme", th);
+    document.getElementById("theme-btn").textContent = th === "dark" ? "🌙" : "☀️";
+    if (!redraw) return;
+    /* Both canvases bake the palette into their pixels, so a theme flip has to
+       repaint them -- CSS variables alone do not reach inside a canvas. */
+    if (lastData) drawHistogram(lastData.revenue && lastData.revenue.histogram);
+    drawAntCanvas();
+  }
+  let theme = safeGet(LS_THEME) || "dark";
+  applyTheme(theme, false);
+  document.getElementById("theme-btn").addEventListener("click", () => {
+    theme = theme === "dark" ? "light" : "dark";
+    safeSet(LS_THEME, theme);
+    applyTheme(theme, true);
+  });
+
+  /* ── Footer year ──────────────────────────────────────────────────────── */
+  function applyLang() {
+    root.setAttribute("lang", lang);
+    renderI18nText();
+    document.querySelectorAll("#lang-seg button")
+      .forEach(b => b.classList.toggle("active", b.dataset.lang === lang));
+    /* Values written by render() are not data-i18n nodes, so re-render them from
+       the last response; otherwise they would keep the previous language. */
+    if (lastData) render(lastData);
+    else showLoading();
+  }
+  document.querySelectorAll("#lang-seg button").forEach(b => {
+    b.addEventListener("click", () => {
+      lang = b.dataset.lang;
+      safeSet(LS_LANG, lang);
+      applyLang();
+    });
+  });
+
+  document.getElementById("foot-year").textContent = new Date().getFullYear();
+
+  /* ── API base ─────────────────────────────────────────────────────────────
+     Same resolution order as index.html: an explicit ?api=, else same-origin when
+     served over http(s). Opened as a file:// there is no origin to call -- every
+     page on this site is live-only, so unlike index.html there is no bundled export
+     to fall back to, and the honest answer is to say so instead of firing a fetch at
+     file:///v1/mining that can only fail. */
+  const apiParam = new URLSearchParams(location.search).get("api");
+  const servedOverHttp = location.protocol.indexOf("http") === 0;
+  const apiBase = apiParam !== null
+    ? apiParam.replace(/\/$/, "")
+    : (servedOverHttp ? "" : null);
+  function apiUrl(path) { return (apiBase || "") + path; }
+
+  /* State is declared further up, before applyTheme() first reads it. */
+  let prevCount    = null;    // vorheriger solution_count (für Delta-Berechnung)
+  let prevCountTs  = null;
+
+  /* ── Animated counter ────────────────────────────────────────────────── */
+  /* Weiche Zahl-Animation: von oldVal nach newVal in ~600ms */
+  let countAnimFrame = null;
+  function animateTo(el, fromVal, toVal, durationMs) {
+    if (REDUCED || fromVal === toVal) { el.textContent = fmtCount(toVal); return; }
+    if (countAnimFrame) cancelAnimationFrame(countAnimFrame);
+    const start = performance.now();
+    function step(now) {
+      const p = Math.min(1, (now - start) / durationMs);
+      const ease = 1 - Math.pow(1 - p, 3); // cubic ease-out
+      const cur = Math.round(fromVal + (toVal - fromVal) * ease);
+      el.textContent = fmtCount(cur);
+      if (p < 1) countAnimFrame = requestAnimationFrame(step);
+    }
+    countAnimFrame = requestAnimationFrame(step);
+  }
+
+  /* ── Countdown ───────────────────────────────────────────────────────── */
+  function startCountdown(seconds) {
+    clearInterval(countdownTimer);
+    countdownVal = Math.max(1, Math.round(seconds));
+    const el = document.getElementById("r-countdown");
+    const agoEl = document.getElementById("r-ago");
+    function tick() {
+      el.textContent = countdownVal;
+      agoEl.textContent = fmtAgo(lastFetchTs);
+      if (countdownVal > 0) countdownVal--;
+    }
+    tick();
+    countdownTimer = setInterval(tick, 1000);
+  }
+
+  /* ── Refresh-bar Zustand ─────────────────────────────────────────────── */
+  function setRefreshState(state) {
+    const bar = document.getElementById("refresh-bar");
+    const dot = document.getElementById("r-dot");
+    bar.className = "refresh-bar " + (state || "");
+    dot.className = "r-dot";
+    if (state === "stale" || state === "error") dot.className = "r-dot " + state;
+  }
+
+  /* Flash-Effekt auf einem Element */
+  function flashEl(el) {
+    if (!el || REDUCED) return;
+    el.classList.remove("flash");
+    void el.offsetWidth; // reflow
+    el.classList.add("flash");
+  }
+
+  /* ── Render: Unavailable ──────────────────────────────────────────────── */
+  function showUnavailable(reason) {
+    document.getElementById("hero-unavail").hidden = false;
+    document.getElementById("hero-unavail-reason").textContent =
+      reason || t("unavailDefault");
+
+    /* No measurement arrived, so there is no "as of" moment to report. Keeping the
+       previous timestamp would date the dashes to a reading that never happened. */
+    lastFetchTs = null;
+    lastData = null;
+    document.getElementById("r-ago").textContent = t("noData");
+
+    /* Hero-Elemente ausgrauen */
+    document.getElementById("hero-count").textContent = "–";
+    document.getElementById("hero-delta").textContent = "–";
+    document.getElementById("hero-threshold").textContent = "–";
+    document.getElementById("hero-threshold-pct").textContent = "";
+    document.getElementById("hero-epoch-badge").textContent = t("epochWord") + " \u2013";
+    document.getElementById("ep-ticks").textContent = "–";
+    document.getElementById("ep-of").textContent = t("ofTicks", { n: "\u2013" });
+    document.getElementById("ep-fill").style.width = "0%";
+    document.getElementById("ep-pct").textContent = "–";
+    document.getElementById("ep-tick-abs").textContent = t("tickWord") + " \u2013";
+
+    /* Hero-Dot auf warn */
+    document.getElementById("hero-dot").style.background = "var(--warn)";
+    setRefreshState("error");
+    document.getElementById("conn-dot").className = "conn-dot dead";
+    document.getElementById("conn-label").innerHTML = "<strong>Kein Node erreichbar</strong>";
+  }
+
+  /* ── Render: Hero ─────────────────────────────────────────────────────── */
+  function renderHero(d) {
+    document.getElementById("hero-unavail").hidden = true;
+    document.getElementById("hero-dot").style.background = "";
+
+    /* solution_count mit Animation */
+    const countEl = document.getElementById("hero-count");
+    const newCount = d.colony && d.colony.solution_count != null ? d.colony.solution_count : null;
+    const oldCount = prevCount != null ? prevCount : newCount;
+    if (newCount !== prevCount) flashEl(countEl);
+    animateTo(countEl, oldCount || 0, newCount || 0, 700);
+
+    /* Delta berechnen */
+    const deltaEl = document.getElementById("hero-delta");
+    if (newCount != null && prevCount != null && prevCountTs != null) {
+      const dtSec = (lastFetchTs || Date.now() / 1000) - prevCountTs;
+      if (dtSec > 0) {
+        const perMin = ((newCount - prevCount) / dtSec * 60).toFixed(1);
+        deltaEl.textContent = (perMin > 0 ? "+" : "") + perMin.replace(".", ",");
+      }
+    } else if (d.colony && d.colony.delta_per_min != null) {
+      deltaEl.textContent = "+" + Number(d.colony.delta_per_min).toFixed(1).replace(".", ",");
+    } else {
+      deltaEl.textContent = "–";
+    }
+
+    /* Schwelle */
+    const thr = document.getElementById("hero-threshold");
+    const thrPct = document.getElementById("hero-threshold-pct");
+    if (d.colony) {
+      thr.textContent = fmtInt(d.colony.threshold);
+      /* The threshold is an upper bound on a single solution's ERROR COUNT, not a
+         target the colony fills up. Relating it to solution_count would divide two
+         unrelated quantities, so state what it means instead. */
+      const graded = d.task && d.task.graded_windows;
+      if (graded && d.colony.threshold > 0) {
+        const hit = ((graded - d.colony.threshold) / graded * 100).toFixed(1);
+        thrPct.textContent = t("thresholdHint", { graded: fmtInt(graded), pct: hit });
+      }
+    }
+
+    /* Epoch-Badge */
+    const ep = d.epoch;
+    if (ep) {
+      document.getElementById("hero-epoch-badge").textContent = t("epochWord") + " " + ep.epoch;
+    }
+
+    /* Epochenfortschritt */
+    if (ep && ep.ticks_into_epoch != null && ep.expected_ticks) {
+      const pct = Math.min(100, ep.ticks_into_epoch / ep.expected_ticks * 100);
+      document.getElementById("ep-ticks").textContent = fmtInt(ep.ticks_into_epoch);
+      document.getElementById("ep-of").textContent = t("ofTicks", { n: fmtInt(ep.expected_ticks) });
+      document.getElementById("ep-fill").style.width = pct.toFixed(2) + "%";
+      document.getElementById("ep-pct").textContent = pct.toFixed(1) + "%";
+      document.getElementById("ep-tick-abs").textContent = t("tickWord") + " " + fmtInt(ep.tick);
+    }
+  }
+
+  /* ── Render: Node ─────────────────────────────────────────────────────── */
+  function renderNode(d) {
+    const n = d.node;
+    if (!n) return;
+
+    const alive = d.status === "live";
+    const connDot = document.getElementById("conn-dot");
+    const connLabel = document.getElementById("conn-label");
+    connDot.className = "conn-dot" + (alive ? "" : " dead");
+    connLabel.innerHTML = alive
+      ? "<strong>Verbindung aktiv</strong> — Daten frisch vom Node"
+      : "<strong>Node nicht erreichbar</strong>";
+
+    document.getElementById("node-ip").textContent        = n.ip || "–";
+    document.getElementById("node-latency").textContent   = fmtMs(n.latency_ms);
+    document.getElementById("node-version").textContent   = n.version != null ? "v" + n.version : "–";
+
+    const total    = n.peers_total || 0;
+    const respond  = n.peers_responding != null ? n.peers_responding : total;
+    document.getElementById("node-peers").textContent     = respond + " / " + total;
+    document.getElementById("node-peers-sub").textContent = t("peersSub", { n: total });
+
+    /* Peer-Pips */
+    const bar = document.getElementById("peers-bar");
+    bar.innerHTML = "";
+    for (let i = 0; i < total; i++) {
+      const pip = document.createElement("div");
+      pip.className = "peer-pip " + (i < respond ? "on" : "off");
+      pip.setAttribute("title", "Peer " + (i + 1) + ": " + (i < respond ? "antwortet" : "keine Antwort"));
+      bar.appendChild(pip);
+    }
+  }
+
+  /* ── Render: Task ─────────────────────────────────────────────────────── */
+  function renderTask(d) {
+    const task = d.task;
+    if (!t) return;
+
+    document.getElementById("t-inputs").textContent   = task.input_trits != null ? task.input_trits : "–";
+    document.getElementById("t-seq").textContent      = fmtInt(task.sequence_length);
+    document.getElementById("t-win").textContent      = fmtInt(task.window_width);
+    document.getElementById("t-graded").textContent   = fmtInt(task.graded_windows);
+    /* The accept bound comes from the node's epoch context, not from the task's row
+       count -- those are different numbers (4000 vs 8761) and confusing them made the
+       page state a threshold the network does not use. */
+    document.getElementById("t-threshold").textContent = fmtInt(
+      d.colony ? d.colony.threshold : null);
+    document.getElementById("t-free").textContent = fmtInt(
+      d.colony && d.colony.free_ann_slots != null ? d.colony.free_ann_slots : null
+    );
+
+    /* Hash */
+    const hashEl = document.getElementById("t-hash");
+    const hashCheck = document.getElementById("t-hash-check");
+    if (task.data_hash) {
+      /* Hash gekürzt anzeigen: erste 16 + … + letzte 8 Zeichen */
+      const h = task.data_hash;
+      hashEl.textContent = h.length > 28
+        ? h.slice(0, 16) + "…" + h.slice(-8)
+        : h;
+      hashEl.title = h; /* Full hash on hover */
+
+      if (task.hash_verified === true) {
+        hashCheck.className = "hash-check";
+        hashCheck.textContent = t("hashOk");
+      } else if (task.hash_verified === false) {
+        hashCheck.className = "hash-check unverified";
+        hashCheck.textContent = t("hashBad");
+      } else {
+        hashCheck.className = "hash-check";
+        hashCheck.innerHTML = "Hash-Verifikation ausstehend";
+      }
+    }
+
+    /* Trit-Distribution */
+    const zeros   = task.target_zeros   || 0;
+    const ones    = task.target_ones    || 0;
+    const unknown = task.target_unknown || 0;
+    const total   = zeros + ones + unknown || 1;
+    const pZ = (zeros   / total * 100).toFixed(1);
+    const pO = (ones    / total * 100).toFixed(1);
+    const pU = (unknown / total * 100).toFixed(1);
+
+    const segZ = document.getElementById("trit-zero");
+    const segO = document.getElementById("trit-one");
+    const segU = document.getElementById("trit-unk");
+    segZ.style.width = pZ + "%";
+    segO.style.width = pO + "%";
+    segU.style.width = pU + "%";
+    segZ.textContent = zeros   > 0 ? "0 (" + pZ + "%)" : "";
+    segO.textContent = ones    > 0 ? "1 (" + pO + "%)" : "";
+    segU.textContent = unknown > 0 ? "? (" + pU + "%)" : "";
+    segU.hidden      = unknown === 0;
+
+    document.getElementById("tl-zero").textContent = fmtInt(zeros) + " (" + pZ + "%)";
+    document.getElementById("tl-one").textContent  = fmtInt(ones)  + " (" + pO + "%)";
+    document.getElementById("tl-unk").textContent  = fmtInt(unknown) + " (" + pU + "%)";
+  }
+
+  /* ── Render: Revenue ──────────────────────────────────────────────────── */
+  function renderRevenue(d) {
+    const r = d.revenue;
+    if (!r) return;
+
+    document.getElementById("rev-slots").textContent  = fmtInt(r.slots) || "676";
+    document.getElementById("rev-tx").textContent     = fmtInt(r.tx_nonzero);
+    document.getElementById("rev-oracle").textContent = fmtInt(r.oracle_nonzero);
+    document.getElementById("rev-doge").textContent   = fmtInt(r.doge_nonzero);
+    document.getElementById("rev-ipc").textContent    = fmtInt(r.ipc);
+
+    const top10El = document.getElementById("rev-top10");
+    top10El.textContent = r.top10_share_pct != null
+      ? Number(r.top10_share_pct).toFixed(1) + "%"
+      : "–";
+
+    drawHistogram(r.histogram);
+  }
+
+  /* ── Histogram (Canvas) ──────────────────────────────────────────────── */
+  function drawHistogram(histogram) {
+    const canvas = document.getElementById("histogram-canvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.offsetWidth || 600;
+    const H = 120;
+    canvas.width = W;
+    canvas.height = H;
+
+    const style = getComputedStyle(root);
+    const accentColor  = style.getPropertyValue("--accent").trim();
+    const accent2Color = style.getPropertyValue("--accent2").trim();
+    const bgColor      = style.getPropertyValue("--surface2").trim();
+    const borderColor  = style.getPropertyValue("--border").trim();
+
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, W, H);
+
+    if (!histogram || !histogram.length) {
+      ctx.fillStyle = style.getPropertyValue("--faint").trim();
+      ctx.font = "13px " + style.getPropertyValue("--sans");
+      ctx.textAlign = "center";
+      ctx.fillText("Keine Histogrammdaten", W / 2, H / 2 + 5);
+      return;
+    }
+
+    /* Sortiert absteigend für eine schöne Kurve */
+    const sorted = [...histogram].sort((a, b) => b - a);
+    const max    = sorted[0] || 1;
+    const n      = sorted.length;
+    const bw     = W / n;
+
+    /* Gradient — teal zu blau */
+    const grad = ctx.createLinearGradient(0, 0, W, 0);
+    grad.addColorStop(0,   accentColor);
+    grad.addColorStop(1,   accent2Color);
+
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const barH = (sorted[i] / max) * (H - 8);
+      const x    = i * bw;
+      if (i === 0) {
+        ctx.moveTo(x, H - barH);
+      } else {
+        ctx.lineTo(x, H - barH);
+      }
+    }
+    ctx.lineTo(W, H);
+    ctx.lineTo(0, H);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.globalAlpha = .75;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    /* Obere Linie schärfer */
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const barH = (sorted[i] / max) * (H - 8);
+      const x    = i * bw;
+      if (i === 0) ctx.moveTo(x, H - barH);
+      else         ctx.lineTo(x, H - barH);
+    }
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    /* Median-Linie */
+    const medIdx = Math.floor(n / 2);
+    const medH   = (sorted[medIdx] / max) * (H - 8);
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, H - medH);
+    ctx.lineTo(W, H - medH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    /* Label */
+    ctx.fillStyle = style.getPropertyValue("--faint").trim();
+    ctx.font = "10px " + style.getPropertyValue("--mono");
+    ctx.textAlign = "left";
+    ctx.fillText("Median", 4, H - medH - 4);
+    ctx.textAlign = "right";
+    ctx.fillText("Max: " + fmtInt(max), W - 4, 14);
+  }
+
+  /* ── Render: alle Daten ──────────────────────────────────────────────── */
+  function render(data) {
+    lastData = data;
+
+    if (data.status !== "live") {
+      showUnavailable(data.reason || null);
+      return;
+    }
+
+    setRefreshState("live");
+
+    /* Hero */
+    renderHero(data);
+
+    /* Node */
+    renderNode(data);
+
+    /* Task */
+    renderTask(data);
+
+    /* Revenue */
+    renderRevenue(data);
+
+    /* Vorherigen count für Delta-Berechnung merken */
+    if (data.colony && data.colony.solution_count != null) {
+      const newC = data.colony.solution_count;
+      if (prevCount !== null && newC !== prevCount) {
+        prevCount   = newC;
+        prevCountTs = lastFetchTs;
+      } else if (prevCount === null) {
+        prevCount   = newC;
+        prevCountTs = lastFetchTs;
+      }
+    }
+  }
+
+  /* ── Polling ──────────────────────────────────────────────────────────── */
+  function poll() {
+    clearTimeout(pollTimer);
+
+    /* No API to poll (opened as a file://). Retrying would just log a fetch error
+       every few seconds without ever succeeding, so stop and say what to do. */
+    if (apiBase === null) {
+      clearInterval(countdownTimer);
+      document.getElementById("r-countdown").textContent = "–";
+      showUnavailable(t("unavailFile")
+      );
+      return;
+    }
+
+    fetch(apiUrl("/v1/mining"), { cache: "no-store" })
+      .then(r => {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(data => {
+        lastFetchTs = data.fetched_at || Math.floor(Date.now() / 1000);
+
+        /* Neue Daten → Flash auf den Hero-Container */
+        flashEl(document.querySelector(".hero-count-wrap"));
+
+        render(data);
+
+        nextIn = (data.next_refresh_in > 0) ? data.next_refresh_in : 30;
+        startCountdown(nextIn);
+        setRefreshState("live");
+        pollTimer = setTimeout(poll, nextIn * 1000);
+      })
+      .catch(err => {
+        console.warn("[mining] fetch error:", err);
+        setRefreshState("error");
+        /* Leerzustand ohne alte Zahlen als aktuell auszugeben */
+        if (!lastData) showUnavailable(t("unavailApi"));
+        /* Retry nach 15 s bei Fehler */
+        startCountdown(15);
+        pollTimer = setTimeout(poll, 15000);
+      });
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     ANT COLONY CANVAS — dezenter Ameisenkolonie-Hintergrund
+     Kleine Punkte (Nodes) verbinden sich und trennen sich langsam.
+     Kein Flackern, keine Ablenkung — nur Bewegung im Hintergrund.
+  ═══════════════════════════════════════════════════════════ */
+  let antAnimFrame = null;
+  let antResizeHandler = null;
+  function drawAntCanvas() {
+    const canvas = document.getElementById("ant-canvas");
+    if (!canvas) return;
+    if (antAnimFrame) cancelAnimationFrame(antAnimFrame);
+
+    const style   = getComputedStyle(root);
+    const accent  = style.getPropertyValue("--accent").trim();
+    const accent2 = style.getPropertyValue("--accent2").trim();
+    const bg      = style.getPropertyValue("--bg").trim();
+
+    /* A light ground swallows these colours far more than a dark one does, so the
+       strokes are drawn harder there. Read from the painted background rather than
+       the theme attribute, which is unset on "follow the system". */
+    const isLight = (() => {
+      const m = bg.match(/\d+/g);
+      if (!m || m.length < 3) return false;
+      return (0.299*+m[0] + 0.587*+m[1] + 0.114*+m[2]) > 140;
+    })();
+    const LINK_BOOST = isLight ? 1.7 : 1;
+    const DOT_BOOST  = isLight ? 1.35 : 1;
+
+    /* Canvas-Größe anpassen. The canvas is viewport-fixed, so its box IS the
+       viewport; re-running this on resize keeps the pixel grid matched to it. */
+    function resize() {
+      canvas.width  = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    }
+    resize();
+    /* A theme flip re-enters this function, so the previous listener has to go --
+       otherwise every toggle stacks another one on the resize event. */
+    if (antResizeHandler) window.removeEventListener("resize", antResizeHandler);
+    antResizeHandler = () => { resize(); };
+    window.addEventListener("resize", antResizeHandler, { passive: true });
+
+    if (REDUCED) {
+      /* Bei reduced-motion: nur statische Punkte */
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      const staticCount = Math.max(24, Math.min(90, Math.round(Math.sqrt(W * H) / 16)));
+      for (let i = 0; i < staticCount; i++) {
+        const x = Math.random() * W, y = Math.random() * H;
+        ctx.beginPath();
+        ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = Math.min(1, .55 * DOT_BOOST);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      return;
+    }
+
+    /* Nodes / Partikel. Scaled by AREA now that the canvas covers the viewport
+       rather than a short hero strip -- a width-only count left a tall screen
+       looking empty. Capped so a large monitor does not turn it into noise. */
+    const N = Math.max(24, Math.min(90,
+      Math.round(Math.sqrt(canvas.width * canvas.height) / 16)));
+    const nodes = [];
+    for (let i = 0; i < N; i++) {
+      nodes.push({
+        x:  Math.random() * canvas.width,
+        y:  Math.random() * canvas.height,
+        vx: (Math.random() - .5) * .25,
+        vy: (Math.random() - .5) * .25,
+        r:  1 + Math.random() * 1.5,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+
+    /* Verbindungsradius. Spread over a full viewport the old fixed 100px left the
+       nodes mostly unconnected -- the trails are the point, so scale it with the
+       canvas and keep a floor for small screens. */
+    const LINK_DIST = Math.max(110, Math.min(190,
+      Math.round(Math.sqrt(canvas.width * canvas.height) / 8)));
+
+    function step() {
+      const W = canvas.width, H = canvas.height;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, W, H);
+
+      const now = performance.now() / 1000;
+
+      /* Bewegung */
+      for (const nd of nodes) {
+        nd.x += nd.vx;
+        nd.y += nd.vy;
+        /* Sanft abprallen */
+        if (nd.x < 0 || nd.x > W) nd.vx *= -1;
+        if (nd.y < 0 || nd.y > H) nd.vy *= -1;
+        nd.x = Math.max(0, Math.min(W, nd.x));
+        nd.y = Math.max(0, Math.min(H, nd.y));
+      }
+
+      /* Verbindungen */
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[j].x - nodes[i].x;
+          const dy = nodes[j].y - nodes[i].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < LINK_DIST) {
+            const alpha = (1 - dist / LINK_DIST) * .55 * LINK_BOOST;
+            ctx.beginPath();
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            ctx.strokeStyle = accent2;
+            ctx.globalAlpha = alpha;
+            ctx.lineWidth = 1.1;
+            ctx.stroke();
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+
+      /* Punkte. A soft glow behind each node makes it read as a lit point on a dark
+         ground instead of a flat dot -- that, more than raw opacity, is what lifts
+         the colony out of the background. */
+      for (const nd of nodes) {
+        const pulse = .5 + .5 * Math.sin(now * .8 + nd.phase);
+        const r = nd.r * (1 + pulse * .35);
+        ctx.beginPath();
+        ctx.arc(nd.x, nd.y, r * 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = (.10 + pulse * .10) * DOT_BOOST;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(nd.x, nd.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = Math.min(1, (.55 + pulse * .35) * DOT_BOOST);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      antAnimFrame = requestAnimationFrame(step);
+    }
+    antAnimFrame = requestAnimationFrame(step);
+  }
+
+  /* ── Initialisierung ─────────────────────────────────────────────────── */
+
+  /* Demo-Daten sofort einblenden — damit die Seite nicht leer aussieht
+     bevor der erste Fetch abgeschlossen ist. Alle Werte werden beim
+     ersten echten Response überschrieben; sie sind als Platzhalter
+     nie als "echt" gekennzeichnet, weil sie in <1 Sek. ersetzt werden. */
+  function showLoading() {
+    setRefreshState("stale");
+    document.getElementById("hero-count").textContent = "…";
+    document.getElementById("r-ago").textContent = t("loading");
+    document.getElementById("r-countdown").textContent = "–";
+  }
+  /* Language first: it fills every data-i18n node, so the page never flashes its
+     German source strings before the English default is applied. */
+  applyLang();
+  showLoading();
+
+  /* Ant-Colony-Hintergrund starten */
+  drawAntCanvas();
+
+  /* Erstes Polling */
+  poll();
+
+})();
+</script>
+</body>
+</html>

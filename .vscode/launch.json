@@ -1,13 +1,9 @@
 {
+  // Order matters: the first entry is what F5 picks by default. The API-backed
+  // dashboard leads, because the file:// variant below cannot reach /v1 at all —
+  // starting there is what makes a page look broken when it is only unserved.
   "version": "0.2.0",
   "configurations": [
-    {
-      "name": "Dashboard (Chrome · sample data)",
-      "type": "chrome",
-      "request": "launch",
-      "file": "${workspaceFolder}/dashboard/index.html",
-      "webRoot": "${workspaceFolder}/dashboard"
-    },
     {
       "name": "Dashboard + live API (Chrome)",
       "type": "chrome",
@@ -17,11 +13,53 @@
       "preLaunchTask": "Start API"
     },
     {
+      // The live mining view. Unlike index.html it has no bundled-data fallback —
+      // every number is read from a Qubic node over TCP at request time — so it
+      // only works through the API. Opened as a file:// the page says exactly that
+      // instead of retrying a fetch that cannot succeed.
+      "name": "Mining Live (Chrome · needs API)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:8000/dashboard/mining.html",
+      "webRoot": "${workspaceFolder}/dashboard",
+      "preLaunchTask": "Start API"
+    },
+    {
+      // No server involved: index.html falls back to the bundled data.js. Handy for
+      // pure layout work, useless for anything that needs live figures.
+      "name": "Dashboard (Chrome · file://, bundled data)",
+      "type": "chrome",
+      "request": "launch",
+      "file": "${workspaceFolder}/dashboard/index.html",
+      "webRoot": "${workspaceFolder}/dashboard"
+    },
+    {
+      "name": "API only (Python)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["api.server:app", "--port", "8000", "--reload"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
       "name": "Run tests (Python)",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/tests/test_report.py",
       "console": "integratedTerminal"
+    }
+  ],
+  "compounds": [
+    {
+      // Both pages against one API instance — the task is shared, so the second
+      // launch reuses the running server rather than starting a competing one.
+      "name": "Report + Mining Live (beide Seiten)",
+      "configurations": [
+        "Dashboard + live API (Chrome)",
+        "Mining Live (Chrome · needs API)"
+      ],
+      "stopAll": true
     }
   ]
 }

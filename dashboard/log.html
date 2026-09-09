@@ -48,6 +48,20 @@
   .card h2{font-size:14.5px;margin:0 0 4px;font-weight:650}
   .card p.hint{margin:0 0 14px;color:var(--muted);font-size:13px}
 
+  /* Collapsed by default: detail that only matters once the checks point at
+     something. Closed, each is a single row instead of a screenful. */
+  .card.fold{padding:0}
+  .card.fold>summary{list-style:none;cursor:pointer;padding:13px 18px;
+    font-size:14.5px;font-weight:650;display:flex;align-items:center;gap:9px}
+  .card.fold>summary::-webkit-details-marker{display:none}
+  .card.fold>summary::before{content:"▸";color:var(--faint);font-size:12px;
+    transition:transform .15s ease}
+  .card.fold[open]>summary::before{transform:rotate(90deg)}
+  .card.fold>summary:hover{color:var(--accent)}
+  .card.fold>*:not(summary){padding-left:18px;padding-right:18px}
+  .card.fold>*:last-child{padding-bottom:16px}
+  .sum-hint{font-weight:400;color:var(--muted);font-size:12.5px}
+
   /* Verdict: the one line that says wait or act. */
   .verdict{border-left:4px solid var(--muted);padding:14px 18px;border-radius:12px;
     background:var(--surface);border:1px solid var(--border);margin-bottom:16px}
@@ -111,30 +125,26 @@
     <div id="v-fix"></div>
   </div>
 
-  <div class="card">
-    <h2>Die drei Dinge, die schiefgehen können</h2>
-    <p class="hint">Der Report bleibt leer, wenn eines davon nicht stimmt. Alles grün und
-      trotzdem keine Zahlen heißt: der erste Backfill läuft noch.</p>
-    <div class="checks" id="checks"></div>
-  </div>
+  <!-- The four checks carry the whole diagnosis, so they stay above the fold and
+       unwrapped -- no card heading, no explanatory paragraph. Everything that is
+       only needed once something is actually wrong sits behind a <details>. -->
+  <div class="checks" id="checks"></div>
 
-  <div class="card">
-    <h2>Epochen im Speicher</h2>
+  <details class="card fold">
+    <summary>Epochen im Speicher <span class="sum-hint" id="ep-sum"></span></summary>
     <p class="hint">Der Report erscheint, sobald mindestens eine Epoche
-      <strong>sealed</strong> ist. <em>live</em> und <em>partial</em> zählen dafür nicht —
-      eine laufende Epoche ist erst nach ihrem Ende vollständig bezahlt.</p>
+      <strong>sealed</strong> ist — eine laufende zählt nicht.</p>
     <div class="scroll"><table>
       <thead><tr><th>Epoche</th><th>Status</th><th class="num">Computors</th>
-        <th>Code-Version</th><th>Zuletzt berechnet</th><th>Notiz</th></tr></thead>
-      <tbody id="epochs"><tr><td colspan="6" class="muted">lädt…</td></tr></tbody>
+        <th>Zuletzt berechnet</th></tr></thead>
+      <tbody id="epochs"><tr><td colspan="4" class="muted">lädt…</td></tr></tbody>
     </table></div>
-  </div>
+  </details>
 
-  <div class="card">
-    <h2>Ingest-Log</h2>
-    <p class="hint" id="log-path">Die Ausgabe des Ingest-Dienstes.</p>
+  <details class="card fold" id="log-fold">
+    <summary>Ingest-Log <span class="sum-hint" id="log-path">letzte Zeilen</span></summary>
     <pre class="log" id="log">lädt…</pre>
-  </div>
+  </details>
 </main>
 
 <footer>
@@ -191,6 +201,8 @@
     return "";
   }
 
+  var logAutoOpened=false;
+
   function renderDiag(d){
     var box=document.getElementById("verdict"),
         title=document.getElementById("v-title"),
@@ -211,6 +223,14 @@
       text.textContent="Nichts ist kaputt. Der erste Backfill dauert einige Minuten; "+
         "sobald eine Epoche abgeschlossen ist, erscheinen die Zahlen.";
     }
+    /* When something is actually broken the log is the next thing an operator wants,
+       so open it for them -- but only once, or a re-render every 15 s would fight
+       anyone who chose to close it. */
+    if(broken && !logAutoOpened){
+      var lf=document.getElementById("log-fold");
+      if(lf){ lf.open=true; logAutoOpened=true; }
+    }
+
     var ps=d.problems||[];
     list.hidden=!ps.length;
     list.innerHTML=ps.map(function(p){return "<li>"+esc(p)+"</li>";}).join("");
@@ -225,24 +245,31 @@
       check("Abgeschlossene Epochen", sealed>0, String(sealed),
             sealed>0?"Report kann angezeigt werden":"Report bleibt leer, bis eine Epoche sealed ist");
 
+    /* Only the newest few matter for "is it working" -- the rest is history the
+       API can answer if anyone actually needs it. */
     var rows=(st.epochs)||[];
-    document.getElementById("epochs").innerHTML = rows.length
-      ? rows.map(function(e){
+    var shown=rows.slice(0,3);
+    document.getElementById("ep-sum").textContent = rows.length
+      ? "· " + sealed + " sealed von " + rows.length : "";
+    document.getElementById("epochs").innerHTML = shown.length
+      ? shown.map(function(e){
           var s=e.status||"?";
           return "<tr><td><strong>"+esc(e.epoch)+"</strong></td>"+
             '<td><span class="tag '+esc(s)+'">'+esc(s)+"</span></td>"+
             '<td class="num">'+esc(e.computor_count==null?"–":e.computor_count)+"</td>"+
-            "<td>"+esc(e.code_version||"–")+"</td>"+
-            '<td class="muted">'+esc(when(e.last_computed))+"</td>"+
-            '<td class="muted">'+esc(e.note||"–")+"</td></tr>";
-        }).join("")
-      : '<tr><td colspan="6" class="muted">Noch keine Epoche im Speicher.</td></tr>';
+            '<td class="muted">'+esc(when(e.last_computed))+"</td></tr>";
+        }).join("") + (rows.length>shown.length
+          ? '<tr><td colspan="4" class="muted">… und '+(rows.length-shown.length)+
+            ' ältere · <code>/v1/epochs</code></td></tr>' : "")
+      : '<tr><td colspan="4" class="muted">Noch keine Epoche im Speicher.</td></tr>';
   }
 
   function renderLog(d){
     var pre=document.getElementById("log"), path=document.getElementById("log-path");
-    path.innerHTML = "Ausgabe des Ingest-Dienstes · <code>"+esc(d.path||"")+"</code>"+
-      (d.mtime?' · zuletzt geschrieben '+esc(when(d.mtime)):"");
+    /* Shown on the collapsed row, so it has to be short: when it last wrote is the
+       one thing worth knowing without opening it. The full path is inside. */
+    path.textContent = d.mtime ? "· zuletzt geschrieben " + when(d.mtime)
+                               : (d.exists ? "" : "· noch keine Ausgabe");
     if(d.error){ pre.textContent="Log nicht lesbar: "+d.error; return; }
     if(!d.exists){
       pre.textContent = (d.note||"Noch kein Log vorhanden.")+
@@ -262,7 +289,7 @@
         document.getElementById("v-text").textContent=
           "Diese Seite erreicht /v1/diagnostics nicht ("+e+"). Läuft der API-Container?";
       });
-    fetch(url("/v1/log?lines=400")).then(function(r){return r.json();}).then(renderLog)
+    fetch(url("/v1/log?lines=120")).then(function(r){return r.json();}).then(renderLog)
       .catch(function(){ document.getElementById("log").textContent="Log nicht abrufbar."; });
   }
 

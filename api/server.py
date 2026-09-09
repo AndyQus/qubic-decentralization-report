@@ -161,6 +161,9 @@ def api_index():
             "/v1/dashboard-data",
             "/v1/store",
             "/v1/pulse",
+            # The page that consumes this is deliberately unlisted; the data behind
+            # it is not secret, so the endpoint is indexed like any other.
+            "/v1/mining",
             "/health",
         ],
         "dashboard": "/dashboard/",
@@ -406,6 +409,72 @@ def pulse():
     data["served_at"] = int(now)
     _pulse_cache.update(at=now, data=data)
     return data
+
+
+# Mining state is read from a Qubic node's peer port, not the RPC, and those are
+# other people's nodes. A TTL well above the page's poll interval keeps many viewers
+# collapsed into one query every MINING_TTL_S, however many browsers are watching.
+_mining_cache: dict = {"at": 0.0, "data": None, "prev_count": None, "prev_at": 0.0}
+MINING_TTL_S = float(os.environ.get("QDR_MINING_TTL", "30"))
+
+
+@app.get("/v1/mining", tags=["service"], summary="Live ant-colony mining state from a node")
+def mining():
+    """What the mining algorithm is doing right now, straight off a Qubic node.
+
+    None of this exists on the public RPC: the ant-colony queries live on the
+    peer-to-peer port (21841). All three reads used here are unsigned and public.
+
+    `next_refresh_in` tells the page when this server will actually go back to a
+    node, so a live view can count down to real new data instead of polling blind.
+    """
+    import time as _t
+    now = _t.time()
+    cached = _mining_cache["data"]
+    if cached and now - _mining_cache["at"] < MINING_TTL_S:
+        out = dict(cached)
+        out["next_refresh_in"] = max(0, round(MINING_TTL_S - (now - _mining_cache["at"])))
+        return out
+
+    try:
+        from qdr import antnode
+        data = antnode.collect()
+    except Exception as e:
+        if cached:
+            stale = dict(cached)
+            stale["stale"] = True
+            stale["next_refresh_in"] = 0
+            return stale
+        raise HTTPException(status_code=503, detail=f"mining state unavailable: {e}")
+
+    # Epoch length varies a lot between epochs, so the progress bar needs the observed
+    # expectation rather than a constant. This comes from the RPC, not the node, and a
+    # missing value only costs the bar its denominator.
+    if data.get("status") == "live":
+        expected = TYPICAL_EPOCH_TICKS
+        client = get_client()
+        if client is not None:
+            try:
+                expected = client._expected_epoch_ticks(TYPICAL_EPOCH_TICKS)
+            except Exception:
+                pass
+        data.setdefault("epoch", {})["expected_ticks"] = expected
+
+    # Growth rate, measured between two real fetches rather than assumed. The colony
+    # only ever adds solutions, so a drop means a new epoch reset the counter.
+    count = (data.get("colony") or {}).get("solution_count")
+    prev, prev_at = _mining_cache["prev_count"], _mining_cache["prev_at"]
+    if data.get("status") == "live" and count is not None:
+        if prev is not None and count >= prev and now > prev_at:
+            elapsed_min = (now - prev_at) / 60.0
+            if elapsed_min > 0:
+                data["colony"]["delta_per_min"] = round((count - prev) / elapsed_min, 1)
+        _mining_cache.update(prev_count=count, prev_at=now)
+
+    _mining_cache.update(at=now, data=data)
+    out = dict(data)
+    out["next_refresh_in"] = round(MINING_TTL_S)
+    return out
 
 
 @app.get("/v1/store", tags=["service"], summary="What the store holds")
