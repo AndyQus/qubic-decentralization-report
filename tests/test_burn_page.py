@@ -109,6 +109,41 @@ def test_no_external_resources():
     assert not external, f"page fetches external resources: {external}"
 
 
+def test_the_furnace_animation_is_driven_only_by_measured_events():
+    """The hero animation's whole licence to exist is that every spark is a
+    counted burn event. A spawn rate that did not come from the measurement —
+    a constant, a random, a time-based fallback — would make it decoration
+    pretending to be data, on a page whose entire argument is the opposite.
+    """
+    src = page_text()
+    furnace = src[src.index("function updateFurnace"):src.index("/* Odometer")]
+    # the rate is derived from the measured event count and nothing else
+    assert "sparksPerSec = 0;" in furnace
+    assert "events_per_day" in furnace or "eventsPerDay" in furnace
+    assert "m.events" in furnace
+    # and with no events it stays at zero, so nothing is drawn
+    assert "if (!events)" in furnace
+    assert "furnaceIdle" in furnace
+
+
+def test_reduced_motion_keeps_the_figures_and_drops_the_animation():
+    """The page must be fully readable without animation."""
+    src = page_text()
+    assert "prefers-reduced-motion" in src
+    assert "reduceMotion" in src
+    assert "furnaceReduced" in src
+
+
+def test_the_odometer_lands_on_the_exact_measured_total():
+    """An eased count-up is presentation; ending on a rounded value would make
+    the headline figure subtly wrong."""
+    src = page_text()
+    start = src.index("function runOdometer")
+    odo = src[start:start + 900]
+    assert "fmtInt(target)" in odo   # the final assignment is the exact value
+    assert "requestAnimationFrame" in odo
+
+
 # -- the API contract the page depends on -----------------------------------
 
 def _client(store_path: Path) -> TestClient:

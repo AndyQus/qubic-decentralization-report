@@ -178,7 +178,24 @@ main { max-width: 1120px; margin: 0 auto; padding: 22px 18px 60px; }
 .card .desc { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); }
 
 /* ─── Hero ──────────────────────────────────────────────────────────────────── */
-.hero { padding: 26px 18px 22px; text-align: center; }
+.hero { padding: 26px 18px 22px; text-align: center; position: relative; overflow: hidden; }
+/* Der Ofen liegt HINTER dem Inhalt und ist rein dekorativ in dem Sinn, dass er
+   nichts trägt, was nicht auch als Zahl dasteht — aber jedes Partikel ist ein
+   gemessenes Ereignis. Läuft nichts, fällt nichts. */
+.furnace {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 0;
+}
+.hero > *:not(.furnace) { position: relative; z-index: 1; }
+.furnace-legend {
+  font-size: 10.5px; color: var(--faint); margin-top: 14px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.furnace-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--burn);
+  display: inline-block; flex: none;
+}
+.furnace-legend.idle .furnace-dot { background: var(--faint); }
 .hero-label {
   font-size: 11px; letter-spacing: .10em; text-transform: uppercase;
   color: var(--muted); font-weight: 700;
@@ -217,6 +234,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 22px 18px 60px; }
    scrollt nie seitwärts. */
 .chart-scroll { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
 .chart-svg { display: block; width: 100%; min-width: 320px; height: auto; }
+.chart-svg[hidden] { display: none; }
 .chart-svg text { font-family: var(--sans); fill: var(--muted); }
 .axis-line { stroke: var(--border); stroke-width: 1; }
 .grid-line { stroke: var(--grid); stroke-width: 1; }
@@ -348,6 +366,7 @@ footer {
 
   <!-- 1 — HERO ------------------------------------------------------------- -->
   <section class="card hero" id="hero">
+    <canvas class="furnace" id="furnace" aria-hidden="true"></canvas>
     <div class="hero-label" data-i18n="heroLabel">Burned supply, total</div>
     <div class="hero-count" id="hero-total">–</div>
     <div class="hero-unit" id="hero-unit" data-i18n="quWord">QU</div>
@@ -368,10 +387,20 @@ footer {
         <div class="fact-sub" data-i18n="epochSub">official counter</div>
       </div>
       <div class="fact">
+        <div class="fact-label" data-i18n="rateLabel">Burn rate</div>
+        <div class="fact-value" id="f-rate">–</div>
+        <div class="fact-sub" data-i18n="rateSub">projected from scanned ticks</div>
+      </div>
+      <div class="fact">
         <div class="fact-label" data-i18n="coverageLabel">Coverage</div>
         <div class="fact-value" id="f-coverage">–</div>
         <div class="fact-sub" id="f-coverage-sub">measured vs. official</div>
       </div>
+    </div>
+    <!-- Sagt in Worten, was die Animation zeigt — und wenn sie steht, warum. -->
+    <div class="furnace-legend idle" id="furnace-legend">
+      <span class="furnace-dot"></span>
+      <span id="furnace-note">–</span>
     </div>
   </section>
 
@@ -468,6 +497,10 @@ footer {
       coverageLabel: "Coverage", coverageSub: "measured vs. official",
       coverageOff: "⚠ implausible — see below",
       tableToggle: "Show the figures as a table",
+      furnaceIdle: "No burn events measured yet — nothing is falling because nothing was counted.",
+      furnaceLive: "Each spark is one measured burn event — about {rate}/s at the rate last counted.",
+      furnaceReduced: "Animation off (reduced motion). The measured figures above are unaffected.",
+      rateLabel: "Burn rate", rateSub: "projected from scanned ticks",
       noteTitle: "What is measured here:",
       noteBody: "The total above is the official counter, the same figure the explorer shows. It only steps once per epoch (~4.4 days), so every per-day figure below was counted by this project from a Qubic node's own burn events — starting when we began measuring. Nothing before that is interpolated.",
       chartTitle: "Burned over time",
@@ -505,6 +538,10 @@ footer {
       coverageLabel: "Abdeckung", coverageSub: "gemessen vs. offiziell",
       coverageOff: "⚠ unplausibel — siehe unten",
       tableToggle: "Zahlen als Tabelle anzeigen",
+      furnaceIdle: "Noch keine Burn-Ereignisse gemessen — es fällt nichts, weil nichts gezählt wurde.",
+      furnaceLive: "Jeder Funke ist ein gemessenes Burn-Ereignis — etwa {rate}/s bei der zuletzt gezählten Rate.",
+      furnaceReduced: "Animation aus (reduzierte Bewegung). Die gemessenen Zahlen oben sind davon unberührt.",
+      rateLabel: "Burn-Rate", rateSub: "aus gescannten Ticks hochgerechnet",
       noteTitle: "Was hier gemessen ist:",
       noteBody: "Die Gesamtsumme oben ist der offizielle Zähler — dieselbe Zahl, die der Explorer zeigt. Er springt nur einmal pro Epoche (~4,4 Tage). Jeder Tageswert darunter wurde von diesem Projekt aus den Burn-Ereignissen eines Qubic-Nodes selbst gezählt, beginnend mit dem Start unserer Messung. Nichts davor ist interpoliert.",
       chartTitle: "Verbrannt im Zeitverlauf",
@@ -682,13 +719,19 @@ footer {
     chart.innerHTML = "";
 
     if (!series.length) {
+      /* Ein leeres SVG behielte seine Höhe (width:100% + height:auto füllen das
+         Seitenverhältnis der viewBox) und risse ein leeres Loch in die Karte.
+         Also wird es ausgeblendet, nicht nur geleert — die Erklärung bleibt. */
+      chart.hidden = true;
       empty.hidden = false;
-      empty.textContent = t("noData");
+      empty.textContent = t("buildingTitle");
       legend.innerHTML = "";
-      document.getElementById("table-wrap").hidden = true;
+      document.getElementById("table-details").hidden = true;
       return;
     }
     empty.hidden = true;
+    chart.hidden = false;
+    document.getElementById("table-details").hidden = false;
 
     /* Geometrie. Breite wächst mit der Punktzahl, damit Balken nie zu
        Haarlinien werden — der Container scrollt dann horizontal. */
@@ -797,14 +840,168 @@ footer {
     wrap.hidden = false;
   }
 
+  /* ─── Der Ofen ──────────────────────────────────────────────────────────────
+     Die eine Regel: jedes Partikel ist ein gemessenes Burn-Ereignis. Die Rate
+     kommt aus den Events, die der letzte Scan tatsächlich gezählt hat — meldet
+     er nichts, fällt nichts. Ein toter Ofen ist eine wahre Aussage über die
+     Daten und weit besser als eine Schleife, die Fantasie-QU verbrennt, während
+     der Node nicht erreichbar ist. */
+  const furnace = document.getElementById("furnace");
+  const fctx = furnace.getContext ? furnace.getContext("2d") : null;
+  const reduceMotion = window.matchMedia
+    && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  let sparks = [];
+  let sparksPerSec = 0;     // aus den Messdaten, nie geraten
+  let spawnCarry = 0;
+  let lastFrame = 0;
+  let furnaceRunning = false;
+
+  /* Auf kleinen Bildschirmen weniger Partikel: eine Telefon-GPU braucht keine
+     900 Sprites, um "es brennt" zu sagen. */
+  function maxSparks() { return window.innerWidth < 700 ? 60 : 160; }
+
+  function sizeFurnace() {
+    const r = furnace.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    furnace.width = Math.max(1, Math.round(r.width * dpr));
+    furnace.height = Math.max(1, Math.round(r.height * dpr));
+    if (fctx) fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function spawnSpark(w) {
+    sparks.push({
+      x: Math.random() * w,
+      y: -6 - Math.random() * 20,
+      vy: 26 + Math.random() * 34,
+      vx: (Math.random() - 0.5) * 10,
+      r: 1.1 + Math.random() * 1.9,
+      life: 0,
+      ttl: 1.5 + Math.random() * 1.4
+    });
+  }
+
+  function frame(ts) {
+    if (!furnaceRunning || !fctx) return;
+    const dt = lastFrame ? Math.min(0.05, (ts - lastFrame) / 1000) : 0.016;
+    lastFrame = ts;
+    const r = furnace.getBoundingClientRect();
+    const w = r.width, h = r.height;
+
+    spawnCarry += sparksPerSec * dt;
+    while (spawnCarry >= 1 && sparks.length < maxSparks()) {
+      spawnSpark(w); spawnCarry -= 1;
+    }
+    if (spawnCarry > 4) spawnCarry = 4;
+
+    fctx.clearRect(0, 0, w, h);
+    const colour = getComputedStyle(document.documentElement)
+      .getPropertyValue("--burn").trim() || "#f5a623";
+
+    sparks = sparks.filter(s => {
+      s.life += dt;
+      s.y += s.vy * dt;
+      s.x += s.vx * dt;
+      if (s.life >= s.ttl || s.y > h + 8) return false;
+      /* Verzehrt werden: heller Start, verlöschendes Ende. */
+      const k = 1 - (s.life / s.ttl);
+      fctx.globalAlpha = Math.max(0, Math.min(0.72, k * 0.72));
+      fctx.fillStyle = colour;
+      fctx.beginPath();
+      fctx.arc(s.x, s.y, s.r * (0.5 + k * 0.5), 0, Math.PI * 2);
+      fctx.fill();
+      return true;
+    });
+    fctx.globalAlpha = 1;
+    requestAnimationFrame(frame);
+  }
+
+  function updateFurnace() {
+    const legend = document.getElementById("furnace-legend");
+    const note = document.getElementById("furnace-note");
+    const m = (latest && latest.measured) || {};
+
+    /* Ereignisse pro Sekunde aus der gemessenen Tagesrate. Gemessen wurden
+       ~4950 Events über ~3200 Ticks; als Rate pro Sekunde ist das die Zahl, die
+       der Ofen darstellt — nicht mehr und nicht weniger. */
+    const perDay = Number(m.burned_per_day || 0);
+    const events = Number(m.events || 0);
+    sparksPerSec = 0;
+    if (events > 0 && m.last_day) {
+      const eventsPerDay = m.events_per_day || events;
+      sparksPerSec = Math.max(0.4, Math.min(14, eventsPerDay / 86400));
+    }
+
+    if (!events) {
+      legend.classList.add("idle");
+      note.textContent = t("furnaceIdle");
+    } else {
+      legend.classList.remove("idle");
+      note.textContent = t("furnaceLive", {
+        rate: sparksPerSec.toLocaleString(locale(), { maximumFractionDigits: 1 })
+      });
+    }
+
+    const shouldRun = sparksPerSec > 0 && !reduceMotion && !!fctx;
+    if (shouldRun && !furnaceRunning) {
+      furnaceRunning = true; lastFrame = 0; sizeFurnace();
+      requestAnimationFrame(frame);
+    } else if (!shouldRun) {
+      furnaceRunning = false;
+      if (fctx) {
+        const r = furnace.getBoundingClientRect();
+        fctx.clearRect(0, 0, r.width, r.height);
+      }
+      sparks = [];
+      /* Bei reduzierter Bewegung sagt die Zeile trotzdem, was gemessen wurde —
+         die Seite muss ohne Animation vollständig lesbar bleiben. */
+      if (reduceMotion && events) note.textContent = t("furnaceReduced");
+    }
+  }
+
+  /* Odometer: die Gesamtsumme zählt beim ersten Laden hoch statt zu erscheinen.
+     Nur Darstellung — der Endwert ist exakt die gemessene Zahl. */
+  let odometerDone = false;
+  function runOdometer(target) {
+    const elTotal = document.getElementById("hero-total");
+    if (reduceMotion || odometerDone || !isFinite(target)) {
+      elTotal.textContent = fmtInt(target); odometerDone = true; return;
+    }
+    odometerDone = true;
+    const dur = 1100, t0 = performance.now();
+    function step(now) {
+      const p = Math.min(1, (now - t0) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      elTotal.textContent = fmtInt(Math.round(target * eased));
+      if (p < 1) requestAnimationFrame(step);
+      else elTotal.textContent = fmtInt(target);   // exakt, nie gerundet stehen lassen
+    }
+    requestAnimationFrame(step);
+  }
+
   /* ─── Hero ──────────────────────────────────────────────────────────────── */
   function renderHero() {
-    if (!latest) return;
-    document.getElementById("hero-total").textContent = fmtInt(latest.burned_total);
+    /* Auch ohne Daten muss der Ofen seinen Zustand erklären — sonst steht die
+       Seite mit einem stummen "–" da, wo sie sagen sollte, dass nichts gemessen
+       wurde. Genau dieser Fall ist der, für den die Regel gedacht ist. */
+    if (!latest) {
+      /* Die Unterzeile der Abdeckung wird sonst nur hier gesetzt und bliebe in
+         der zuletzt gerenderten Sprache stehen. */
+      document.getElementById("f-coverage-sub").textContent = t("coverageNaSub");
+      updateFurnace();
+      return;
+    }
+    if (odometerDone) document.getElementById("hero-total").textContent = fmtInt(latest.burned_total);
+    else runOdometer(Number(latest.burned_total));
     document.getElementById("f-share").textContent = fmtPct(latest.burned_share, 2);
     document.getElementById("f-epoch").textContent = fmtInt(latest.epoch);
 
     const m = latest.measured || {};
+    /* Die Rate stammt aus den tatsächlich gescannten Ticks, nicht aus einem
+       angebrochenen Kalendertag — sonst läge sie den ganzen Tag zu niedrig und
+       wäre erst um Mitternacht richtig. */
+    document.getElementById("f-rate").textContent =
+      m.burned_per_day ? (fmtCompact(m.burned_per_day) + " " + t("perDay")) : "–";
     document.getElementById("f-today").textContent =
       m.burned ? fmtCompact(m.burned) : "–";
     document.getElementById("f-today-sub").textContent =
@@ -831,6 +1028,7 @@ footer {
         covSub.textContent = t("coverageSub");
       }
     }
+    updateFurnace();
   }
 
   /* ─── Contract-Panel ────────────────────────────────────────────────────── */
@@ -928,7 +1126,10 @@ footer {
     safeSet(LS_THEME, theme); applyTheme();
   });
 
-  window.addEventListener("resize", () => { if (seriesCache[by]) drawChart(seriesCache[by]); });
+  window.addEventListener("resize", () => {
+    if (seriesCache[by]) drawChart(seriesCache[by]);
+    if (furnaceRunning) sizeFurnace();
+  });
 
   /* ─── Start ─────────────────────────────────────────────────────────────── */
   syncSeg("by-seg", "by", by);

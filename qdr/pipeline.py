@@ -634,6 +634,42 @@ def build_burn_series(store: Store, by: str = "day",
     }
 
 
+# Measured 2026-09-07 and unchanged since: the chain advances ~2.7 ticks/s. Used
+# only to project a per-tick observation into a per-day figure a reader can hold
+# onto; the underlying measurement is per tick and is reported as such.
+TICKS_PER_SECOND = 2.7
+
+
+def _measured_rate(store: Store) -> dict:
+    """Burn rate over the ticks actually scanned.
+
+    Returns per-tick, per-second and per-day figures, plus the tick span they
+    came from, so a consumer can show the projection and still see its basis.
+    Empty when nothing has been scanned — an invented rate would be exactly the
+    thing this whole feature exists to avoid.
+    """
+    with store._lock:                      # noqa: SLF001 - same module family
+        row = store._conn.execute(
+            "SELECT SUM(burned) b, SUM(burn_events) e, "
+            "MIN(from_tick) lo, MAX(to_tick) hi FROM burn_buckets"
+        ).fetchone()
+    if not row or not row["e"] or row["lo"] is None:
+        return {}
+    ticks = max(1, int(row["hi"]) - int(row["lo"]) + 1)
+    events_per_tick = int(row["e"]) / ticks
+    burned_per_tick = int(row["b"] or 0) / ticks
+    per_day = 86_400 * TICKS_PER_SECOND
+    return {
+        "scanned_ticks": ticks,
+        "events_per_tick": round(events_per_tick, 4),
+        "events_per_second": round(events_per_tick * TICKS_PER_SECOND, 3),
+        "events_per_day": int(round(events_per_tick * per_day)),
+        "burned_per_day": int(round(burned_per_tick * per_day)),
+        "rate_basis": f"{int(row['e'])} events over {ticks} scanned ticks "
+                      f"@ {TICKS_PER_SECOND} ticks/s",
+    }
+
+
 def build_burn_latest(store: Store) -> Optional[dict]:
     """Headline burn figures: the official total, plus what we measured.
 
@@ -667,6 +703,13 @@ def build_burn_latest(store: Store) -> Optional[dict]:
             "events": int(recent["events"]) if recent else 0,
             "first_measured_tick": state["first_tick"] if state else None,
             "last_scanned_tick": state["last_tick"] if state else None,
+            # Rate over the ticks actually scanned, not over a wall-clock day: a
+            # day still being measured has only partial hours in it, so dividing
+            # its total by 24 would understate the rate all day and only become
+            # right at midnight. Per-tick is what was observed; the ~2.7 ticks/s
+            # measured tick rate turns it into a per-day figure for the reader,
+            # and it is labelled as the projection it is.
+            **_measured_rate(store),
         },
         "coverage": cov["epochs"][-1] if cov["epochs"] else None,
         "source": "rpc:latest-stats (total) + bob:getLogs (per-day measurement)",
