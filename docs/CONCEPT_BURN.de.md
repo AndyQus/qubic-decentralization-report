@@ -75,8 +75,17 @@ jeder Computor erzeugt. Hochgerechnet: ~426 Mrd. QU/Tag, ~2,56 Bio. QU/Epoche.
 
 > **Implementierungsfalle, einmal bereits bezahlt.** Eine Qubic-Identity hat **60 Zeichen**.
 > Wer die Null-Adresse über ein 40-Zeichen-Präfix matcht, trifft still gar nichts, und die
-> Burn-Summe kommt als saubere, plausible Null heraus. `qdr/revenue.py` hat genau dafür
-> `BURN_PREFIXES` und `_is_burn_address()` — wiederverwenden, nicht neu herleiten.
+> Burn-Summe kommt als saubere, plausible Null heraus.
+>
+> *Bei der Umsetzung korrigiert.* Der Entwurf sagte, man solle
+> `revenue.is_uninformative_identity()` wiederverwenden. **Nicht tun** — die Funktion
+> beantwortet eine andere Frage („verrät Geld, das hier durchfließt, einen Eigentümer?")
+> und ist zu Recht großzügig bei den A/B/D-präfigierten Systemadressen. Sie matcht
+> `DAAA…NMIG`, und das ist **keine** Burn-Senke: das Ledger weist 16.311.057 **ausgehende**
+> Transfers bei 4.210 QU Guthaben aus, der Wert fließt also direkt wieder ab. Die
+> Null-Adresse meldet 0 Guthaben und 0 Transfers in beide Richtungen — genau das macht sie
+> zur Senke. Die Burn-Erkennung vergleicht deshalb exakt gegen die vollen 60 Zeichen
+> (`burn.is_burn_sink()`).
 
 **(b) `BURNING`-Log-Ereignisse.** Ein eigener Log-Typ mit `amount` und — das Wertvolle —
 **`contractIndexBurnedFor`**. Das ist die einzige Quelle, die sagt, *wofür* verbrannt wurde.
@@ -172,11 +181,38 @@ CREATE TABLE IF NOT EXISTS burn_totals (
 ```
 
 **Warum eine Tagesspalte und nicht nur Ticks.** „Pro Tag" ist das, was gefordert war, und
-eine Tick-Nummer ist kein Datum. Bobs Log-Einträge tragen einen `timestamp`
-(`"26-09-02 12:00:05"` in den beobachteten Daten), der Tag wird also aus den Ereignissen
-abgelesen statt aus einer angenommenen Tick-Rate berechnet. Wo ein Bucket über Mitternacht
-reicht, wird er an der Grenze geteilt — ein Bucket ist eine Scan-Einheit, keine
-Berichtseinheit.
+eine Tick-Nummer ist kein Datum.
+
+*Bei der Umsetzung korrigiert.* Der Entwurf nahm an, Bobs Log-Einträge trügen einen
+`timestamp`. End-Epoch-Einträge tun das (`"26-09-02 12:00:05"`), **gewöhnliche
+Tick-Log-Einträge jedoch nicht** — gegen einen Live-Node gemessen hat ein Eintrag `tick`,
+`epoch`, `logId`, Adressen und Betrag, und überhaupt kein Zeitfeld. Auch kein
+RPC-Endpunkt liefert eines: `/v2/ticks/{t}` ist Not Found, und `/v2/epochs/{e}/ticks` gibt
+nur `{tickNumber, isEmpty}` zurück.
+
+Der Scanner datiert Ereignisse deshalb nach dem **Zeitpunkt seiner Beobachtung**. Das ist
+gerade deshalb ehrlich, weil der Worker fortlaufend nahe am Chain-Head scannt: er zählt
+Burns Minuten nachdem sie passiert sind, „der Tag, an dem wir gezählt haben" und „der Tag,
+an dem es geschah" sind also derselbe. Das ist eine Beobachtung, kein Rückschluss aus einer
+angenommenen Tick-Rate.
+
+Zwei Regeln halten das aufrecht, statt es nur bequem zu machen:
+
+* Ein Durchlauf, der weiter als `MAX_DATING_LAG_TICKS` (100.000 Ticks ≈ 10 h) hinter dem
+  Head liegt, darf nichts datieren. Statt sich durch undatierbare Ticks zu arbeiten,
+  während die heutigen Burns ungezählt vorbeilaufen, **springt der Zeiger zum Head**, und
+  der übersprungene Bereich wird als Lücke der Reihe ausgewiesen (`skipped_undatable`).
+  Einen Abschnitt zu verlieren, den wir nicht datieren können, ist das ehrliche Ergebnis;
+  ihn falsch zu datieren — oder die Gegenwart zu verpassen, während man ihm nachjagt —
+  nicht.
+* Der Scan endet an **Bobs `currentIndexingTick`**, nicht am Chain-Head. Gemessen: Bob
+  indiziert ~36 Ticks hinterher und liefert für noch nicht erreichte Ticks ein *leeres Log*
+  — ununterscheidbar von „es gab keine Burns". Den Zeiger darüber hinwegzurücken würde
+  deren Burns dauerhaft verlieren. Ein noch nicht indizierter Tick ist nicht leer, er ist
+  noch nicht so weit.
+
+Wo ein Bucket über Mitternacht reicht, wird er an der Grenze geteilt — ein Bucket ist eine
+Scan-Einheit, keine Berichtseinheit.
 
 **Aggregation für die Ansichten.** Tag / Epoche / Jahr sind allesamt `SUM(burned) GROUP BY`
 über diese eine Tabelle. Nichts wird dreifach gespeichert.

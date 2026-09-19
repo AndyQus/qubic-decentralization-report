@@ -86,6 +86,14 @@ def main() -> int:
     ap.add_argument("--snapshot", action="store_true",
                     help="snapshot computor balances (input for balance-delta revenue)")
     ap.add_argument("--status", action="store_true", help="show what the store holds")
+    ap.add_argument("--burn-scan", action="store_true",
+                    help="advance the burn scan toward the current tick (one budgeted pass)")
+    ap.add_argument("--burn-from", type=int, metavar="TICK",
+                    help="with --burn-scan: start at this tick instead of resuming")
+    ap.add_argument("--burn-calls", type=int, default=None,
+                    help="with --burn-scan: chunk budget for this pass")
+    ap.add_argument("--burn-status", action="store_true",
+                    help="what the burn scan has measured, and its coverage")
     ap.add_argument("--refresh-stale", action="store_true",
                     help="re-derive every epoch computed by an older code version, "
                          "then exit (run on startup so a deploy never serves figures "
@@ -107,6 +115,26 @@ def main() -> int:
 
     if args.export:
         export_snapshots(store)
+        return 0
+
+    if args.burn_status:
+        state = store.burn_scan_state()
+        if not state:
+            print("burn scan has not run yet")
+        else:
+            print(f"scanned ticks {state['first_tick']}..{state['last_tick']}")
+        latest = store.latest_burn_total()
+        if latest:
+            print(f"official total: {latest['burned_total']:,} QU "
+                  f"(epoch {latest['epoch']})")
+        for row in store.burn_series(by="day")[-14:]:
+            print(f"  {row['key']}  {row['burned']:>18,} QU  "
+                  f"{row['events']:>6} events")
+        cov = pipeline.burn_coverage(store)
+        for c in cov["epochs"][-5:]:
+            ratio = "n/a" if c["ratio"] is None else f"{c['ratio']:.3f}"
+            print(f"  epoch {c['epoch']}: coverage {ratio} "
+                  f"(measured {c['measured_delta']:,} / official {c['official_delta']:,})")
         return 0
 
     client = CachedClient(base_url=args.base) if args.base else CachedClient()
@@ -145,6 +173,24 @@ def main() -> int:
             bob = None
 
     registry = load_registry()
+
+    if args.burn_scan:
+        pipeline.sample_burn_total(client, store)
+        if bob is None:
+            print("burn scan needs a Bob node (the RPC total alone has no daily "
+                  "resolution); pass --bob or drop --no-bob", file=sys.stderr)
+            return 2
+        out = pipeline.scan_burns(client, store, bob, from_tick=args.burn_from,
+                                  max_calls=args.burn_calls or 20)
+        if out.get("reason"):
+            print(f"burn scan: {out['reason']}")
+            return 0
+        print(f"burn scan: ticks {out['from_tick']}..{out['to_tick']} "
+              f"({out['scanned']} ticks, {out['calls']} calls), "
+              f"{out['days_written']} day(s) written, {out['behind']} ticks behind")
+        for g in out.get("gaps") or []:
+            print(f"  ! gap, will retry from {g[0]}: {g[0]}..{g[1]}", file=sys.stderr)
+        return 0
 
     if args.snapshot:
         out = pipeline.snapshot_epoch_balances(client, store)
@@ -195,6 +241,17 @@ def main() -> int:
                 rep = pipeline.update_live(client, store, registry, bob=bob)
                 print(f"[{time.strftime('%H:%M:%S')}] {describe(rep)} "
                       f"| snapshots {snap['snapshots']}")
+                # Burns are only measurable near the chain head: tick logs carry
+                # no timestamp, so a pass that falls far behind can read ticks
+                # but not date them (pipeline.MAX_DATING_LAG_TICKS). Keeping the
+                # scan in the watch loop is what keeps it close enough to count.
+                pipeline.sample_burn_total(client, store)
+                if bob is not None:
+                    burn_out = pipeline.scan_burns(client, store, bob)
+                    if not burn_out.get("reason"):
+                        print(f"           burn: +{burn_out['scanned']} ticks, "
+                              f"{burn_out['days_written']} day(s), "
+                              f"{burn_out['behind']} behind")
                 # seal the epoch that just closed, if it is complete
                 prev = rep["epoch"] - 1
                 if not store.is_sealed(prev):

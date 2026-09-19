@@ -73,8 +73,16 @@ emits. Extrapolated: ~426 G QU/day, ~2.56 T QU/epoch.
 
 > **Implementation trap, already paid for once.** A Qubic identity is **60 characters**.
 > Matching the null address on a 40-character prefix silently matches nothing and the burn
-> total comes out as a clean, plausible zero. `qdr/revenue.py` has `BURN_PREFIXES` and
-> `_is_burn_address()` for exactly this — reuse them, do not re-derive them.
+> total comes out as a clean, plausible zero.
+>
+> *Corrected during implementation.* The draft said to reuse `revenue.is_uninformative_identity()`.
+> **Do not** — it answers a different question ("does money moving through here reveal an
+> owner?") and is correctly generous about A/B/D-prefixed system addresses. It matches
+> `DAAA…NMIG`, which is **not** a burn sink: the ledger reports 16,311,057 *outgoing*
+> transfers against a 4,210 QU balance, so value flows straight back out. The null address
+> reports 0 balance and 0 transfers in either direction, which is what makes it the sink.
+> Burn detection therefore matches the full 60-character null address exactly
+> (`burn.is_burn_sink()`).
 
 **(b) `BURNING` log events.** A distinct log type carrying `amount` and — the valuable
 part — **`contractIndexBurnedFor`**. This is the only source that says *what* a burn was
@@ -163,8 +171,31 @@ CREATE TABLE IF NOT EXISTS burn_totals (
 ```
 
 **Why a day column and not just ticks.** "Per day" is what was asked for, and a tick number
-is not a date. Bob's log entries carry a `timestamp` (`"26-09-02 12:00:05"` in the observed
-data), so the day is read off the events rather than computed from an assumed tick rate.
+is not a date.
+
+*Corrected during implementation.* The draft assumed Bob's log entries carry a `timestamp`.
+End-epoch entries do (`"26-09-02 12:00:05"`), but **ordinary tick-log entries do not** —
+measured against a live node, an entry has `tick`, `epoch`, `logId`, addresses and amount,
+and no time field at all. No RPC endpoint supplies one either: `/v2/ticks/{t}` is Not Found
+and `/v2/epochs/{e}/ticks` returns only `{tickNumber, isEmpty}`.
+
+So the scanner dates events by **when it observed them**. That is honest precisely because
+the worker scans continuously near the chain head: it counts burns minutes after they
+happen, so "the day we counted it" and "the day it happened" are the same day. It is an
+observation, not an inference from an assumed tick rate.
+
+Two rules keep that true rather than merely convenient:
+
+* A pass further behind the head than `MAX_DATING_LAG_TICKS` (100,000 ticks ≈ 10 h) may not
+  date anything. Rather than grinding through undatable ticks while today's burns scroll
+  past uncounted, the pointer **skips to the head** and the skipped range is reported as a
+  hole in the series (`skipped_undatable`). Losing a stretch we cannot date is the honest
+  outcome; misdating it, or missing the present while chasing it, is not.
+* The scan stops at **Bob's `currentIndexingTick`**, not the chain head. Measured: Bob
+  indexes ~36 ticks behind, and returns an *empty log* for ticks it has not reached —
+  indistinguishable from "no burns happened". Advancing the pointer over those would lose
+  their burns permanently. A tick that is not indexed yet is not empty, it is not ready.
+
 Where a bucket straddles midnight it is split at the boundary — a bucket is a scan unit,
 not a reporting unit.
 

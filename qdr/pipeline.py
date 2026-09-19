@@ -16,7 +16,7 @@ from __future__ import annotations
 import time
 from typing import Optional
 
-from . import __version__
+from . import __version__, burn
 from .client import CachedClient, QubicRPCError
 from .clustering import (
     Cluster,
@@ -438,6 +438,239 @@ def slot_distribution(store: Store, epoch: int) -> Optional[dict]:
         "flat_share": round(mode_count / n, 6),
         "distinct_values": len(counts),
         "bands": bands, "deciles": deciles,
+    }
+
+
+# -- burn ------------------------------------------------------------------
+# History only grows; the burn series is windowed like the timeseries is.
+DEFAULT_BURN_DAYS = 90
+
+# How far behind the chain head a scan may be and still date its events by the
+# observation time. At the measured ~2.7 ticks/s, 100,000 ticks is ~10 hours —
+# comfortably inside a day, so a worker that fell behind overnight still dates
+# correctly, while one replaying last week's ticks does not.
+MAX_DATING_LAG_TICKS = 100_000
+
+
+def sample_burn_total(client: CachedClient, store: Store) -> Optional[dict]:
+    """Record the official cumulative burn counter for the running epoch.
+
+    This is the anchor, not the measurement (CONCEPT_BURN §3.2): the counter is
+    an epoch aggregate and does not move between boundaries, so sampling it more
+    often buys nothing but keeps the anchor current when an epoch does close.
+    """
+    try:
+        stats = client.latest_stats()
+    except QubicRPCError:
+        return None
+    epoch = int(stats.get("epoch") or 0)
+    burned = int(stats.get("burnedQus") or 0)
+    if not epoch or not burned:
+        return None
+    store.put_burn_total(epoch, burned,
+                         circulating=int(stats.get("circulatingSupply") or 0) or None,
+                         tick=int(stats.get("currentTick") or 0) or None)
+    return {"epoch": epoch, "burned_total": burned}
+
+
+def scan_burns(
+    client: CachedClient,
+    store: Store,
+    bob: BobClient,
+    from_tick: Optional[int] = None,
+    max_calls: int = burn.MAX_CALLS,
+) -> dict:
+    """Advance the burn scan toward the current tick, one budgeted pass.
+
+    Resumes from the stored pointer, so a restart continues rather than
+    rescanning. A pass that hits a range Bob cannot serve stops at the gap
+    instead of advancing past it: skipping unread ticks would lose those burns
+    permanently, and they are not replayable.
+    """
+    state = store.burn_scan_state()
+    pulse_epoch, tick = None, None
+    try:
+        info = client.tick_info()
+        pulse_epoch, tick = int(info.get("epoch") or 0), int(info.get("tick") or 0)
+    except QubicRPCError:
+        return {"scanned": 0, "reason": "rpc unreachable"}
+    if not tick:
+        return {"scanned": 0, "reason": "no current tick"}
+
+    # Scan only as far as Bob has actually INDEXED, not as far as the chain has
+    # advanced. Measured 2026-09-19: Bob's currentIndexingTick trails the RPC's
+    # tick by ~36. Asking for the ticks in between returns an empty log — which
+    # is indistinguishable from "no burns happened" — and the pointer would then
+    # advance past them, losing those burns permanently. A tick that has not been
+    # indexed yet is not empty, it is not ready.
+    try:
+        status = bob.status()
+        indexed = int(status.get("currentIndexingTick") or 0)
+    except (BobError, TypeError, ValueError):
+        indexed = 0
+    if indexed:
+        tick = min(tick, indexed)
+
+    if from_tick is not None:
+        start = int(from_tick)
+    elif state:
+        start = int(state["last_tick"]) + 1
+    else:
+        # First ever pass: start close to the head rather than at the epoch's
+        # first tick. A cold start that tried to scan a whole epoch would issue
+        # ~1400 heavy calls against a public node before the page showed
+        # anything; the series simply begins where we began measuring, and says so.
+        start = max(0, tick - burn.CHUNK_TICKS * max_calls)
+
+    if start > tick:
+        return {"scanned": 0, "reason": "up to date", "last_tick": start - 1}
+
+    # Tick logs carry no timestamp (measured 2026-09-19), and no RPC endpoint
+    # exposes a tick's wall time, so a scan dates its events by when it observed
+    # them. That only holds near the chain head — which is where the worker runs,
+    # counting burns minutes after they happen.
+    #
+    # When the pointer is further behind than a day's worth of ticks (an outage,
+    # a long restart), those ticks cannot be dated at all. Grinding through them
+    # chunk by chunk would spend every pass on ticks it must discard while TODAY's
+    # burns scroll past uncounted — the scan would never catch up, and the chart
+    # would stay empty. So the pointer skips to the head and the gap is recorded
+    # as unmeasured. Losing a stretch we cannot date is the honest outcome;
+    # misdating it, or missing the present while chasing it, is not.
+    skipped_from = None
+    if max(0, tick - start) > MAX_DATING_LAG_TICKS:
+        skipped_from = start
+        start = max(0, tick - burn.CHUNK_TICKS * max_calls)
+
+    out = burn.scan_range(bob, start, tick, epoch=pulse_epoch or 0,
+                          max_calls=max_calls,
+                          default_day=burn.observed_day())
+    written = 0
+    for day, agg in out["days"].items():
+        store.put_burn_bucket(
+            from_tick=agg["from_tick"] or start,
+            to_tick=agg["to_tick"] or out["scanned_to"],
+            epoch=pulse_epoch or 0, day=day,
+            burned=agg["burned"], burn_events=agg["burn_events"],
+            contract_burned=agg["contract_burned"],
+            contract_events=agg["contract_events"],
+            by_contract=agg["by_contract"],
+        )
+        written += 1
+    if out["scanned_to"] >= start:
+        store.set_burn_scan_state(last_tick=out["scanned_to"], first_tick=start)
+    result = {"scanned": max(0, out["scanned_to"] - start + 1),
+              "from_tick": start, "to_tick": out["scanned_to"],
+              "days_written": written, "calls": out["calls"],
+              "gaps": out["gaps"], "complete": out["complete"],
+              "behind": max(0, tick - out["scanned_to"])}
+    if skipped_from is not None:
+        # Surfaced, not swallowed: this is a hole in the measured series, and the
+        # page says so rather than presenting the remaining days as continuous.
+        result["skipped_undatable"] = [skipped_from, start - 1]
+    return result
+
+
+def burn_coverage(store: Store) -> dict:
+    """Measured burns against the official counter's step, per epoch.
+
+    A ratio below 1.0 means a burn category the scan does not recognise, and is
+    published rather than hidden — the same discipline `linkage_coverage: 0`
+    applies to operator attribution. Only epochs we scanned end to end can be
+    compared at all; a partially scanned epoch would understate by construction.
+    """
+    totals = store.burn_totals()
+    by_epoch = {row["epoch"]: row for row in totals}
+    measured = {int(r["key"]): r for r in store.burn_series(by="epoch")}
+    out = []
+    for prev, cur in zip(totals, totals[1:]):
+        epoch = cur["epoch"]
+        if epoch not in measured:
+            continue
+        official = int(cur["burned_total"]) - int(prev["burned_total"])
+        row = burn.reconcile(int(measured[epoch]["burned"] or 0)
+                             + int(measured[epoch]["contract_burned"] or 0),
+                             official)
+        row["epoch"] = epoch
+        out.append(row)
+    return {"epochs": out, "anchored_epochs": len(by_epoch)}
+
+
+def build_burn_series(store: Store, by: str = "day",
+                      limit: Optional[int] = DEFAULT_BURN_DAYS) -> dict:
+    """The burn series, with every point labelled measured or derived.
+
+    Two regimes share one chart (CONCEPT_BURN §4.1): what we counted ourselves,
+    and — before that — what can only be read off the epoch counter's steps. They
+    are not smoothed together. A reader has to be able to see where real
+    measurement begins, so `first_measured_day` marks the boundary and each point
+    carries `measured`.
+    """
+    rows = store.burn_series(by=by, limit=limit)
+    state = store.burn_scan_state()
+    series = []
+    cumulative = 0
+    for r in rows:
+        burned = int(r["burned"] or 0)
+        cumulative += burned
+        series.append({
+            "key": r["key"],
+            "burned": burned,
+            "events": int(r["events"] or 0),
+            "contract_burned": int(r["contract_burned"] or 0),
+            "contract_events": int(r["contract_events"] or 0),
+            "from_tick": r["from_tick"], "to_tick": r["to_tick"],
+            "cumulative": cumulative,
+            "measured": True,
+        })
+    return {
+        "by": by,
+        "series": series,
+        "first_measured_tick": state["first_tick"] if state else None,
+        "first_measured_day": series[0]["key"] if series else None,
+        "last_scanned_tick": state["last_tick"] if state else None,
+        "generated_at": int(time.time()),
+        "code_version": __version__,
+    }
+
+
+def build_burn_latest(store: Store) -> Optional[dict]:
+    """Headline burn figures: the official total, plus what we measured.
+
+    The official total is what explorer.qubic.org shows and the only figure
+    directly comparable to it. Everything with finer resolution than an epoch is
+    ours, and is labelled as such.
+    """
+    total = store.latest_burn_total()
+    if not total:
+        return None
+    days = store.burn_series(by="day")
+    recent = days[-1] if days else None
+    state = store.burn_scan_state()
+    burned_total = int(total["burned_total"])
+    circulating = int(total["circulating"] or 0)
+    cov = burn_coverage(store)
+    return {
+        "burned_total": burned_total,
+        "circulating": circulating or None,
+        # Share of the supply that WOULD exist had nothing burned. Dividing by
+        # circulating alone would understate it — burned QU are not in that
+        # figure any more.
+        "burned_share": (round(burned_total / (burned_total + circulating), 6)
+                         if circulating else None),
+        "epoch": total["epoch"],
+        "tick": total["tick"],
+        "observed_at": total["observed_at"],
+        "measured": {
+            "last_day": recent["key"] if recent else None,
+            "burned": int(recent["burned"]) if recent else 0,
+            "events": int(recent["events"]) if recent else 0,
+            "first_measured_tick": state["first_tick"] if state else None,
+            "last_scanned_tick": state["last_tick"] if state else None,
+        },
+        "coverage": cov["epochs"][-1] if cov["epochs"] else None,
+        "source": "rpc:latest-stats (total) + bob:getLogs (per-day measurement)",
+        "code_version": __version__,
     }
 
 

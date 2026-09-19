@@ -18,6 +18,12 @@
 #   2. Watch. Refreshes the running epoch, takes the balance snapshots that
 #      revenue derivation needs (an epoch boundary is not replayable, so a
 #      missed one is missed for good), and seals each epoch as it closes.
+#   2b. Measure burns. The RPC's burnedQus is an epoch aggregate and does not
+#      move between boundaries, so a per-day burn figure has to be counted from
+#      a Bob node's tick logs. Those logs carry no timestamp, so the count is
+#      dated by when it was observed — which is only valid near the chain head.
+#      That makes this a watch-loop job by nature: it is the continuous scanning
+#      that keeps it close enough to the head to date anything at all.
 #   3. Export after every pass, so dashboard/data.js and api/sample/*.json can
 #      never drift behind the store the way they did before.
 set -eu
@@ -75,6 +81,11 @@ python scripts/ingest.py --backfill "${BACKFILL}" || \
 # fix changed a figure, or remember to pass --force by hand.
 echo "[worker] checking for epochs computed by an older code version …"
 python scripts/ingest.py --refresh-stale ||   echo "[worker] stale refresh incomplete; watch will retry the live epoch" >&2
+
+# Seed the burn scan before the watch loop takes it over, so the burn page has
+# a first measured day within a minute of start rather than after one interval.
+echo "[worker] seeding the burn scan ..."
+python scripts/ingest.py --burn-scan ||   echo "[worker] burn scan incomplete; the watch loop will continue it" >&2
 
 python scripts/ingest.py --export || true
 

@@ -137,6 +137,51 @@ CREATE TABLE IF NOT EXISTS reports (
     PRIMARY KEY (epoch, code_version)
 );
 CREATE INDEX IF NOT EXISTS ix_reports_epoch ON reports(epoch);
+
+-- Burn totals per scanned tick window (CONCEPT_BURN §4).
+--
+-- The raw events are deliberately NOT kept: measured at ~900 burns per 500 ticks,
+-- an epoch's event log is gigabytes and says nothing the aggregate does not. The
+-- tick window is what makes a figure recomputable by a third party — the same
+-- role first_tick/last_tick play for revenue.
+CREATE TABLE IF NOT EXISTS burn_buckets (
+    from_tick       INTEGER NOT NULL,   -- inclusive
+    to_tick         INTEGER NOT NULL,   -- inclusive
+    epoch           INTEGER NOT NULL,
+    day             TEXT NOT NULL,      -- UTC 'YYYY-MM-DD', read off event timestamps
+    burned          INTEGER NOT NULL DEFAULT 0,   -- sum of QU_TRANSFER to a burn sink
+    burn_events     INTEGER NOT NULL DEFAULT 0,
+    contract_burned INTEGER NOT NULL DEFAULT 0,   -- sum of BURNING events
+    contract_events INTEGER NOT NULL DEFAULT 0,
+    by_contract     TEXT,               -- json {contractIndex: amount}
+    scanned_at      INTEGER NOT NULL,
+    PRIMARY KEY (from_tick, to_tick, day)
+);
+CREATE INDEX IF NOT EXISTS ix_burn_epoch ON burn_buckets(epoch);
+CREATE INDEX IF NOT EXISTS ix_burn_day   ON burn_buckets(day);
+
+-- The official cumulative counter, sampled at epoch boundaries. This is the
+-- anchor the measured buckets reconcile against, and the only figure directly
+-- comparable to what explorer.qubic.org publishes. Measured 2026-09-19: it does
+-- not move between boundaries, which is precisely why it cannot supply the
+-- daily resolution on its own.
+CREATE TABLE IF NOT EXISTS burn_totals (
+    epoch         INTEGER PRIMARY KEY,
+    burned_total  INTEGER NOT NULL,
+    circulating   INTEGER,
+    tick          INTEGER,
+    observed_at   INTEGER NOT NULL
+);
+
+-- How far the burn scan has got. Kept as a row rather than derived from
+-- MAX(to_tick) so a resume point survives a gap: a tick range Bob could not
+-- serve must not look like one we already counted.
+CREATE TABLE IF NOT EXISTS burn_scan_state (
+    id              INTEGER PRIMARY KEY CHECK (id = 1),
+    last_tick       INTEGER NOT NULL,   -- last tick counted (inclusive)
+    first_tick      INTEGER NOT NULL,   -- first tick ever counted: where measurement begins
+    updated_at      INTEGER NOT NULL
+);
 """
 
 
@@ -555,6 +600,148 @@ class Store:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    # -- burn --------------------------------------------------------------
+    def put_burn_bucket(
+        self,
+        from_tick: int,
+        to_tick: int,
+        epoch: int,
+        day: str,
+        burned: int = 0,
+        burn_events: int = 0,
+        contract_burned: int = 0,
+        contract_events: int = 0,
+        by_contract: Optional[dict] = None,
+    ) -> None:
+        """Record one scanned tick window's burn totals.
+
+        A rescan of the same window overwrites rather than accumulating: scanning
+        ticks 100-199 twice must not double the day's burn. That makes a rescan
+        safe, which is what lets the worker retry a window it could not finish.
+        """
+        with self._tx() as c:
+            c.execute(
+                "INSERT INTO burn_buckets (from_tick,to_tick,epoch,day,burned,burn_events,"
+                "contract_burned,contract_events,by_contract,scanned_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(from_tick,to_tick,day) DO UPDATE SET "
+                "epoch=excluded.epoch, burned=excluded.burned, "
+                "burn_events=excluded.burn_events, "
+                "contract_burned=excluded.contract_burned, "
+                "contract_events=excluded.contract_events, "
+                "by_contract=excluded.by_contract, scanned_at=excluded.scanned_at",
+                (int(from_tick), int(to_tick), int(epoch), day, int(burned),
+                 int(burn_events), int(contract_burned), int(contract_events),
+                 json.dumps(by_contract or {}), int(time.time())),
+            )
+
+    def burn_series(self, by: str = "day", limit: Optional[int] = None) -> list[dict]:
+        """Measured burn totals grouped by day, epoch or year.
+
+        Day/epoch/year are all a GROUP BY over the one bucket table — nothing is
+        stored three times. Newest rows win when a limit applies, but the result
+        is returned oldest-first so a chart can draw it directly.
+        """
+        key = {"day": "day", "epoch": "epoch",
+               "year": "substr(day,1,4)"}.get(by)
+        if key is None:
+            raise ValueError(f"unsupported grouping: {by!r}")
+        sql = (f"SELECT {key} AS key, SUM(burned) AS burned, "
+               "SUM(burn_events) AS events, SUM(contract_burned) AS contract_burned, "
+               "SUM(contract_events) AS contract_events, "
+               "MIN(from_tick) AS from_tick, MAX(to_tick) AS to_tick, "
+               "MIN(epoch) AS first_epoch, MAX(epoch) AS last_epoch "
+               f"FROM burn_buckets GROUP BY {key} ORDER BY key DESC")
+        if limit is not None:
+            sql += f" LIMIT {int(limit)}"
+        with self._lock:
+            rows = self._conn.execute(sql).fetchall()
+        out = [dict(r) for r in rows]
+        for r in out:
+            r["key"] = str(r["key"])
+        return list(reversed(out))
+
+    def burn_by_contract(self, epoch: Optional[int] = None) -> dict[str, int]:
+        """Contract-attributed burns, summed per contract index.
+
+        Stored as a json blob per bucket (the set of indices is small and sparse),
+        so this folds them in Python rather than with a json1 query that would tie
+        the store to an optional SQLite extension.
+        """
+        with self._lock:
+            if epoch is None:
+                rows = self._conn.execute(
+                    "SELECT by_contract FROM burn_buckets").fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT by_contract FROM burn_buckets WHERE epoch=?", (epoch,)).fetchall()
+        totals: dict[str, int] = {}
+        for r in rows:
+            try:
+                blob = json.loads(r["by_contract"] or "{}")
+            except ValueError:
+                continue
+            for idx, amount in blob.items():
+                totals[str(idx)] = totals.get(str(idx), 0) + int(amount or 0)
+        return totals
+
+    def put_burn_total(self, epoch: int, burned_total: int,
+                       circulating: Optional[int] = None,
+                       tick: Optional[int] = None) -> None:
+        """Sample the official cumulative counter for an epoch.
+
+        An epoch's closing total does not change once observed, so a repeat
+        observation of an epoch already on record is a no-op — re-reading a stale
+        RPC value must not walk a recorded total backwards.
+        """
+        with self._tx() as c:
+            c.execute(
+                "INSERT INTO burn_totals (epoch,burned_total,circulating,tick,observed_at) "
+                "VALUES (?,?,?,?,?) ON CONFLICT(epoch) DO NOTHING",
+                (int(epoch), int(burned_total),
+                 int(circulating) if circulating is not None else None,
+                 int(tick) if tick is not None else None, int(time.time())),
+            )
+
+    def burn_totals(self, limit: Optional[int] = None) -> list[dict]:
+        """Official cumulative totals per epoch, oldest first."""
+        sql = "SELECT * FROM burn_totals ORDER BY epoch DESC"
+        if limit is not None:
+            sql += f" LIMIT {int(limit)}"
+        with self._lock:
+            rows = self._conn.execute(sql).fetchall()
+        return [dict(r) for r in reversed(rows)]
+
+    def latest_burn_total(self) -> Optional[dict]:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM burn_totals ORDER BY epoch DESC LIMIT 1").fetchone()
+        return dict(r) if r else None
+
+    def set_burn_scan_state(self, last_tick: int, first_tick: Optional[int] = None) -> None:
+        """Advance the scan pointer. `first_tick` is only ever set once — it marks
+        where our own measurement begins, and the series is labelled against it."""
+        now = int(time.time())
+        with self._tx() as c:
+            row = c.execute("SELECT first_tick FROM burn_scan_state WHERE id=1").fetchone()
+            if row is None:
+                c.execute(
+                    "INSERT INTO burn_scan_state (id,last_tick,first_tick,updated_at) "
+                    "VALUES (1,?,?,?)",
+                    (int(last_tick),
+                     int(first_tick if first_tick is not None else last_tick), now),
+                )
+            else:
+                c.execute(
+                    "UPDATE burn_scan_state SET last_tick=?, updated_at=? WHERE id=1",
+                    (int(last_tick), now),
+                )
+
+    def burn_scan_state(self) -> Optional[dict]:
+        with self._lock:
+            r = self._conn.execute("SELECT * FROM burn_scan_state WHERE id=1").fetchone()
+        return dict(r) if r else None
+
     def stats(self) -> dict:
         with self._lock:
             def one(q: str, *a) -> int:
@@ -568,4 +755,6 @@ class Store:
                 "transfers": one("SELECT COUNT(*) FROM transfers"),
                 "linkage_edges": one("SELECT COUNT(*) FROM linkage"),
                 "balance_snapshots": one("SELECT COUNT(*) FROM balance_snapshots"),
+                "burn_buckets": one("SELECT COUNT(*) FROM burn_buckets"),
+                "burn_totals": one("SELECT COUNT(*) FROM burn_totals"),
             }

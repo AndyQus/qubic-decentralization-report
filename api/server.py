@@ -71,6 +71,8 @@ app = FastAPI(
     openapi_tags=[
         {"name": "report", "description": "Per-epoch decentralization reports and snapshots."},
         {"name": "metrics", "description": "Concentration indices over time, for charts."},
+        {"name": "burn", "description": "Burned supply: the official total, and a per-day "
+                                        "measurement counted from a Bob node's logs."},
         {"name": "service", "description": "Index, health and store status."},
     ],
 )
@@ -157,6 +159,10 @@ def api_index():
             "/v1/clusters/{epoch}",
             "/v1/epochs",
             "/v1/metrics/timeseries",
+            "/v1/burn/latest",
+            "/v1/burn/series",
+            "/v1/burn/contracts",
+            "/v1/burn/coverage",
             "/v1/report/{epoch}/snapshot.json",
             "/v1/dashboard-data",
             "/v1/store",
@@ -475,6 +481,95 @@ def mining():
     out = dict(data)
     out["next_refresh_in"] = round(MINING_TTL_S)
     return out
+
+
+# The burn figures move on the epoch clock (the official counter) and on the
+# worker's scan cadence (our measurement). Neither changes per request, so the
+# headline is cached like the pulse is.
+_burn_cache: dict = {"at": 0.0, "data": None}
+BURN_TTL_S = float(os.environ.get("QDR_BURN_TTL", "15"))
+
+
+@app.get("/v1/burn/latest", tags=["burn"], summary="Burned supply: official total and measured rate")
+def burn_latest():
+    """Headline burn figures.
+
+    `burned_total` is the official cumulative counter — the same figure
+    explorer.qubic.org publishes, and the only one directly comparable to it.
+    Everything at finer resolution than an epoch is measured by this project from
+    a Bob node's logs, and is reported under `measured` rather than mixed in:
+    the official counter is an epoch aggregate and does not move between epoch
+    boundaries (measured 2026-09-19 over 375 ticks), so a per-day figure cannot
+    come from it.
+
+    `coverage` compares what we counted against the counter's own step. A ratio
+    below 1.0 means a burn category the scan does not recognise yet, and is
+    published rather than hidden.
+    """
+    import time as _t
+    now = _t.time()
+    if _burn_cache["data"] and now - _burn_cache["at"] < BURN_TTL_S:
+        return _burn_cache["data"]
+    data = pipeline.build_burn_latest(get_store())
+    if data is None:
+        raise _no_data("burn data")
+    _burn_cache.update(at=now, data=data)
+    return data
+
+
+@app.get("/v1/burn/series", tags=["burn"], summary="Burned supply over time")
+def burn_series(
+    by: str = Query("day", pattern="^(day|epoch|year)$",
+                    description="Grouping: day, epoch or year."),
+    limit: int = Query(pipeline.DEFAULT_BURN_DAYS, ge=1, le=2000,
+                       description="How many of the most recent periods to return. "
+                                   "History only grows, so this is windowed by default."),
+):
+    """The stored burn history, grouped by day, epoch or year.
+
+    Every point carries `measured: true` — this series contains only what was
+    counted from events. `first_measured_day` marks where our measurement begins;
+    there is deliberately no interpolated history before it, because the official
+    counter only steps once per epoch and smoothing that into daily values would
+    present an invented curve as a measurement.
+    """
+    ts = pipeline.build_burn_series(get_store(), by=by, limit=limit)
+    if not ts["series"]:
+        raise _no_data("burn series")
+    return ts
+
+
+@app.get("/v1/burn/contracts", tags=["burn"], summary="Burns attributed to a contract")
+def burn_contracts(epoch: int | None = Query(None, description="Restrict to one epoch.")):
+    """Burns carrying a `contractIndexBurnedFor`, summed per contract index.
+
+    These are reported separately from the transfer burns, never summed with
+    them: measured across epochs 225-228 they run ~0.3-0.5 M QU per epoch against
+    trillions from the computor burns, so a shared total would hide them entirely.
+
+    A contract *index* is not yet a contract *name* — mapping the two needs a
+    source this project does not have, so the index is reported as the index.
+    """
+    totals = get_store().burn_by_contract(epoch)
+    if not totals:
+        raise _no_data("contract burn data")
+    grand = sum(totals.values()) or 1
+    rows = [{"index": int(k) if k.lstrip("-").isdigit() else k,
+             "burned": v, "share": round(v / grand, 6)}
+            for k, v in sorted(totals.items(), key=lambda kv: -kv[1])]
+    return {"epoch": epoch, "total": sum(totals.values()), "by_contract": rows,
+            "note": "contract index is not a contract name; no index->name source yet"}
+
+
+@app.get("/v1/burn/coverage", tags=["burn"], summary="Measured burns vs. the official counter")
+def burn_coverage():
+    """Per-epoch reconciliation of our event count against `burnedQus` steps.
+
+    This is the honest answer to "is this measurement complete?". Published for
+    the same reason `linkage_coverage: 0` is: a silent undercount is the failure
+    mode worth engineering against.
+    """
+    return pipeline.burn_coverage(get_store())
 
 
 @app.get("/v1/store", tags=["service"], summary="What the store holds")

@@ -1,0 +1,296 @@
+"""Burn measurement — counting what the explorer only totals.
+
+`explorer.qubic.org` publishes one cumulative Burned Supply figure, and so does
+the public RPC (`/v1/latest-stats` -> `burnedQus`). Measured 2026-09-19, that
+counter **does not move between epoch boundaries**: six samples over 375 ticks
+(~4.6 min) returned the identical 53,662,829,138,067 QU, while a Bob node
+reported 913 burn transfers of exactly 1,000,000 QU each over 500 ticks in the
+same window.
+
+So the RPC figure is an epoch aggregate (~4.4 days per step). Storing it hourly
+would yield four flat days and one jump; calling the flat stretch "0 QU burned
+today" would be false, and interpolating the jump backwards would be an invented
+curve presented as measurement. This module therefore *counts the events* from a
+Bob node's tick logs, and the RPC total becomes the epoch-boundary anchor those
+sums are reconciled against (CONCEPT_BURN §3).
+
+Two event shapes carry burns, and they are not the same thing:
+
+  * `QU_TRANSFER` to a burn sink — the uniform 1,000,000 QU computor outflow.
+    Trillions of QU per epoch.
+  * `BURNING` — a distinct log type carrying `contractIndexBurnedFor`, i.e. the
+    only source that says *what* a burn was for. Hundreds of thousands of QU per
+    epoch: six orders of magnitude smaller, which is why the two are counted and
+    reported separately rather than summed into one number.
+"""
+from __future__ import annotations
+
+import time
+from typing import Iterable, Optional
+
+from .bob import BobClient, BobError
+
+BURNING = "BURNING"
+QU_TRANSFER = "QU_TRANSFER"
+
+# The one address value burns actually go to, measured from Bob's logs and
+# confirmed against the ledger on 2026-09-19.
+#
+# A Qubic identity is 60 characters. Matching it on a shorter prefix silently
+# matches nothing and the burn total comes out as a clean, plausible zero — this
+# repo has paid for that mistake once already (CONCEPT §4.2) — so the full value
+# is pinned here and compared exactly.
+NULL_ADDRESS = "A" * 56 + "FXIB"
+
+# Why an exact match and not `revenue.is_uninformative_identity()`, which is
+# right there and looks like it fits: that helper answers a DIFFERENT question.
+# It asks "does money moving through here reveal an owner?", and for that it is
+# correctly generous — it treats the A/B/D-prefixed system addresses alike,
+# because none of them indicate ownership.
+#
+# "Is this a burn?" is a narrower question, and reusing the looser test gets it
+# wrong. Measured over ticks 80,820,000-80,820,500, the generous test matched a
+# second sink, DAAA...NMIG, with 496 transfers of exactly 1 QU. The ledger says
+# that address holds a balance of 4,210 QU against 16,328,271 incoming and
+# 16,311,057 OUTGOING transfers: value flows straight back out of it, so it is an
+# active system account, not a sink. The null address by contrast reports
+# 0 balance and 0 transfers in either direction — value that reaches it leaves
+# the supply, which is exactly what makes it the burn address.
+#
+# Counting that second address would have added 496 QU against 913,000,000 —
+# harmless in magnitude, wrong in kind, and it would have grown silently the day
+# some other system address started moving volume.
+def is_burn_sink(identity: Optional[str]) -> bool:
+    """True only for the protocol's burn address.
+
+    Deliberately exact rather than prefix-based: see the note above for the
+    address this distinction excludes and why.
+    """
+    return identity == NULL_ADDRESS
+
+# Bob caps a log request at ~1000 ticks whatever range is asked for, and answers
+# with ~2.6 MB per 500 ticks. A scan pass is therefore budgeted: it advances by
+# at most MAX_CALLS chunks and stores what it got, rather than trying to catch up
+# in one pass and monopolising the worker or the public node.
+CHUNK_TICKS = 500
+MAX_CALLS = 20
+
+
+def _log_type(entry: dict) -> Optional[str]:
+    """End-epoch logs spell it `logTypename`, tick logs `logTypeName`."""
+    return entry.get("logTypename") or entry.get("logTypeName")
+
+
+def _body(entry: dict) -> dict:
+    b = entry.get("body")
+    return b if isinstance(b, dict) else entry
+
+
+def _int(value) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def event_day(entry: dict) -> Optional[str]:
+    """UTC day carried BY the log entry itself, as 'YYYY-MM-DD', or None.
+
+    End-epoch entries carry `"26-09-02 12:00:05"` — a two-digit year. **Ordinary
+    tick-log entries carry no timestamp at all** (measured against a live node,
+    2026-09-19: the entry has `tick`, `epoch`, `logId`, addresses and amount, and
+    no time field of any kind). Nor does any RPC endpoint expose a tick's wall
+    time: `/v2/ticks/{t}` is Not Found and `/v2/epochs/{e}/ticks` returns only
+    `{tickNumber, isEmpty}`.
+
+    So this returns None for most live events, and the scanner dates them by
+    when it observed them instead (see `scan_range`). Deriving a date from the
+    tick number would mean assuming a constant tick rate; the measured rate
+    varies, and a burn filed under the wrong day is exactly the kind of quiet
+    error this project refuses to ship.
+    """
+    raw = entry.get("timestamp")
+    if not raw or not isinstance(raw, str):
+        return None
+    date_part = raw.strip().split(" ")[0]
+    bits = date_part.split("-")
+    if len(bits) != 3:
+        return None
+    y, m, d = bits
+    if not (y.isdigit() and m.isdigit() and d.isdigit()):
+        return None
+    if len(y) == 2:
+        y = f"20{y}"
+    if len(y) != 4:
+        return None
+    return f"{y}-{int(m):02d}-{int(d):02d}"
+
+
+def burn_events(logs: Iterable[dict]) -> list[dict]:
+    """Extract burn events from a log range.
+
+    Returns entries of {kind, amount, day, tick, contract}, where `kind` is
+    'transfer' (QU sent to a burn sink) or 'contract' (a BURNING event).
+
+    A QU_TRANSFER only counts when its DESTINATION is a burn sink. Testing the
+    source instead would count the protocol's emission — every computor payout is
+    credited *from* the null address — and report the network's entire revenue as
+    burned.
+    """
+    out: list[dict] = []
+    for entry in logs:
+        if not isinstance(entry, dict):
+            continue
+        kind = _log_type(entry)
+        body = _body(entry)
+        tick = _int(entry.get("tick"))
+        day = event_day(entry)
+        if kind == QU_TRANSFER:
+            dest = body.get("to") or body.get("destination")
+            amount = _int(body.get("amount") or body.get("value"))
+            if amount <= 0 or not is_burn_sink(dest):
+                continue
+            out.append({"kind": "transfer", "amount": amount, "day": day,
+                        "tick": tick, "contract": None})
+        elif kind == BURNING:
+            amount = _int(body.get("amount"))
+            if amount <= 0:
+                continue   # a 0-QU burn event is a no-op, measured in epochs 225-228
+            out.append({"kind": "contract", "amount": amount, "day": day,
+                        "tick": tick,
+                        "contract": body.get("contractIndexBurnedFor")})
+    return out
+
+
+def observed_day(at: Optional[float] = None) -> str:
+    """Today in UTC, as 'YYYY-MM-DD'."""
+    return time.strftime("%Y-%m-%d", time.gmtime(at if at is not None else time.time()))
+
+
+def aggregate_by_day(events: Iterable[dict],
+                     default_day: Optional[str] = None) -> dict[str, dict]:
+    """Fold burn events into per-day totals.
+
+    A scan window is a unit of work, not a unit of reporting — a window that
+    straddles midnight is split here, so a day's figure is never distorted by
+    where the scanner happened to stop.
+
+    `default_day` dates the events that carry no timestamp of their own, which is
+    all of them in an ordinary tick log (see `event_day`). The worker passes the
+    day it is scanning ON, which is accurate precisely because it scans close to
+    the chain head: it counts burns shortly after they happen. That is an
+    observation ("we counted this on this day"), not an inference from an assumed
+    tick rate.
+
+    With no `default_day`, undated events are dropped rather than guessed — a
+    burn on the wrong day is worse than one we openly did not date. Backfilling
+    old ticks therefore records nothing rather than misdating history, which is
+    why the series begins where measurement began.
+    """
+    days: dict[str, dict] = {}
+    for e in events:
+        day = e.get("day") or default_day
+        if not day:
+            continue
+        bucket = days.setdefault(day, {
+            "burned": 0, "burn_events": 0,
+            "contract_burned": 0, "contract_events": 0,
+            "by_contract": {}, "from_tick": None, "to_tick": None,
+        })
+        amount = int(e.get("amount") or 0)
+        if e.get("kind") == "contract":
+            bucket["contract_burned"] += amount
+            bucket["contract_events"] += 1
+            idx = e.get("contract")
+            if idx is not None:
+                key = str(idx)
+                bucket["by_contract"][key] = bucket["by_contract"].get(key, 0) + amount
+        else:
+            bucket["burned"] += amount
+            bucket["burn_events"] += 1
+        tick = int(e.get("tick") or 0)
+        if tick:
+            lo, hi = bucket["from_tick"], bucket["to_tick"]
+            bucket["from_tick"] = tick if lo is None else min(lo, tick)
+            bucket["to_tick"] = tick if hi is None else max(hi, tick)
+    return days
+
+
+def scan_range(
+    bob: BobClient,
+    from_tick: int,
+    to_tick: int,
+    epoch: int,
+    chunk: int = CHUNK_TICKS,
+    max_calls: int = MAX_CALLS,
+    default_day: Optional[str] = None,
+) -> dict:
+    """Count burns across a tick range, paging around the node's request cap.
+
+    Returns {days, scanned_to, calls, gaps}. `scanned_to` is the last tick
+    actually counted — a chunk Bob could not serve ends the pass there rather
+    than being skipped over, because advancing the pointer past an unread range
+    would silently lose those burns forever.
+
+    `default_day` dates events that carry no timestamp (all of them, in an
+    ordinary tick log). Pass it only when scanning near the chain head, where
+    "the day we counted it" and "the day it happened" are the same day. The
+    caller enforces that; see `pipeline.scan_burns`.
+    """
+    days: dict[str, dict] = {}
+    tick = int(from_tick)
+    end = int(to_tick)
+    calls = 0
+    scanned_to = tick - 1
+    gaps: list[list[int]] = []
+
+    while tick <= end and calls < max_calls:
+        chunk_end = min(tick + chunk - 1, end)
+        try:
+            logs = bob.tick_logs(tick, chunk_end)
+        except BobError:
+            gaps.append([tick, chunk_end])
+            break        # stop at the gap; the next pass retries from here
+        calls += 1
+        for day, agg in aggregate_by_day(burn_events(logs), default_day).items():
+            merged = days.setdefault(day, {
+                "burned": 0, "burn_events": 0, "contract_burned": 0,
+                "contract_events": 0, "by_contract": {},
+                "from_tick": None, "to_tick": None,
+            })
+            merged["burned"] += agg["burned"]
+            merged["burn_events"] += agg["burn_events"]
+            merged["contract_burned"] += agg["contract_burned"]
+            merged["contract_events"] += agg["contract_events"]
+            for k, v in agg["by_contract"].items():
+                merged["by_contract"][k] = merged["by_contract"].get(k, 0) + v
+            for field, fn in (("from_tick", min), ("to_tick", max)):
+                a, b = merged[field], agg[field]
+                merged[field] = b if a is None else (a if b is None else fn(a, b))
+        scanned_to = chunk_end
+        tick = chunk_end + 1
+
+    return {"days": days, "scanned_to": scanned_to, "calls": calls,
+            "gaps": gaps, "epoch": epoch,
+            "complete": scanned_to >= end}
+
+
+def reconcile(measured_delta: int, official_delta: int) -> dict:
+    """Compare our summed events against the official counter's step.
+
+    Coverage below 1.0 means a burn category exists that the scan does not yet
+    recognise. That is a finding to publish, not an error to hide — the same
+    discipline `linkage_coverage: 0` already applies to operator attribution.
+    An official delta of zero yields a null ratio rather than a division error:
+    it means the anchor has not stepped yet, not that coverage is perfect.
+    """
+    ratio = None
+    if official_delta > 0:
+        ratio = round(measured_delta / official_delta, 6)
+    return {
+        "measured_delta": int(measured_delta),
+        "official_delta": int(official_delta),
+        "ratio": ratio,
+        "missing": int(official_delta - measured_delta) if official_delta > 0 else None,
+        "observed_at": int(time.time()),
+    }
