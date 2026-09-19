@@ -550,9 +550,14 @@ def burn_contracts(epoch: int | None = Query(None, description="Restrict to one 
     A contract *index* is not yet a contract *name* — mapping the two needs a
     source this project does not have, so the index is reported as the index.
     """
+    # An empty result is an ANSWER here, not a missing service: measured across
+    # epochs 225-228, contract burns appear only in the end-epoch logs, so a
+    # store that has been scanning mid-epoch ticks for days legitimately holds
+    # none. 503 would be wrong twice over — it claims the data is not ready when
+    # it is, and it puts a red error in the browser console for a normal state.
+    # (Contrast /v1/burn/latest, where an empty store genuinely has nothing to
+    # say and 503 is the honest answer.)
     totals = get_store().burn_by_contract(epoch)
-    if not totals:
-        raise _no_data("contract burn data")
     grand = sum(totals.values()) or 1
     rows = [{"index": int(k) if k.lstrip("-").isdigit() else k,
              "burned": v, "share": round(v / grand, 6)}

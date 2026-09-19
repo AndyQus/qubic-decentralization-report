@@ -1078,10 +1078,15 @@ footer {
       showBuilding(e && e.status === 503 ? t("buildingBody") : t("unavailApi"));
     }
     await loadSeries();
+    /* Contract-Burns treten nach bisheriger Messung nur an Epochengrenzen auf,
+       also sind sie tagelang legitim leer. Das ist ein normaler Zustand, kein
+       Fehler — ein 503 wäre trotzdem rot in der Browser-Konsole gelandet und
+       hätte bei jedem Blick ins Devtools-Fenster nach einem Defekt ausgesehen.
+       Deshalb wird der Fall hier erwartet und still behandelt. */
     try {
-      contracts = await getJSON("/v1/burn/contracts");
-      renderContracts();
-    } catch (e) { /* noch keine Contract-Burns: Panel bleibt aus */ }
+      const r = await fetch("/v1/burn/contracts", { headers: { accept: "application/json" } });
+      if (r.ok) { contracts = await r.json(); renderContracts(); }
+    } catch (e) { /* offline oder file:// — Panel bleibt aus */ }
   }
 
   /* ─── Controls ──────────────────────────────────────────────────────────── */

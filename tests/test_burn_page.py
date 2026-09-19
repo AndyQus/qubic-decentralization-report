@@ -168,7 +168,12 @@ def test_an_empty_store_answers_503_rather_than_zeros():
     c = _client(d / "qdr.db")
     assert c.get("/v1/burn/latest").status_code == 503
     assert c.get("/v1/burn/series").status_code == 503
-    assert c.get("/v1/burn/contracts").status_code == 503
+    # /contracts is deliberately NOT a 503: contract burns appear only in the
+    # end-epoch logs, so holding none is a real answer rather than a store that
+    # is not ready. It returns an empty list, and the page hides the panel.
+    empty = c.get("/v1/burn/contracts")
+    assert empty.status_code == 200
+    assert empty.json()["by_contract"] == []
 
 
 def test_coverage_is_null_until_two_epoch_boundaries_are_on_record():
