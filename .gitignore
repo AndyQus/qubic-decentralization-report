@@ -36,3 +36,8 @@ Thumbs.db
 
 # verification screenshots (scratch)
 scripts/shot_*.png
+
+# Burn-page verification screenshots. scripts/verify_burn_page.py renders these
+# against whatever store is running - often a preview store with invented
+# figures, so they must never be committed as though they showed measurements.
+scripts/burn_*.png

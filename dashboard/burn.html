@@ -1,0 +1,942 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Burn Report — Qubic Decentralization Report</title>
+
+<!--
+  dashboard/burn.html — Verbrannte Supply: Gesamtsumme und gemessene Tageskurve.
+
+  Datenquellen:
+    GET /v1/burn/latest     — offizielle Gesamtsumme + was wir gemessen haben
+    GET /v1/burn/series     — die Reihe, nach Tag / Epoche / Jahr
+    GET /v1/burn/contracts  — Burns mit contractIndexBurnedFor
+
+  Der Punkt dieser Seite (CONCEPT_BURN §2): der offizielle Zähler `burnedQus`
+  bewegt sich NUR an Epochengrenzen. Alles, was feiner als eine Epoche ist,
+  haben wir selbst aus den Events eines Bob-Nodes gezählt — und genau so wird
+  es hier beschriftet. Nichts wird interpoliert, nichts geglättet.
+
+  Kein Build-Schritt, keine externe Library, keine CDN-Schriften.
+
+  Abschnitte:
+    1. Hero    — Gesamtsumme, Anteil, gemessene Rate
+    2. Chart   — Tag / Epoche / Jahr, Delta vs. kumulativ (inline SVG)
+    3. Contract — Aufschlüsselung nach Contract-Index
+    4. Einordnung — was gemessen ist und was nicht
+-->
+
+<style>
+/* ─── Design Tokens ────────────────────────────────────────────────────────── */
+/* Identisch zu mining.html/index.html, damit die Seiten als ein System lesen. */
+:root {
+  --bg:       #eef3f6;
+  --bg2:      #f6f9fb;
+  --surface:  #ffffff;
+  --surface2: #f1f5f8;
+  --border:   #d8e2e8;
+  --text:     #132430;
+  --muted:    #546773;
+  --faint:    #8698a2;
+  --accent:   #0aa17e;
+  --accent2:  #1f7fe0;
+  --warn:     #c9820f;
+  --danger:   #e0435f;
+  --shadow:   0 6px 20px rgba(20,40,55,.10);
+  --radius:   14px;
+  --mono:     ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:     system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+
+  /* Serienfarben. Gegen den dataviz-Validator geprüft (light, Fläche #ffffff):
+     CVD-Trennung ΔE 19.3 protan, Normalsicht 20.2, Kontrast alle ≥ 3:1.
+     Tritan liegt bei 4.7 — Blau/Grün ist für Tritanopie schwach getrennt,
+     deshalb trägt die Seite Identität nie über Farbe allein: Contract-Burns
+     stehen in einem EIGENEN Panel, und die kumulative Kurve ist eine Linie
+     gegen Balken, nicht ein zweiter Farbton. */
+  --burn:     #c9820f;   /* verbrannt pro Periode — die Hauptserie */
+  --burn-dim: rgba(201,130,15,.22);
+  --cum:      #1f7fe0;   /* kumulativ */
+  --contract: #0aa17e;   /* Contract-Burns, eigenes Panel */
+  --grid:     rgba(19,36,48,.09);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:       #0c141b;
+    --bg2:      #101820;
+    --surface:  #16232e;
+    --surface2: #1b2c38;
+    --border:   #263846;
+    --text:     #e6eef2;
+    --muted:    #8aa0ab;
+    --faint:    #5c7180;
+    --accent:   #22d3a6;
+    --accent2:  #3b9dff;
+    --warn:     #f5a623;
+    --danger:   #ff5c7a;
+    --shadow:   0 6px 24px rgba(0,0,0,.35);
+    /* Dunkel ist eigens gewählt, kein automatisches Umdrehen: gegen Fläche
+       #16232e geprüft — CVD ΔE 21.4 protan, Normalsicht 22.8, Kontrast ≥ 3:1. */
+    --burn:     #f5a623;
+    --burn-dim: rgba(245,166,35,.20);
+    --cum:      #3b9dff;
+    --contract: #22d3a6;
+    --grid:     rgba(230,238,242,.10);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg:       #0c141b;
+  --bg2:      #101820;
+  --surface:  #16232e;
+  --surface2: #1b2c38;
+  --border:   #263846;
+  --text:     #e6eef2;
+  --muted:    #8aa0ab;
+  --faint:    #5c7180;
+  --accent:   #22d3a6;
+  --accent2:  #3b9dff;
+  --warn:     #f5a623;
+  --danger:   #ff5c7a;
+  --shadow:   0 6px 24px rgba(0,0,0,.35);
+  --burn:     #f5a623;
+  --burn-dim: rgba(245,166,35,.20);
+  --cum:      #3b9dff;
+  --contract: #22d3a6;
+  --grid:     rgba(230,238,242,.10);
+}
+
+/* ─── Reset & Base ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+a { color: var(--accent2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ─── Header ────────────────────────────────────────────────────────────────── */
+header.top {
+  position: sticky; top: 0; z-index: 30;
+  background: linear-gradient(180deg, var(--bg2) 70%, transparent);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.top-inner {
+  max-width: 1120px; margin: 0 auto; padding: 10px 18px;
+  display: flex; align-items: center; gap: 12px;
+}
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.logo {
+  width: 30px; height: 30px; border-radius: 8px; flex: none;
+  background: radial-gradient(circle at 35% 30%, var(--burn), transparent 62%),
+              linear-gradient(140deg, var(--danger), var(--burn));
+}
+.brand h1 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
+.brand .sub { font-size: 11px; color: var(--muted); }
+.spacer { flex: 1; }
+.controls { display: flex; align-items: center; gap: 8px; }
+.how-link {
+  font-size: 12px; color: var(--muted); border: 1px solid var(--border);
+  border-radius: 9px; padding: 6px 10px; white-space: nowrap;
+}
+.how-link:hover { color: var(--text); text-decoration: none; }
+.seg {
+  display: inline-flex; border: 1px solid var(--border); border-radius: 9px;
+  overflow: hidden; background: var(--surface);
+}
+.seg button {
+  background: transparent; border: 0; color: var(--muted);
+  padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
+  font-family: var(--sans); min-height: 32px;
+}
+.seg button.active { background: var(--accent); color: #04231b; }
+:root[data-theme="light"] .seg button.active { color: #fff; }
+.icon-btn {
+  width: 36px; height: 32px; border: 1px solid var(--border);
+  border-radius: 9px; background: var(--surface);
+  color: var(--text); cursor: pointer; font-size: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* ─── Layout ────────────────────────────────────────────────────────────────── */
+main { max-width: 1120px; margin: 0 auto; padding: 22px 18px 60px; }
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 18px; margin-bottom: 18px;
+}
+.card h2 {
+  margin: 0 0 4px; font-size: 15px; font-weight: 700; letter-spacing: -.01em;
+}
+.card .desc { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); }
+
+/* ─── Hero ──────────────────────────────────────────────────────────────────── */
+.hero { padding: 26px 18px 22px; text-align: center; }
+.hero-label {
+  font-size: 11px; letter-spacing: .10em; text-transform: uppercase;
+  color: var(--muted); font-weight: 700;
+}
+.hero-count {
+  font-family: var(--mono); font-weight: 700; letter-spacing: -.02em;
+  font-size: clamp(30px, 8.5vw, 62px); line-height: 1.05;
+  color: var(--burn); margin: 6px 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+.hero-unit { font-size: 12px; color: var(--muted); }
+.hero-facts {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
+  margin-top: 18px;
+}
+.fact {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 11px; padding: 10px 14px; min-width: 132px;
+}
+.fact-label {
+  font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--faint); font-weight: 700;
+}
+.fact-value {
+  font-family: var(--mono); font-size: 16px; font-weight: 700; margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.fact-sub { font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+
+/* ─── Chart ─────────────────────────────────────────────────────────────────── */
+.chart-controls {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin-bottom: 14px;
+}
+/* Breite Inhalte scrollen in ihrem eigenen Container — der Seitenkörper
+   scrollt nie seitwärts. */
+.chart-scroll { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+.chart-svg { display: block; width: 100%; min-width: 320px; height: auto; }
+.chart-svg text { font-family: var(--sans); fill: var(--muted); }
+.axis-line { stroke: var(--border); stroke-width: 1; }
+.grid-line { stroke: var(--grid); stroke-width: 1; }
+.bar { fill: var(--burn); }
+.bar:hover { fill: var(--burn); filter: brightness(1.15); }
+.bar-hit { fill: transparent; cursor: pointer; }
+.cum-line { fill: none; stroke: var(--cum); stroke-width: 2;
+  stroke-linejoin: round; stroke-linecap: round; }
+.cum-dot { fill: var(--cum); stroke: var(--surface); stroke-width: 2; }
+.legend {
+  display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px;
+  font-size: 12px; color: var(--muted);
+}
+.legend i {
+  width: 11px; height: 11px; border-radius: 3px; display: inline-block;
+  vertical-align: -1px; margin-right: 5px;
+}
+.tip {
+  position: fixed; z-index: 60; pointer-events: none; opacity: 0;
+  transition: opacity .1s; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: var(--shadow); padding: 9px 11px; font-size: 12px;
+  max-width: 260px;
+}
+.tip.show { opacity: 1; }
+.tip-key { font-weight: 700; margin-bottom: 4px; }
+.tip-row { display: flex; justify-content: space-between; gap: 14px; }
+.tip-row span:last-child { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tip-note { margin-top: 5px; color: var(--faint); font-size: 11px; }
+
+/* Tabellenansicht: Identität nie nur über Farbe, und die Zahlen bleiben
+   lesbar, wenn das Diagramm es nicht ist. */
+.table-details { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+.table-details summary {
+  cursor: pointer; font-size: 12.5px; color: var(--muted);
+  list-style: none; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 32px; user-select: none;
+}
+.table-details summary::-webkit-details-marker { display: none; }
+.table-details summary::before { content: "▸"; font-size: 11px; }
+.table-details[open] summary::before { content: "▾"; }
+.table-details summary:hover { color: var(--text); }
+.table-wrap { overflow-x: auto; margin-top: 10px; max-height: 420px; overflow-y: auto; }
+table.data { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+table.data th, table.data td {
+  text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+table.data th:first-child, table.data td:first-child { text-align: left; }
+table.data th { color: var(--muted); font-weight: 700; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .05em; }
+table.data td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+table.data td:first-child { font-family: var(--sans); }
+
+/* ─── Contract-Panel ────────────────────────────────────────────────────────── */
+.ct-row {
+  display: grid; grid-template-columns: 90px 1fr 120px;
+  gap: 10px; align-items: center; padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ct-row:last-child { border-bottom: 0; }
+.ct-idx { font-family: var(--mono); font-size: 12.5px; font-weight: 700; }
+.ct-bar-track { background: var(--surface2); border-radius: 4px; height: 9px; }
+.ct-bar { background: var(--contract); border-radius: 4px; height: 9px; }
+.ct-val {
+  font-family: var(--mono); font-size: 12.5px; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Notices ───────────────────────────────────────────────────────────────── */
+.notice {
+  border: 1px solid var(--border); border-left: 3px solid var(--warn);
+  background: var(--surface2); border-radius: 10px;
+  padding: 12px 14px; font-size: 12.5px; color: var(--muted);
+  margin-bottom: 18px;
+}
+.notice strong { color: var(--text); }
+.empty { text-align: center; padding: 34px 18px; color: var(--muted); font-size: 13px; }
+footer {
+  max-width: 1120px; margin: 0 auto; padding: 0 18px 40px;
+  font-size: 11.5px; color: var(--faint);
+}
+
+/* ─── Mobile ────────────────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .top-inner { flex-wrap: wrap; padding: 9px 13px; }
+  .brand h1 { font-size: 15px; }
+  main { padding: 16px 13px 44px; }
+  .card { padding: 14px; }
+  .hero-facts { gap: 8px; }
+  .fact { flex: 1 1 calc(50% - 8px); min-width: 0; }
+  /* Die Umschaltung wird vollbreit, Touch-Ziele ≥ 44 px. */
+  .chart-controls { gap: 6px; }
+  .chart-controls .seg { flex: 1 1 100%; }
+  .chart-controls .seg button { flex: 1; min-height: 44px; font-size: 13px; }
+  .ct-row { grid-template-columns: 62px 1fr 96px; gap: 8px; }
+  .how-link { padding: 8px 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+      <div>
+        <h1 data-i18n="pageTitle">Burn Report</h1>
+        <div class="sub"><span data-i18n="subtitle">Burned supply · Qubic Decentralization Report</span></div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="controls">
+      <a class="how-link" href="./"><span data-i18n="backToReport">← Report</span></a>
+      <div class="seg" id="lang-seg">
+        <button data-lang="en">EN</button><button data-lang="de">DE</button>
+      </div>
+      <button class="icon-btn" id="theme-btn" aria-label="Theme">🌙</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- 1 — HERO ------------------------------------------------------------- -->
+  <section class="card hero" id="hero">
+    <div class="hero-label" data-i18n="heroLabel">Burned supply, total</div>
+    <div class="hero-count" id="hero-total">–</div>
+    <div class="hero-unit" id="hero-unit" data-i18n="quWord">QU</div>
+    <div class="hero-facts">
+      <div class="fact">
+        <div class="fact-label" data-i18n="shareLabel">Share of supply</div>
+        <div class="fact-value" id="f-share">–</div>
+        <div class="fact-sub" data-i18n="shareSub">of ever-issued QU</div>
+      </div>
+      <div class="fact">
+        <div class="fact-label" data-i18n="measuredLabel">Measured today</div>
+        <div class="fact-value" id="f-today">–</div>
+        <div class="fact-sub" id="f-today-sub">–</div>
+      </div>
+      <div class="fact">
+        <div class="fact-label" data-i18n="epochLabel">Epoch</div>
+        <div class="fact-value" id="f-epoch">–</div>
+        <div class="fact-sub" data-i18n="epochSub">official counter</div>
+      </div>
+      <div class="fact">
+        <div class="fact-label" data-i18n="coverageLabel">Coverage</div>
+        <div class="fact-value" id="f-coverage">–</div>
+        <div class="fact-sub" id="f-coverage-sub">measured vs. official</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Ehrlichkeitshinweis: steht ÜBER dem Diagramm, nicht im Kleingedruckten. -->
+  <div class="notice" id="honesty-note">
+    <strong data-i18n="noteTitle">What is measured here:</strong>
+    <span data-i18n="noteBody">The total above is the official counter, the same figure the explorer shows. It only steps once per epoch (~4.4 days), so every per-day figure below was counted by this project from a Qubic node's own burn events — starting when we began measuring. Nothing before that is interpolated.</span>
+  </div>
+
+  <!-- 2 — CHART ------------------------------------------------------------ -->
+  <section class="card">
+    <h2 data-i18n="chartTitle">Burned over time</h2>
+    <p class="desc" data-i18n="chartDesc">Counted from individual burn events. Each bar is one period; the line is the running total across the measured range.</p>
+
+    <div class="chart-controls">
+      <div class="seg" id="by-seg" role="group" aria-label="Grouping">
+        <button data-by="day" data-i18n="byDay">Day</button
+        ><button data-by="epoch" data-i18n="byEpoch">Epoch</button
+        ><button data-by="year" data-i18n="byYear">Year</button>
+      </div>
+      <div class="seg" id="mode-seg" role="group" aria-label="Mode">
+        <button data-mode="delta" data-i18n="modeDelta">Per period</button
+        ><button data-mode="cumulative" data-i18n="modeCumulative">Cumulative</button>
+      </div>
+    </div>
+
+    <div class="chart-scroll">
+      <svg class="chart-svg" id="chart" viewBox="0 0 900 340"
+           preserveAspectRatio="xMinYMin meet" role="img"></svg>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div id="chart-empty" class="empty" hidden></div>
+
+    <!-- Die Tabellenansicht macht die Zahlen ohne Farbe und ohne Hover
+         zugänglich (und druckbar). Standardmäßig zugeklappt: aufgeklappt
+         verdrängen 45 Zeilen das Diagramm, um das es hier geht — auf dem
+         Telefon um ein Vielfaches der Seitenhöhe. -->
+    <details class="table-details" id="table-details">
+      <summary data-i18n="tableToggle">Show the figures as a table</summary>
+      <div class="table-wrap" id="table-wrap">
+        <table class="data" id="data-table"></table>
+      </div>
+    </details>
+  </section>
+
+  <!-- 3 — CONTRACT --------------------------------------------------------- -->
+  <section class="card" id="contract-card" hidden>
+    <h2 data-i18n="ctTitle">Burns attributed to a contract</h2>
+    <p class="desc" data-i18n="ctDesc">A separate panel on purpose: these run six orders of magnitude below the computor burns, so a shared axis would hide them entirely. A contract index is not yet a contract name — no public index→name source exists, so the index is shown as the index.</p>
+    <div id="ct-list"></div>
+  </section>
+
+  <!-- 4 — EINORDNUNG ------------------------------------------------------- -->
+  <section class="card">
+    <h2 data-i18n="aboutTitle">Where these numbers come from</h2>
+    <p class="desc" style="margin-bottom:10px" data-i18n="aboutBody">The official counter (/v1/latest-stats → burnedQus) is cumulative and authoritative, but it is an epoch aggregate: measured over 375 ticks it did not move by a single QU. So a per-day series cannot come from it. This project counts the burn events themselves from a Bob node's tick logs and reconciles the sum against the official counter at every epoch boundary — that ratio is the coverage figure above. Where coverage falls below 100%, a burn category exists that this scan does not recognise yet, and it is reported rather than hidden.</p>
+    <p class="desc" style="margin-bottom:0">
+      <a href="./how-it-works.html" data-i18n="aboutLink">How this report works →</a>
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  <span data-i18n="footDisclaimer">Measured from public data. No figure on this page is estimated or interpolated. Use for analysis, not as a basis for investment decisions.</span>
+</footer>
+
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ─── Storage-Helfer (können in privaten Fenstern werfen) ──────────────── */
+  function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function safeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  const LS_LANG = "qdr.lang";
+  const LS_THEME = "qdr.theme";
+  const root = document.documentElement;
+
+  /* ─── i18n ──────────────────────────────────────────────────────────────
+     Beide Wörterbücher vollständig: ein fehlender Schlüssel darf einem Leser
+     nie als roher Schlüsselname erscheinen. */
+  const I18N = {
+    en: {
+      pageTitle: "Burn Report",
+      subtitle: "Burned supply · Qubic Decentralization Report",
+      backToReport: "← Report",
+      heroLabel: "Burned supply, total", quWord: "QU",
+      shareLabel: "Share of supply", shareSub: "of ever-issued QU",
+      measuredLabel: "Measured today", epochLabel: "Epoch",
+      epochSub: "official counter",
+      coverageLabel: "Coverage", coverageSub: "measured vs. official",
+      coverageOff: "⚠ implausible — see below",
+      tableToggle: "Show the figures as a table",
+      noteTitle: "What is measured here:",
+      noteBody: "The total above is the official counter, the same figure the explorer shows. It only steps once per epoch (~4.4 days), so every per-day figure below was counted by this project from a Qubic node's own burn events — starting when we began measuring. Nothing before that is interpolated.",
+      chartTitle: "Burned over time",
+      chartDesc: "Counted from individual burn events. Each bar is one period; the line is the running total across the measured range.",
+      byDay: "Day", byEpoch: "Epoch", byYear: "Year",
+      modeDelta: "Per period", modeCumulative: "Cumulative",
+      legendBurned: "Burned per period", legendCum: "Cumulative (measured range)",
+      ctTitle: "Burns attributed to a contract",
+      ctDesc: "A separate panel on purpose: these run six orders of magnitude below the computor burns, so a shared axis would hide them entirely. A contract index is not yet a contract name — no public index→name source exists, so the index is shown as the index.",
+      ctIndex: "Contract", ctShare: "share",
+      aboutTitle: "Where these numbers come from",
+      aboutBody: "The official counter (/v1/latest-stats → burnedQus) is cumulative and authoritative, but it is an epoch aggregate: measured over 375 ticks it did not move by a single QU. So a per-day series cannot come from it. This project counts the burn events themselves from a Bob node's tick logs and reconciles the sum against the official counter at every epoch boundary — that ratio is the coverage figure above. Where coverage falls below 100%, a burn category exists that this scan does not recognise yet, and it is reported rather than hidden.",
+      aboutLink: "How this report works →",
+      footDisclaimer: "Measured from public data. No figure on this page is estimated or interpolated. Use for analysis, not as a basis for investment decisions.",
+      thEvents: "Events", thBurned: "Burned (QU)", thPeriod: "Period",
+      thCumulative: "Cumulative (QU)",
+      tipEvents: "Burn events", tipBurned: "Burned", tipCum: "Cumulative",
+      tipTicks: "Ticks", tipMeasured: "Measured by this project from node events",
+      buildingTitle: "Nothing measured yet",
+      buildingBody: "The ingest worker has not recorded a burn measurement yet. It counts events from a Qubic node and writes the first day within a few minutes of starting.",
+      unavailApi: "API not reachable",
+      unavailFile: "This page was opened as a file (file://) and has no API. Start the server and open it through that: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/burn.html",
+      noContract: "No contract-attributed burns recorded yet.",
+      coverageNa: "n/a", coverageNaSub: "needs two epoch boundaries",
+      perDay: "/ day", eventsWord: "events", noData: "no data"
+    },
+    de: {
+      pageTitle: "Burn-Report",
+      subtitle: "Verbrannte Supply · Qubic Decentralization Report",
+      backToReport: "← Report",
+      heroLabel: "Verbrannte Supply, gesamt", quWord: "QU",
+      shareLabel: "Anteil an der Supply", shareSub: "der je ausgegebenen QU",
+      measuredLabel: "Heute gemessen", epochLabel: "Epoche",
+      epochSub: "offizieller Zähler",
+      coverageLabel: "Abdeckung", coverageSub: "gemessen vs. offiziell",
+      coverageOff: "⚠ unplausibel — siehe unten",
+      tableToggle: "Zahlen als Tabelle anzeigen",
+      noteTitle: "Was hier gemessen ist:",
+      noteBody: "Die Gesamtsumme oben ist der offizielle Zähler — dieselbe Zahl, die der Explorer zeigt. Er springt nur einmal pro Epoche (~4,4 Tage). Jeder Tageswert darunter wurde von diesem Projekt aus den Burn-Ereignissen eines Qubic-Nodes selbst gezählt, beginnend mit dem Start unserer Messung. Nichts davor ist interpoliert.",
+      chartTitle: "Verbrannt im Zeitverlauf",
+      chartDesc: "Aus einzelnen Burn-Ereignissen gezählt. Jeder Balken ist eine Periode; die Linie ist die laufende Summe über den gemessenen Bereich.",
+      byDay: "Tag", byEpoch: "Epoche", byYear: "Jahr",
+      modeDelta: "Pro Periode", modeCumulative: "Kumulativ",
+      legendBurned: "Verbrannt pro Periode", legendCum: "Kumulativ (gemessener Bereich)",
+      ctTitle: "Burns mit Contract-Zuordnung",
+      ctDesc: "Bewusst ein eigenes Panel: diese liegen sechs Größenordnungen unter den Computor-Burns, eine gemeinsame Achse würde sie vollständig verschwinden lassen. Ein Contract-Index ist noch kein Contract-Name — es gibt keine öffentliche Index→Name-Quelle, deshalb steht hier der Index.",
+      ctIndex: "Contract", ctShare: "Anteil",
+      aboutTitle: "Woher diese Zahlen kommen",
+      aboutBody: "Der offizielle Zähler (/v1/latest-stats → burnedQus) ist kumulativ und maßgeblich, aber ein Epochen-Aggregat: über 375 Ticks gemessen bewegte er sich um keinen einzigen QU. Eine Tagesreihe kann also nicht von ihm kommen. Dieses Projekt zählt die Burn-Ereignisse selbst aus den Tick-Logs eines Bob-Nodes und gleicht die Summe an jeder Epochengrenze gegen den offiziellen Zähler ab — dieses Verhältnis ist die Abdeckung oben. Fällt sie unter 100 %, existiert eine Burn-Kategorie, die dieser Scan noch nicht erkennt; sie wird ausgewiesen statt versteckt.",
+      aboutLink: "Wie dieser Report funktioniert →",
+      footDisclaimer: "Aus öffentlichen Daten gemessen. Keine Zahl auf dieser Seite ist geschätzt oder interpoliert. Zu Analysezwecken, nicht als Grundlage für Anlageentscheidungen.",
+      thEvents: "Ereignisse", thBurned: "Verbrannt (QU)", thPeriod: "Periode",
+      thCumulative: "Kumulativ (QU)",
+      tipEvents: "Burn-Ereignisse", tipBurned: "Verbrannt", tipCum: "Kumulativ",
+      tipTicks: "Ticks", tipMeasured: "Von diesem Projekt aus Node-Ereignissen gemessen",
+      buildingTitle: "Noch nichts gemessen",
+      buildingBody: "Der Ingest-Worker hat noch keine Burn-Messung aufgezeichnet. Er zählt Ereignisse von einem Qubic-Node und schreibt den ersten Tag wenige Minuten nach dem Start.",
+      unavailApi: "API nicht erreichbar",
+      unavailFile: "Diese Seite wurde als Datei (file://) geöffnet und hat keine API. Starte den Server und öffne sie darüber: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/burn.html",
+      noContract: "Noch keine Burns mit Contract-Zuordnung erfasst.",
+      coverageNa: "n/v", coverageNaSub: "braucht zwei Epochengrenzen",
+      perDay: "/ Tag", eventsWord: "Ereignisse", noData: "keine Daten"
+    }
+  };
+
+  let lang = safeGet(LS_LANG) || (String(navigator.language || "").toLowerCase().startsWith("de") ? "de" : "en");
+  let theme = safeGet(LS_THEME) || "dark";
+
+  function t(k, vars) {
+    let str = (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
+    if (typeof str !== "string" || str.indexOf("{") < 0) return str;
+    return str.replace(/\{(\w+)\}/g, (m, n) => (vars && vars[n] != null) ? vars[n] : m);
+  }
+  function renderI18nText() {
+    document.querySelectorAll("[data-i18n]").forEach(el => {
+      el.textContent = t(el.getAttribute("data-i18n"));
+    });
+  }
+
+  /* ─── Formatierung ──────────────────────────────────────────────────────── */
+  function locale() { return lang === "de" ? "de-DE" : "en-US"; }
+  function fmtInt(n) {
+    if (n == null || !isFinite(n)) return "–";
+    return Number(n).toLocaleString(locale());
+  }
+  /* Burn-Summen laufen in die Billionen. Voll ausgeschrieben sprengen sie jede
+     Achse, deshalb kompakt — die exakte Zahl steht im Tooltip und der Tabelle. */
+  function fmtCompact(n) {
+    if (n == null || !isFinite(n)) return "–";
+    const abs = Math.abs(n);
+    const units = lang === "de"
+      ? [[1e12, " Bio."], [1e9, " Mrd."], [1e6, " Mio."], [1e3, " Tsd."]]
+      : [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "K"]];
+    for (const [div, suf] of units) {
+      if (abs >= div) {
+        const v = n / div;
+        return v.toLocaleString(locale(), {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: v < 10 ? 2 : (v < 100 ? 1 : 0)
+        }) + suf;
+      }
+    }
+    return fmtInt(n);
+  }
+  function fmtPct(x, digits) {
+    if (x == null || !isFinite(x)) return "–";
+    return (x * 100).toLocaleString(locale(), {
+      minimumFractionDigits: digits == null ? 1 : digits,
+      maximumFractionDigits: digits == null ? 1 : digits
+    }) + " %";
+  }
+
+  /* ─── API ───────────────────────────────────────────────────────────────── */
+  const API = (location.protocol === "file:") ? null : "";
+  async function getJSON(path) {
+    if (API === null) throw new Error("file");
+    const r = await fetch(API + path, { headers: { accept: "application/json" } });
+    if (!r.ok) {
+      const err = new Error("HTTP " + r.status);
+      err.status = r.status;
+      throw err;
+    }
+    return r.json();
+  }
+
+  /* ─── Zustand ───────────────────────────────────────────────────────────── */
+  let by = "day";
+  let mode = "delta";
+  let latest = null;
+  let seriesCache = {};   // by -> payload
+  let contracts = null;
+
+  /* ─── Chart ─────────────────────────────────────────────────────────────── */
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const chart = document.getElementById("chart");
+  const tip = document.getElementById("tip");
+
+  function el(name, attrs, text) {
+    const n = document.createElementNS(SVG_NS, name);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  function showTip(evt, point) {
+    const rows = [];
+    rows.push(`<div class="tip-key">${escapeHtml(labelFor(point))}</div>`);
+    rows.push(`<div class="tip-row"><span>${escapeHtml(t("tipBurned"))}</span><span>${escapeHtml(fmtInt(point.burned))}</span></div>`);
+    rows.push(`<div class="tip-row"><span>${escapeHtml(t("tipEvents"))}</span><span>${escapeHtml(fmtInt(point.events))}</span></div>`);
+    if (mode === "cumulative") {
+      rows.push(`<div class="tip-row"><span>${escapeHtml(t("tipCum"))}</span><span>${escapeHtml(fmtInt(point.cumulative))}</span></div>`);
+    }
+    if (point.from_tick != null && point.to_tick != null) {
+      rows.push(`<div class="tip-row"><span>${escapeHtml(t("tipTicks"))}</span><span>${escapeHtml(fmtInt(point.from_tick))}–${escapeHtml(fmtInt(point.to_tick))}</span></div>`);
+    }
+    /* Jeder Punkt sagt, woher er kommt — das ist der Kern dieser Seite. */
+    rows.push(`<div class="tip-note">${escapeHtml(t("tipMeasured"))}</div>`);
+    tip.innerHTML = rows.join("");
+    tip.classList.add("show");
+    positionTip(evt);
+  }
+  function positionTip(evt) {
+    const pad = 12;
+    const r = tip.getBoundingClientRect();
+    let x = evt.clientX + pad, y = evt.clientY + pad;
+    if (x + r.width > window.innerWidth - 8) x = evt.clientX - r.width - pad;
+    if (y + r.height > window.innerHeight - 8) y = evt.clientY - r.height - pad;
+    tip.style.left = Math.max(8, x) + "px";
+    tip.style.top = Math.max(8, y) + "px";
+  }
+  function hideTip() { tip.classList.remove("show"); }
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[c]);
+  }
+
+  /* Tagesschlüssel kommen als 'YYYY-MM-DD'. Normalisiert wird trotzdem, weil
+     ein einstelliger Monat sonst als "2026-9-28" durchschlagen würde — in einer
+     Tabelle neben "2026-09-28" liest sich das wie zwei verschiedene Formate. */
+  function dayParts(key) {
+    const bits = String(key).split("-");
+    if (bits.length !== 3) return null;
+    const [y, m, d] = bits;
+    if (!/^\d{4}$/.test(y) || !/^\d{1,2}$/.test(m) || !/^\d{1,2}$/.test(d)) return null;
+    return { y, m: String(Number(m)).padStart(2, "0"), d: String(Number(d)).padStart(2, "0") };
+  }
+
+  function labelFor(p) {
+    if (by === "epoch") return t("byEpoch") + " " + p.key;
+    if (by === "day") {
+      const q = dayParts(p.key);
+      if (q) return lang === "de" ? `${q.d}.${q.m}.${q.y}` : `${q.y}-${q.m}-${q.d}`;
+    }
+    return String(p.key);
+  }
+
+  /* Kurzes Achsenlabel: ein voller Tag pro Balken kollidiert sofort. */
+  function axisLabel(p) {
+    if (by === "day") {
+      const q = dayParts(p.key);
+      if (q) return lang === "de" ? `${q.d}.${q.m}.` : `${q.m}-${q.d}`;
+    }
+    return String(p.key);
+  }
+
+  function drawChart(payload) {
+    const series = (payload && payload.series) || [];
+    const empty = document.getElementById("chart-empty");
+    const legend = document.getElementById("legend");
+    chart.innerHTML = "";
+
+    if (!series.length) {
+      empty.hidden = false;
+      empty.textContent = t("noData");
+      legend.innerHTML = "";
+      document.getElementById("table-wrap").hidden = true;
+      return;
+    }
+    empty.hidden = true;
+
+    /* Geometrie. Breite wächst mit der Punktzahl, damit Balken nie zu
+       Haarlinien werden — der Container scrollt dann horizontal. */
+    const H = 340, padL = 66, padR = 16, padT = 16, padB = 44;
+    const minStep = 26;
+    const W = Math.max(900, series.length * minStep + padL + padR);
+    chart.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    chart.style.minWidth = (W > 900 ? W : 320) + "px";
+
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const values = series.map(p => mode === "cumulative" ? p.cumulative : p.burned);
+    const maxV = Math.max.apply(null, values.concat([1]));
+    const y = v => padT + plotH - (v / maxV) * plotH;
+
+    /* Gitter + y-Achse: zurückhaltend, nie dominanter als die Daten. */
+    const TICKS = 4;
+    for (let i = 0; i <= TICKS; i++) {
+      const v = maxV * i / TICKS, yy = y(v);
+      chart.appendChild(el("line", {
+        class: "grid-line", x1: padL, x2: W - padR, y1: yy, y2: yy
+      }));
+      chart.appendChild(el("text", {
+        x: padL - 8, y: yy + 4, "text-anchor": "end", "font-size": "11"
+      }, fmtCompact(v)));
+    }
+    chart.appendChild(el("line", {
+      class: "axis-line", x1: padL, x2: W - padR,
+      y1: padT + plotH, y2: padT + plotH
+    }));
+
+    const step = plotW / series.length;
+    const barW = Math.max(3, Math.min(34, step - 6));
+
+    if (mode === "delta") {
+      series.forEach((p, i) => {
+        const cx = padL + step * i + step / 2;
+        const v = p.burned;
+        const yy = y(v);
+        const h = Math.max(1, padT + plotH - yy);
+        /* 4px gerundete Datenenden, an der Grundlinie verankert. */
+        chart.appendChild(el("rect", {
+          class: "bar", x: cx - barW / 2, y: yy, width: barW, height: h,
+          rx: Math.min(4, barW / 2)
+        }));
+      });
+    } else {
+      const pts = series.map((p, i) => [padL + step * i + step / 2, y(p.cumulative)]);
+      chart.appendChild(el("path", {
+        class: "cum-line",
+        d: pts.map((pt, i) => (i ? "L" : "M") + pt[0].toFixed(1) + " " + pt[1].toFixed(1)).join(" ")
+      }));
+      /* Marker ≥ 8px nur am Ende — ein Punkt auf jedem Wert wäre Rauschen. */
+      const last = pts[pts.length - 1];
+      chart.appendChild(el("circle", { class: "cum-dot", cx: last[0], cy: last[1], r: 4.5 }));
+    }
+
+    /* x-Achsenlabels ausdünnen, bis sie sicher passen. */
+    const everyN = Math.max(1, Math.ceil(series.length / Math.floor(plotW / 58)));
+    series.forEach((p, i) => {
+      if (i % everyN && i !== series.length - 1) return;
+      chart.appendChild(el("text", {
+        x: padL + step * i + step / 2, y: H - padB + 18,
+        "text-anchor": "middle", "font-size": "11"
+      }, axisLabel(p)));
+    });
+
+    /* Trefferflächen: größer als die Marke, damit Hover/Tap zuverlässig ist. */
+    series.forEach((p, i) => {
+      const hit = el("rect", {
+        class: "bar-hit", x: padL + step * i, y: padT,
+        width: step, height: plotH
+      });
+      hit.addEventListener("mouseenter", e => showTip(e, p));
+      hit.addEventListener("mousemove", positionTip);
+      hit.addEventListener("mouseleave", hideTip);
+      hit.addEventListener("click", e => showTip(e, p));
+      chart.appendChild(hit);
+    });
+
+    /* Legende: eine Serie braucht keinen Kasten, der Titel benennt sie.
+       Im kumulativen Modus sind es zwei Bedeutungen, also Legende. */
+    legend.innerHTML = mode === "cumulative"
+      ? `<span><i style="background:var(--cum)"></i>${escapeHtml(t("legendCum"))}</span>`
+      : `<span><i style="background:var(--burn)"></i>${escapeHtml(t("legendBurned"))}</span>`;
+
+    drawTable(series);
+  }
+
+  /* Tabellenansicht — Identität und Werte ohne Farbe, und druckbar. */
+  function drawTable(series) {
+    const wrap = document.getElementById("table-wrap");
+    const table = document.getElementById("data-table");
+    const head = `<thead><tr>
+      <th>${escapeHtml(t("thPeriod"))}</th>
+      <th>${escapeHtml(t("thBurned"))}</th>
+      <th>${escapeHtml(t("thEvents"))}</th>
+      <th>${escapeHtml(t("thCumulative"))}</th>
+    </tr></thead>`;
+    const rows = series.slice().reverse().map(p => `<tr>
+      <td>${escapeHtml(labelFor(p))}</td>
+      <td>${escapeHtml(fmtInt(p.burned))}</td>
+      <td>${escapeHtml(fmtInt(p.events))}</td>
+      <td>${escapeHtml(fmtInt(p.cumulative))}</td>
+    </tr>`).join("");
+    table.innerHTML = head + "<tbody>" + rows + "</tbody>";
+    wrap.hidden = false;
+  }
+
+  /* ─── Hero ──────────────────────────────────────────────────────────────── */
+  function renderHero() {
+    if (!latest) return;
+    document.getElementById("hero-total").textContent = fmtInt(latest.burned_total);
+    document.getElementById("f-share").textContent = fmtPct(latest.burned_share, 2);
+    document.getElementById("f-epoch").textContent = fmtInt(latest.epoch);
+
+    const m = latest.measured || {};
+    document.getElementById("f-today").textContent =
+      m.burned ? fmtCompact(m.burned) : "–";
+    document.getElementById("f-today-sub").textContent =
+      m.events ? (fmtInt(m.events) + " " + t("eventsWord")) : (m.last_day || "–");
+
+    const cov = latest.coverage;
+    const covEl = document.getElementById("f-coverage");
+    const covSub = document.getElementById("f-coverage-sub");
+    covEl.style.color = "";
+    if (!cov || cov.ratio == null) {
+      /* Ehrlich: keine Abdeckung ohne zwei Epochengrenzen — nicht "100 %". */
+      covEl.textContent = t("coverageNa");
+      covSub.textContent = t("coverageNaSub");
+    } else {
+      covEl.textContent = fmtPct(cov.ratio, 1);
+      /* Eine Abdeckung weit über 100 % ist kein guter Wert, sondern ein Hinweis,
+         dass die Messung eine unvollständige Epoche gegen ein volles Delta hält
+         (oder doppelt zählt). Sie als schlichte Kennzahl stehen zu lassen, wäre
+         genau die stille Fehlmessung, gegen die diese Seite gebaut ist. */
+      if (cov.ratio > 1.25 || cov.ratio < 0.75) {
+        covEl.style.color = "var(--danger)";
+        covSub.textContent = t("coverageOff");
+      } else {
+        covSub.textContent = t("coverageSub");
+      }
+    }
+  }
+
+  /* ─── Contract-Panel ────────────────────────────────────────────────────── */
+  function renderContracts() {
+    const card = document.getElementById("contract-card");
+    const list = document.getElementById("ct-list");
+    if (!contracts || !contracts.by_contract || !contracts.by_contract.length) {
+      card.hidden = true;
+      return;
+    }
+    card.hidden = false;
+    const max = Math.max.apply(null, contracts.by_contract.map(c => c.burned).concat([1]));
+    list.innerHTML = contracts.by_contract.map(c => `
+      <div class="ct-row">
+        <div class="ct-idx">${escapeHtml(t("ctIndex"))} ${escapeHtml(String(c.index))}</div>
+        <div class="ct-bar-track"><div class="ct-bar" style="width:${(c.burned / max * 100).toFixed(1)}%"></div></div>
+        <div class="ct-val">${escapeHtml(fmtInt(c.burned))}</div>
+      </div>`).join("");
+  }
+
+  /* ─── Laden ─────────────────────────────────────────────────────────────── */
+  function showBuilding(bodyText) {
+    const note = document.getElementById("honesty-note");
+    note.innerHTML = `<strong>${escapeHtml(t("buildingTitle"))}</strong> ${escapeHtml(bodyText || t("buildingBody"))}`;
+    document.getElementById("chart-empty").hidden = false;
+    document.getElementById("chart-empty").textContent = t("buildingTitle");
+  }
+
+  async function loadSeries() {
+    if (seriesCache[by]) { drawChart(seriesCache[by]); return; }
+    try {
+      const data = await getJSON(`/v1/burn/series?by=${encodeURIComponent(by)}`);
+      seriesCache[by] = data;
+      drawChart(data);
+    } catch (e) {
+      drawChart({ series: [] });
+      if (e && e.status === 503) showBuilding();
+    }
+  }
+
+  async function loadAll() {
+    try {
+      latest = await getJSON("/v1/burn/latest");
+      renderHero();
+    } catch (e) {
+      if (e && e.message === "file") { showBuilding(t("unavailFile")); return; }
+      showBuilding(e && e.status === 503 ? t("buildingBody") : t("unavailApi"));
+    }
+    await loadSeries();
+    try {
+      contracts = await getJSON("/v1/burn/contracts");
+      renderContracts();
+    } catch (e) { /* noch keine Contract-Burns: Panel bleibt aus */ }
+  }
+
+  /* ─── Controls ──────────────────────────────────────────────────────────── */
+  function syncSeg(id, attr, value) {
+    document.querySelectorAll(`#${id} button`).forEach(b => {
+      b.classList.toggle("active", b.dataset[attr] === value);
+    });
+  }
+
+  document.getElementById("by-seg").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    by = b.dataset.by; syncSeg("by-seg", "by", by); loadSeries();
+  });
+  document.getElementById("mode-seg").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    mode = b.dataset.mode; syncSeg("mode-seg", "mode", mode);
+    if (seriesCache[by]) drawChart(seriesCache[by]);
+  });
+
+  function applyLang() {
+    root.setAttribute("lang", lang);
+    renderI18nText();
+    syncSeg("lang-seg", "lang", lang);
+    /* Von render() geschriebene Werte sind keine data-i18n-Knoten, also neu
+       zeichnen — sonst behielten sie die vorherige Sprache. */
+    renderHero();
+    renderContracts();
+    if (seriesCache[by]) drawChart(seriesCache[by]);
+  }
+  document.getElementById("lang-seg").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    lang = b.dataset.lang; safeSet(LS_LANG, lang); applyLang();
+  });
+
+  function applyTheme() {
+    root.setAttribute("data-theme", theme);
+    document.getElementById("theme-btn").textContent = theme === "dark" ? "🌙" : "☀️";
+    if (seriesCache[by]) drawChart(seriesCache[by]);
+  }
+  document.getElementById("theme-btn").addEventListener("click", () => {
+    theme = theme === "dark" ? "light" : "dark";
+    safeSet(LS_THEME, theme); applyTheme();
+  });
+
+  window.addEventListener("resize", () => { if (seriesCache[by]) drawChart(seriesCache[by]); });
+
+  /* ─── Start ─────────────────────────────────────────────────────────────── */
+  syncSeg("by-seg", "by", by);
+  syncSeg("mode-seg", "mode", mode);
+  applyTheme();
+  applyLang();
+  loadAll();
+})();
+</script>
+</body>
+</html>
