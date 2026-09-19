@@ -369,11 +369,15 @@ einer falschen Zahl darin.
 
 ## 9. Offene Fragen
 
-**Q1 — Treten `BURNING`-Ereignisse mitten in der Epoche auf?** Beobachtet in
-`qubic_getEndEpochLogs` (4–5 pro Epoche); die 500-Tick-Stichprobe normaler Ticks enthielt
-keine. Der Scan zählt sie, wo immer sie auftreten; die Antwort wird hier festgehalten,
-sobald eine volle Epoche gescannt ist. Bis dahin spiegelt `contract_burned` womöglich nur
-Ereignisse an der Epochengrenze.
+**Q1 — Treten `BURNING`-Ereignisse mitten in der Epoche auf? — BEANTWORTET: ja.** Der
+Entwurf hielt es für möglich, dass sie auf die Epochengrenze beschränkt sind, weil die
+erste 500-Tick-Stichprobe keine enthielt. Ein breiterer Scan entscheidet es: über die Ticks
+80.811.175–80.829.394 zählte der Scan **18 Contract-Burn-Ereignisse mit zusammen
+159.371 QU**, auf die Contract-Indizes **13 und 4** — von denen keiner in irgendeinem
+End-Epoch-Log auftaucht. Contract-Burns mitten in der Epoche sind also real, sie betreffen
+andere Contracts als die an der Grenze (9, 10, 12, 19, 27), und `contract_burned` erfasst
+beides. Die 500-Tick-Stichprobe war schlicht zu klein: bei ~1 Contract-Burn je 1.000 Ticks
+war die Chance, nichts zu sehen, etwa fifty-fifty.
 
 **Q2 — Was sind die Contract-Indizes?** Gemessen: 9, 10, 12, 19, 27. Index 19 ist der
 größte und stetigste (250k–450k QU/Epoche). Die Zuordnung Index → Contract-Name braucht

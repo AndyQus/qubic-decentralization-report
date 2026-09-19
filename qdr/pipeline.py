@@ -451,6 +451,13 @@ DEFAULT_BURN_DAYS = 90
 # correctly, while one replaying last week's ticks does not.
 MAX_DATING_LAG_TICKS = 100_000
 
+# Ceiling on a catch-up pass. 120 calls x 500 ticks = 60,000 ticks, about 6 hours
+# of chain at the measured rate — enough to absorb a long RPC outage in one pass,
+# and still bounded so the scan cannot run away with the worker or hammer a
+# public node. Beyond this the dating rule takes over anyway (a pass further
+# behind than MAX_DATING_LAG_TICKS skips to the head).
+CATCHUP_MAX_CALLS = 120
+
 
 def sample_burn_total(client: CachedClient, store: Store) -> Optional[dict]:
     """Record the official cumulative burn counter for the running epoch.
@@ -542,8 +549,23 @@ def scan_burns(
         skipped_from = start
         start = max(0, tick - burn.CHUNK_TICKS * max_calls)
 
+    # Size the budget to the actual backlog rather than a fixed number of calls.
+    #
+    # The watch loop does not run at its nominal interval: the balance snapshot
+    # ahead of it makes 676 sequential RPC calls at ~1.75 s each (measured), so a
+    # pass comes round roughly every 20 minutes whatever --interval says. At
+    # ~2.7 ticks/s that is ~3,250 ticks of drift per pass, against a fixed budget
+    # covering 10,000 — it keeps up, but the margin shrinks to almost nothing if
+    # the RPC has a slow day and the gap stretches to an hour.
+    #
+    # Rather than depend on that arithmetic staying true, let a pass that is
+    # behind buy the calls it needs to catch up, with a ceiling so it still
+    # cannot monopolise the worker or the public node.
+    behind = max(0, tick - start + 1)
+    needed = -(-behind // burn.CHUNK_TICKS)           # ceil
+    budget = max(max_calls, min(CATCHUP_MAX_CALLS, needed))
     out = burn.scan_range(bob, start, tick, epoch=pulse_epoch or 0,
-                          max_calls=max_calls,
+                          max_calls=budget,
                           default_day=burn.observed_day())
     written = 0
     for day, agg in out["days"].items():

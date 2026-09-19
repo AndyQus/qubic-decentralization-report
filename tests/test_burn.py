@@ -260,6 +260,45 @@ def test_rescanning_a_window_overwrites_instead_of_doubling():
     assert series[0]["burned"] == 5_000_000
 
 
+def test_a_wider_rescan_supersedes_the_buckets_it_covers():
+    """Overlapping windows double-count, and the primary key does not stop them:
+    it only dedupes an identical window.
+
+    Measured live: a catch-up pass re-read ticks 80,812,215-80,829,173, landed
+    beside two earlier buckets sitting inside that range, and the day's total
+    came out 13.1% high. The wider measurement counted exactly the same events,
+    so it supersedes them.
+    """
+    s = fresh_store()
+    s.put_burn_bucket(1000, 1499, 231, "2026-09-19", burned=1_000_000, burn_events=1)
+    s.put_burn_bucket(1500, 1999, 231, "2026-09-19", burned=2_000_000, burn_events=2)
+    # a catch-up pass re-reads the whole span in one window
+    s.put_burn_bucket(500, 2499, 231, "2026-09-19", burned=9_000_000, burn_events=9)
+
+    series = s.burn_series(by="day")
+    assert len(series) == 1
+    assert series[0]["burned"] == 9_000_000, "contained buckets were counted twice"
+    assert series[0]["events"] == 9
+
+
+def test_a_bucket_outside_the_rescanned_window_survives():
+    """Superseding must not reach beyond what the new window actually covered."""
+    s = fresh_store()
+    s.put_burn_bucket(1000, 1499, 231, "2026-09-19", burned=1_000_000, burn_events=1)
+    s.put_burn_bucket(5000, 5499, 231, "2026-09-19", burned=4_000_000, burn_events=4)
+    s.put_burn_bucket(900, 2000, 231, "2026-09-19", burned=3_000_000, burn_events=3)
+    assert s.burn_series(by="day")[0]["burned"] == 7_000_000   # 3M + untouched 4M
+
+
+def test_superseding_is_scoped_to_the_day():
+    """A window is written per day; it must not delete another day's buckets."""
+    s = fresh_store()
+    s.put_burn_bucket(1000, 1499, 231, "2026-09-18", burned=1_000_000, burn_events=1)
+    s.put_burn_bucket(900, 2000, 231, "2026-09-19", burned=3_000_000, burn_events=3)
+    days = {r["key"]: r["burned"] for r in s.burn_series(by="day")}
+    assert days == {"2026-09-18": 1_000_000, "2026-09-19": 3_000_000}
+
+
 def test_series_groups_by_day_epoch_and_year_from_one_table():
     s = fresh_store()
     s.put_burn_bucket(1000, 1499, 231, "2026-09-02", burned=1_000_000, burn_events=1)
@@ -321,6 +360,37 @@ def test_a_scan_near_the_head_dates_its_burns():
     out = pipeline.scan_burns(StubRpc(head), s, StubBob(per_chunk=2), max_calls=2)
     assert out["days_written"] == 1
     assert s.burn_series(by="day")[0]["burned"] > 0
+
+
+def test_a_pass_that_is_behind_buys_the_calls_it_needs_to_catch_up():
+    """The watch loop does not run at its nominal interval — the balance
+    snapshot ahead of it takes ~20 min (676 sequential RPC calls at ~1.75 s,
+    measured), so the burn scan comes round on that cadence instead. A fixed
+    call budget left almost no margin once the gap stretched, so a pass sizes
+    its budget to the backlog."""
+    from qdr import pipeline
+    s = fresh_store()
+    head = 1_000_000
+    gap = 20_000                       # ~2 h of chain, well past a 20-call budget
+    s.set_burn_scan_state(last_tick=head - gap, first_tick=head - gap)
+    bob = StubBob(per_chunk=1)
+    out = pipeline.scan_burns(StubRpc(head), s, bob, max_calls=20)
+
+    assert out["complete"], "a catch-up pass must reach the head"
+    assert out["behind"] <= 1
+    assert out["calls"] > 20, "budget did not grow with the backlog"
+
+
+def test_a_catch_up_pass_is_still_bounded():
+    """Unbounded catch-up would let one pass monopolise the worker and hammer a
+    public node."""
+    from qdr import pipeline
+    s = fresh_store()
+    head = 10_000_000
+    s.set_burn_scan_state(last_tick=head - 90_000, first_tick=head - 90_000)
+    bob = StubBob(per_chunk=1)
+    out = pipeline.scan_burns(StubRpc(head), s, bob, max_calls=20)
+    assert out["calls"] <= pipeline.CATCHUP_MAX_CALLS
 
 
 def test_a_scan_far_behind_the_head_skips_to_the_head_and_reports_the_hole():

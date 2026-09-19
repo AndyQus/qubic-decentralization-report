@@ -348,10 +348,14 @@ wrong number in it.
 
 ## 9. Open questions
 
-**Q1 — Do `BURNING` events occur mid-epoch?** Observed in `qubic_getEndEpochLogs` (4–5 per
-epoch); the 500-tick sample of normal ticks contained none. The scan will count them
-wherever they appear; the answer gets recorded here once a full epoch has been scanned.
-Until then, `contract_burned` may only reflect epoch-boundary events.
+**Q1 — Do `BURNING` events occur mid-epoch? — ANSWERED: yes.** The draft assumed they
+might be confined to the epoch boundary, because the first 500-tick sample contained none.
+A wider scan settles it: over ticks 80,811,175–80,829,394 the scan counted **18 contract
+burn events totalling 159,371 QU**, against contract indices **13 and 4** — neither of
+which appears in any end-epoch log. So mid-epoch contract burns are real, they are a
+different set of contracts from the boundary ones (9, 10, 12, 19, 27), and `contract_burned`
+covers both. The 500-tick sample was simply too small: at ~1 contract burn per 1,000 ticks
+it had roughly even odds of seeing nothing.
 
 **Q2 — What are the contract indices?** Measured: 9, 10, 12, 19, 27. Index 19 is the
 largest and steadiest (250k–450k QU/epoch). Mapping index → contract name needs a source

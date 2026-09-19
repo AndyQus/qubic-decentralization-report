@@ -615,11 +615,31 @@ class Store:
     ) -> None:
         """Record one scanned tick window's burn totals.
 
-        A rescan of the same window overwrites rather than accumulating: scanning
-        ticks 100-199 twice must not double the day's burn. That makes a rescan
-        safe, which is what lets the worker retry a window it could not finish.
+        A rescan overwrites rather than accumulating: scanning ticks 100-199
+        twice must not double the day's burn. That makes a rescan safe, which is
+        what lets the worker retry a window it could not finish.
+
+        Overlapping windows are the harder case, and the one that actually bit:
+        the primary key only dedupes an IDENTICAL window, so a catch-up pass
+        re-reading 80,812,215-80,829,173 landed beside two earlier buckets inside
+        that range and the day's total came out 13.1% high. Any stored bucket the
+        new window covers is therefore deleted first — the new, wider measurement
+        supersedes it, having counted exactly the same events.
+
+        Partial overlap is deliberately NOT merged: it would mean either dropping
+        events or keeping a bucket whose tick window no longer describes what it
+        counted, and the window is what makes a figure recomputable by a third
+        party. The scan advances a single pointer, so partial overlap does not
+        arise in practice; if it ever does, the two buckets stay side by side and
+        the coverage figure is what surfaces it.
         """
         with self._tx() as c:
+            # drop buckets fully contained in the window being written
+            c.execute(
+                "DELETE FROM burn_buckets WHERE day=? AND from_tick>=? AND to_tick<=? "
+                "AND NOT (from_tick=? AND to_tick=?)",
+                (day, int(from_tick), int(to_tick), int(from_tick), int(to_tick)),
+            )
             c.execute(
                 "INSERT INTO burn_buckets (from_tick,to_tick,epoch,day,burned,burn_events,"
                 "contract_burned,contract_events,by_contract,scanned_at) "
