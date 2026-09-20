@@ -96,6 +96,56 @@ python scripts/ingest.py --refresh-stale ||   echo "[worker] stale refresh incom
 echo "[worker] seeding the burn scan ..."
 python scripts/ingest.py --burn-scan ||   echo "[worker] burn scan incomplete; the watch loop will continue it" >&2
 
+# Fill the days BEFORE this worker existed, if asked to.
+#
+# The live scan can only date what it watches happen (tick logs carry no
+# timestamp), so a fresh deployment's burn series starts at its own cold start
+# and the page shows one partial day. QDR_BURN_BACKFILL_DAYS counts the days
+# before that, dating each tick by measurement instead of by observation.
+#
+# DEFAULTS ON, at 4 days, which is a deliberate reversal worth explaining.
+#
+# It costs hundreds of heavy calls against a Bob node that is usually someone
+# else's, so the polite default is off, and that is how this shipped first. But
+# the deployment this image actually serves is installed by a watcher that pulls
+# the image and runs it — it sets no environment, so an opt-in flag there can
+# never be switched on, and the burn page would stay at one partial day forever.
+#
+# A default nobody can reach is not a choice, it is a permanent off. So the cost
+# is paid once per deployment instead: the run is recorded in the store, and
+# every restart after it skips the window rather than re-scanning it. Operators
+# who do control their environment can still set QDR_BURN_BACKFILL_DAYS=0.
+#
+# Four days is one Qubic epoch (~4.4 days), which is the span the page's own
+# reconciliation is measured over — less would leave the epoch view short.
+BURN_BACKFILL_DAYS="${QDR_BURN_BACKFILL_DAYS:-4}"
+if [ "$BURN_BACKFILL_DAYS" -gt 0 ] 2>/dev/null; then
+  # Budget scales with the ask. A day of chain is ~134,000 ticks at the measured
+  # 1.55 ticks/s, and a call covers 500 — so ~270 calls per day, plus headroom.
+  # A fixed default would silently cover only the first day and leave the rest
+  # for the next restart, which reads as a backfill that never finishes.
+  BURN_BACKFILL_CALLS="${QDR_BURN_BACKFILL_CALLS:-$(( BURN_BACKFILL_DAYS * 300 + 100 ))}"
+
+  # IN THE BACKGROUND, because it is slow and nothing waits on it.
+  #
+  # Measured against the public node: one 500-tick chunk takes ~2.1 s, so a day
+  # is ~9 minutes and the 4-day default is ~38. Run in the foreground that is 38
+  # minutes in which the watch loop has not started — no live burn scan, and no
+  # balance snapshots. The snapshots are the part that cannot wait: an epoch
+  # boundary is not replayable, so one missed while backfilling is missed for
+  # good, and the backfill would have cost exactly the data it cannot recover.
+  #
+  # The two do not collide. The backfill writes whole measured days and the live
+  # scan writes the running one; `put_burn_bucket` supersedes by containment, and
+  # both are idempotent per day. The store is WAL-mode SQLite, which is built for
+  # one writer plus readers — and these two writers touch different days.
+  echo "[worker] backfilling the last ${BURN_BACKFILL_DAYS} day(s) of burns in the background"
+  echo "[worker]   (~9 min per day against the public node; the watch loop starts now)"
+  (
+    python scripts/ingest.py --burn-backfill --burn-backfill-days "${BURN_BACKFILL_DAYS}" --burn-calls "${BURN_BACKFILL_CALLS}" &&       echo "[worker] burn backfill finished" ||       echo "[worker] burn backfill incomplete; it resumes on the next start" >&2
+  ) &
+fi
+
 # One mining reading before the watch loop, for the same reason the burn scan is
 # seeded: the page should have a measurement in hand at start, not after the
 # first interval. Two points make a curve, so the loop fills it out from here.

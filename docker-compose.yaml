@@ -50,6 +50,16 @@ services:
       # How many epochs to seal on first start. Bob keeps end-epoch logs well
       # past this, so a new deployment has real history within minutes.
       - QDR_BACKFILL_EPOCHS=${QDR_BACKFILL_EPOCHS:-10}
+      # Days of burn history to count on first start, from BEFORE this worker
+      # existed. The live scan can only date ticks it watches go by, so without
+      # this the burn series begins at deployment and the page shows one partial
+      # day. Defaults to 4 (one epoch) because the deployment this image serves
+      # is installed by a watcher that sets no environment — an opt-in flag there
+      # could never be switched on. Set 0 to turn it off.
+      # It runs once: a completed window is recorded and a restart skips it, and
+      # a run that stopped short is resumed rather than declared finished.
+      # Costs ~270 calls per day; the budget scales with the days asked for.
+      - QDR_BURN_BACKFILL_DAYS=${QDR_BURN_BACKFILL_DAYS:-4}
       # How often the running epoch is refreshed. The analysis only changes at an
       # epoch boundary (~4.4 days), but balance snapshots must be taken while the
       # boundary is passing, so this stays well under it.

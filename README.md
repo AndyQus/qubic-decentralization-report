@@ -302,6 +302,50 @@ docker image prune -f              # remove the superseded image
 | `QDR_PULSE_TTL` | Seconds the live pulse is cached | `10` |
 | `QDR_MINING_TTL` | Seconds a live mining reading is cached before a node is queried again | `30` |
 | `QDR_MINING_SAMPLE_INTERVAL` | Seconds between mining samples written to the store by the ingest worker | `30` |
+| `QDR_BURN_BACKFILL_DAYS` | Days of burn history to count on start, from before the worker existed (see below) | `4` (one epoch; `0` disables) |
+| `QDR_BURN_BACKFILL_CALLS` | Call budget for that backfill | `days x 300 + 100` (~270 calls buy one day) |
+
+### Burn history: why it starts empty, and how to fill it
+
+Tick logs carry no timestamp. The live scan therefore dates a burn by the moment
+it watched it happen, which is only true near the chain head — so a fresh
+deployment's burn series begins at its own cold start, and the burn page shows a
+single partial day (the first pass covers ~10,000 ticks, roughly an hour, rather
+than issuing ~1,400 heavy calls against a public node before the page shows
+anything).
+
+Older days are not lost, only unfilled: `/v1/ticks/{t}/tick-data` carries a real
+wall-clock time, so a past tick can be dated by measurement rather than assumed
+from a tick rate. The worker therefore counts the last **4 days** (one epoch) on
+its first start, and `QDR_BURN_BACKFILL_DAYS` changes or disables that:
+
+```bash
+docker run -e QDR_BURN_BACKFILL_DAYS=7 ...        # more history
+docker run -e QDR_BURN_BACKFILL_DAYS=0 ...        # off
+python scripts/ingest.py --burn-backfill --burn-backfill-days 4   # locally
+```
+
+It defaults to **on** despite costing a few hundred calls against a public node,
+because the deployment this image serves is installed by a watcher that pulls the
+image and sets no environment. An opt-in flag there could never be switched on,
+and the burn page would stay at a single partial day permanently — a default
+nobody can reach is not a choice. The cost is paid once per deployment.
+
+A day of chain is ~134,000 ticks at the measured 1.55 ticks/s and one call
+covers 500, so **a day costs ~270 calls**; the budget scales with the days asked
+for unless `QDR_BURN_BACKFILL_CALLS` overrides it. A run that exhausts its budget
+stops partway, is *not* recorded as done, and resumes on the next start.
+
+It runs **once**: a completed window is recorded in the store and a restart
+skips it, so a host that reinstalls the image on every push does not re-scan the
+same ticks. A run that stopped early — at a gap Bob could not serve, or on its
+call budget — is *not* recorded, so it resumes on the next start instead of
+leaving a silent hole. `--burn-backfill-force` recounts a window already recorded
+as done.
+
+Until one whole day has been measured, the chart's Epoch and Year views stay
+disabled: aggregating a partial day would draw an hour as though it were a full
+period, and a bar is believed faster than the footnote under it is read.
 
 ### Mining history: why it is stored
 

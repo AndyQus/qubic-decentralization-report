@@ -228,3 +228,198 @@ def test_an_unbounded_day_falls_back_and_says_so():
     point = pipeline.build_burn_series(store, by="day")["series"][0]
     assert point["period_measured"] is False
     assert point["period_ticks"] == pipeline.TICKS_PER_DAY
+
+
+# ── the once-per-deployment guard ──────────────────────────────────────────
+#
+# `backfill_burns_days` is what the worker runs on every container start, on a
+# host whose watcher restarts the image on every push. Its cost is hundreds of
+# heavy calls against a Bob node that is usually someone else's, so "runs once"
+# is not a nicety — it is the property that makes it safe to leave switched on.
+
+
+def test_a_completed_backfill_is_not_repeated_on_the_next_start():
+    """The second start must not touch the node at all."""
+    head = _tick_at("2026-09-20", hour=1)
+    store = fresh_store()
+    bob = FakeBob(burn_ticks=[_tick_at("2026-09-18", hour=13)], indexed=head)
+
+    first = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3,
+                                         max_calls=2000)
+    assert first.get("reason") is None
+    assert first["recorded"] is True
+    calls_after_first = len(bob.calls)
+    assert calls_after_first > 0
+
+    second = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3,
+                                          max_calls=2000)
+    assert second["reason"] == "already done"
+    assert len(bob.calls) == calls_after_first, "the node was scanned twice"
+
+
+def test_a_backfill_that_hit_a_gap_is_retried_on_the_next_start():
+    """A hole is not a finished job: not recorded, so the next start resumes."""
+    head = _tick_at("2026-09-20", hour=1)
+    store = fresh_store()
+    # Bob refuses everything from midway on, so the run stops at a gap.
+    bob = FakeBob(indexed=head, fail_from=_tick_at("2026-09-19"))
+
+    out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3)
+    assert out["recorded"] is False
+    assert not store.burn_backfill_done(out["from_tick"], out["to_tick"])
+
+    again = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3)
+    assert again.get("reason") != "already done"
+
+
+def test_force_reruns_a_window_already_recorded():
+    head = _tick_at("2026-09-20", hour=1)
+    store = fresh_store()
+    bob = FakeBob(burn_ticks=[_tick_at("2026-09-18", hour=13)], indexed=head)
+
+    pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3)
+    before = len(bob.calls)
+    out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3,
+                                       force=True)
+    assert out.get("reason") is None
+    assert len(bob.calls) > before
+
+
+def test_zero_days_is_off_and_never_calls_the_node():
+    """The default. An unset env var must cost nothing."""
+    head = _tick_at("2026-09-20", hour=1)
+    bob = FakeBob(indexed=head)
+    client = FakeClient(head)
+    out = pipeline.backfill_burns_days(client, fresh_store(), bob, days=0)
+    assert out["reason"] == "disabled"
+    assert not bob.calls and client.lookups == 0
+
+
+def test_the_window_starts_at_a_measured_day_boundary_not_an_assumed_rate():
+    """`days=2` must reach back to yesterday's midnight, by measurement.
+
+    Deriving the start from a tick rate is the error this module exists to
+    retire: the rate the old code assumed is nearly double the measured one, so
+    arithmetic would land on the wrong day.
+    """
+    head = _tick_at("2026-09-20", hour=6)
+    store = fresh_store()
+    bob = FakeBob(indexed=head)
+    out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=2)
+    # Day 2 of 2 counting back from 2026-09-20 is 2026-09-19.
+    expected = _tick_at("2026-09-19")
+    assert abs(out["from_tick"] - expected) <= 2, (out["from_tick"], expected)
+
+
+def test_a_window_older_than_bobs_history_starts_at_bobs_floor():
+    """Asking for more history than the node retains must not ask below it."""
+    head = _tick_at("2026-09-20", hour=1)
+    floor = _tick_at("2026-09-19", hour=12)
+    store = fresh_store()
+    bob = FakeBob(indexed=head, initial=floor)
+    out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=30)
+    assert out["from_tick"] >= floor
+    for frm, _to in bob.calls:
+        assert frm >= floor
+
+
+def test_a_run_that_ran_out_of_budget_is_not_recorded_as_done():
+    """Found by a live run, not by reasoning: a budget-limited pass stops
+    partway with NO gap recorded, so testing `gaps` alone marked a window done
+    that had 90% of its ticks uncounted — and the next start would have skipped
+    exactly those."""
+    head = _tick_at("2026-09-20", hour=1)
+    store = fresh_store()
+    bob = FakeBob(indexed=head)
+    out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3,
+                                       max_calls=2)          # far too few
+    assert not out["gaps"], "this test is only meaningful without a gap"
+    assert out["complete"] is False
+    assert out["reached_tick"] < out["to_tick"]
+    assert out["recorded"] is False
+    assert not store.burn_backfill_done(out["from_tick"], out["to_tick"])
+
+    # and the next start must therefore still do the work
+    again = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3,
+                                         max_calls=2)
+    assert again.get("reason") != "already done"
+
+
+def test_a_full_run_reports_complete_and_is_recorded():
+    """The other side of the same rule, so it cannot be satisfied by never
+    recording anything."""
+    head = _tick_at("2026-09-20", hour=1)
+    store = fresh_store()
+    bob = FakeBob(burn_ticks=[_tick_at("2026-09-19", hour=4)], indexed=head)
+    out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3,
+                                       max_calls=2000)
+    assert out["complete"] is True
+    assert out["reached_tick"] >= out["to_tick"]
+    assert out["recorded"] is True
+
+
+# ── running beside the live scan ───────────────────────────────────────────
+#
+# The worker now starts the backfill in the BACKGROUND, because it takes ~9 min
+# per day against the public node and the watch loop must not wait that long
+# (a missed epoch boundary is not replayable). That puts two writers on one
+# SQLite store, so the isolation between them is load-bearing.
+
+
+def test_a_backfilled_day_does_not_delete_the_live_days_buckets():
+    """The backfill writes one wide bucket per past day; the live scan writes
+    narrow ones for today. `put_burn_bucket` supersedes by containment, so a
+    wide window MUST NOT swallow another day's rows just by overlapping their
+    tick range — the delete is scoped to the day, and this pins that."""
+    store = fresh_store()
+    for i in range(5):
+        store.put_burn_bucket(from_tick=600_000 + i * 500, to_tick=600_499 + i * 500,
+                              epoch=231, day="2026-09-20", burned=1, burn_events=1,
+                              contract_burned=0, contract_events=0, by_contract={})
+    # a past day whose measured span overlaps those ticks
+    store.put_burn_bucket(from_tick=536_000, to_tick=669_999, epoch=231,
+                          day="2026-09-19", burned=1003, burn_events=10,
+                          contract_burned=500, contract_events=2,
+                          by_contract={"9": 500})
+    rows = {r["key"]: r["burned"] for r in store.burn_series(by="day")}
+    assert rows == {"2026-09-19": 1003, "2026-09-20": 5}
+
+
+def test_two_writers_on_one_store_do_not_error():
+    """WAL mode plus the store's own lock: concurrent backfill and live-scan
+    writes must not raise 'database is locked'."""
+    import threading
+    store_path = fresh_store().path
+    errs = []
+
+    def backfill():
+        try:
+            s = Store(store_path)
+            for i, day in enumerate(["2026-09-16", "2026-09-17", "2026-09-18"]):
+                for _ in range(20):
+                    s.put_burn_bucket(from_tick=i * 134_000, to_tick=(i + 1) * 134_000 - 1,
+                                      epoch=231, day=day, burned=1000 + i, burn_events=10,
+                                      contract_burned=0, contract_events=0, by_contract={})
+        except Exception as e:                     # noqa: BLE001 - the point is to catch any
+            errs.append(repr(e))
+
+    def live():
+        try:
+            s = Store(store_path)
+            for i in range(60):
+                s.put_burn_bucket(from_tick=600_000 + i * 500, to_tick=600_499 + i * 500,
+                                  epoch=231, day="2026-09-20", burned=1, burn_events=1,
+                                  contract_burned=0, contract_events=0, by_contract={})
+                s.set_burn_scan_state(last_tick=600_499 + i * 500, first_tick=600_000)
+                s.burn_series(by="day")
+        except Exception as e:                     # noqa: BLE001
+            errs.append(repr(e))
+
+    ts = [threading.Thread(target=backfill), threading.Thread(target=live)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert not errs, errs
+    days = {r["key"] for r in Store(store_path).burn_series(by="day")}
+    assert "2026-09-20" in days and "2026-09-16" in days

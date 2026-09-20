@@ -145,6 +145,14 @@ def main() -> int:
     ap.add_argument("--burn-to", type=int, metavar="TICK",
                     help="with --burn-backfill: stop at this tick (default: "
                          "Bob's current indexing tick)")
+    ap.add_argument("--burn-backfill-days", type=int, metavar="N", default=None,
+                    help="with --burn-backfill: fill the last N whole UTC days, "
+                         "resolving the tick range by measurement. Runs once per "
+                         "store: a completed window is recorded and a later run "
+                         "skips it, so this is safe on every container start")
+    ap.add_argument("--burn-backfill-force", action="store_true",
+                    help="with --burn-backfill-days: re-run a window already "
+                         "recorded as done")
     ap.add_argument("--burn-status", action="store_true",
                     help="what the burn scan has measured, and its coverage")
     ap.add_argument("--refresh-stale", action="store_true",
@@ -321,10 +329,20 @@ def main() -> int:
             print(f"  {ev['day']}  ticks {ev['from_tick']}..{ev['to_tick']}"
                   f"  [{ev['calls']} calls]{done}", flush=True)
 
-        out = pipeline.backfill_burns(
-            client, store, bob,
-            from_tick=args.burn_from, to_tick=args.burn_to,
-            max_calls=args.burn_calls or 400, progress=_tick)
+        if args.burn_backfill_days:
+            # Scale the budget to the ask: a day is ~134,000 ticks at the
+            # measured 1.55 ticks/s and a call covers 500, so a flat 400 would
+            # cover one day and quietly leave the rest undone.
+            budget = args.burn_calls or (args.burn_backfill_days * 300 + 100)
+            out = pipeline.backfill_burns_days(
+                client, store, bob, days=args.burn_backfill_days,
+                max_calls=budget,
+                force=args.burn_backfill_force, progress=_tick)
+        else:
+            out = pipeline.backfill_burns(
+                client, store, bob,
+                from_tick=args.burn_from, to_tick=args.burn_to,
+                max_calls=args.burn_calls or 400, progress=_tick)
         if out.get("reason"):
             print(f"burn backfill: {out['reason']}")
             return 0
@@ -333,6 +351,12 @@ def main() -> int:
               f"{out['days']} day-bucket(s) written")
         for g in out.get("gaps") or []:
             print(f"  ! gap, not counted: {g[0]}..{g[1]}", file=sys.stderr)
+        if args.burn_backfill_days and not out.get("recorded"):
+            # Say it out loud: an unrecorded run will be attempted again on the
+            # next start, which is the intended behaviour but looks like a loop
+            # to anyone reading the log without knowing why.
+            print("  (not recorded as done — a gap remains; "
+                  "the next start will resume it)")
         return 0
 
     if args.snapshot:

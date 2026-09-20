@@ -755,6 +755,11 @@ def backfill_burns(
                             complete=bounded)
 
     days_written, calls, gaps, scanned = 0, 0, [], 0
+    # How far the count actually reached. `gaps` alone cannot answer that: a run
+    # can stop with none of them, by exhausting its call budget or by breaking
+    # out of a day whose scan was incomplete. A caller deciding whether the
+    # window is finished needs the tick, not the absence of an error.
+    reached = lo - 1
     for r in ranges:
         if calls >= max_calls:
             break
@@ -785,6 +790,7 @@ def backfill_burns(
         # reason: a zero we measured and a day we never scanned are different
         # claims, and only the bucket's tick window tells them apart.
         covered_to = min(out["scanned_to"], r["to_tick"])
+        reached = max(reached, covered_to)
         found = out["days"].get(r["day"])
         agg = found or {"burned": 0, "burn_events": 0, "contract_burned": 0,
                         "contract_events": 0, "by_contract": {}}
@@ -824,7 +830,101 @@ def backfill_burns(
 
     return {"days": days_written, "scanned": scanned, "calls": calls,
             "gaps": gaps, "from_tick": lo, "to_tick": hi,
+            "reached_tick": reached, "complete": reached >= hi,
             "boundaries": ranges}
+
+
+def backfill_burns_days(
+    client: CachedClient,
+    store: Store,
+    bob: BobClient,
+    days: int,
+    max_calls: int = 400,
+    force: bool = False,
+    progress=None,
+) -> dict:
+    """Backfill the last `days` whole UTC days, once per deployment.
+
+    `backfill_burns` takes ticks, but an operator thinks in days and a tick
+    number is not something they can know in advance — especially on a host
+    where the only control surface is an environment variable. This resolves
+    "the last N days" to a tick range by measurement (`dating`), then hands off.
+
+    Two guards make it safe to run unconditionally on every container start:
+
+      * a completed run is recorded (`store.mark_burn_backfill`) and a later
+        start whose window is already covered returns `reason="already done"`
+        without touching the node. Without this, a host whose watcher restarts
+        the image on every push would re-scan the same hundreds of thousands of
+        ticks against a public Bob node forever.
+      * a run that did not reach the end of the window is NOT recorded, so the
+        next start resumes it rather than declaring the hole filled. That covers
+        both ways of stopping short: a range Bob could not serve, and a run that
+        simply ran out of call budget (measured: ~270 calls buy one day).
+
+    `force=True` skips the first guard, for an operator who knows the stored run
+    was wrong (a corrected scanner, say) and wants the days recounted.
+    """
+    if days <= 0:
+        return {"scanned": 0, "reason": "disabled"}
+
+    try:
+        info = client.tick_info()
+        head = int(info.get("tick") or 0)
+    except QubicRPCError:
+        return {"scanned": 0, "reason": "rpc unreachable"}
+    if not head:
+        return {"scanned": 0, "reason": "no current tick"}
+
+    # Never ask beyond what Bob has indexed or below what it still retains:
+    # outside that window the node answers empty, which the scanner cannot
+    # distinguish from "no burns happened".
+    try:
+        status = bob.status()
+        indexed = int(status.get("currentIndexingTick") or 0)
+        initial = int(status.get("initialTick") or 0)
+    except (BobError, TypeError, ValueError):
+        indexed, initial = 0, 0
+    hi = min(head, indexed) if indexed else head
+
+    # Where the window starts is a measurement, not an estimate. Deriving it
+    # from a tick rate is exactly the mistake this module's dating exists to
+    # retire: the rate the old code assumed (~2.7/s) is nearly double the
+    # measured one, so "N days back" by arithmetic would land on the wrong day.
+    target = dating.day_start(burn.observed_day()) - (int(days) - 1) * dating.SECONDS_PER_DAY
+    floor = max(initial, 0) if initial else max(0, hi - 2_000_000)
+    lo = dating.find_first_tick_at_or_after(client.tick_timestamp, target, floor, hi)
+    if lo is None:
+        # Bob's retained history does not reach back that far. Start at its
+        # floor and say so, rather than silently backfilling a shorter window
+        # as though it were the one that was asked for.
+        lo = floor
+    if lo >= hi:
+        return {"scanned": 0, "reason": "nothing to backfill", "from_tick": lo}
+
+    if not force and store.burn_backfill_done(lo, hi):
+        return {"scanned": 0, "reason": "already done",
+                "from_tick": lo, "to_tick": hi}
+
+    out = backfill_burns(client, store, bob, from_tick=lo, to_tick=hi,
+                         max_calls=max_calls, progress=progress)
+    # Only a run that reached the end of the window earns the marker.
+    #
+    # Testing `gaps` alone was wrong, and a live run against the real nodes is
+    # what showed it: a pass that exhausts its call budget stops partway with no
+    # gap recorded at all. It reported 20,000 of 200,000 ticks and still marked
+    # the whole window done, which would have made the next start skip the 90%
+    # it never counted — the exact hole the marker exists to prevent.
+    #
+    # `complete` answers the question directly: did the count reach `hi`?
+    reached_end = bool(out.get("complete"))
+    if not out.get("reason") and reached_end and not out.get("gaps"):
+        store.mark_burn_backfill(lo, hi, days=int(out.get("days") or 0))
+        out["recorded"] = True
+    else:
+        out["recorded"] = False
+    out["requested_days"] = int(days)
+    return out
 
 
 def burn_coverage(store: Store) -> dict:

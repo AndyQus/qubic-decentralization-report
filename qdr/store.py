@@ -197,6 +197,26 @@ CREATE TABLE IF NOT EXISTS burn_scan_state (
     updated_at      INTEGER NOT NULL
 );
 
+-- Burn backfills that have already run to completion.
+--
+-- A backfill is expensive (hundreds of heavy calls against a public Bob node)
+-- and idempotent in its RESULT but not in its COST: `put_burn_bucket` would
+-- happily supersede the same buckets with the same numbers on every container
+-- restart, re-scanning ticks already counted. On a host whose watcher restarts
+-- the image on every push, that turns a one-off catch-up into a recurring load
+-- on someone else's node.
+--
+-- So a completed run is recorded by the window it covered. The worker asks
+-- `burn_backfill_done()` before starting and skips a range already filled. A run
+-- that stopped at a gap is NOT recorded, because it has more to do.
+CREATE TABLE IF NOT EXISTS burn_backfill_runs (
+    from_tick   INTEGER NOT NULL,
+    to_tick     INTEGER NOT NULL,
+    days        INTEGER NOT NULL DEFAULT 0,
+    finished_at INTEGER NOT NULL,
+    PRIMARY KEY (from_tick, to_tick)
+);
+
 -- Live mining state, sampled from a node's peer port (DATA_SOURCES.md §8).
 --
 -- None of this is on the RPC and none of it is replayable: a node answers what
@@ -840,6 +860,43 @@ class Store:
                     "UPDATE burn_scan_state SET last_tick=?, updated_at=? WHERE id=1",
                     (int(last_tick), now),
                 )
+
+    def mark_burn_backfill(self, from_tick: int, to_tick: int, days: int = 0) -> None:
+        """Record that a backfill covered this tick window to completion.
+
+        Only call this for a run that finished without stopping at a gap: the
+        point of the record is to let the next start skip work already done, and
+        a partial run has work left.
+        """
+        with self._tx() as c:
+            c.execute(
+                "INSERT INTO burn_backfill_runs (from_tick,to_tick,days,finished_at) "
+                "VALUES (?,?,?,?) ON CONFLICT(from_tick,to_tick) DO UPDATE SET "
+                "days=excluded.days, finished_at=excluded.finished_at",
+                (int(from_tick), int(to_tick), int(days), int(time.time())),
+            )
+
+    def burn_backfill_done(self, from_tick: int, to_tick: int) -> bool:
+        """True when a completed run already covers this whole window.
+
+        Containment, not equality: a later start computes a slightly different
+        `from_tick` every time (it is derived from the current head), so an exact
+        match would never hit and the backfill would re-run on every restart.
+        """
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT 1 FROM burn_backfill_runs "
+                "WHERE from_tick <= ? AND to_tick >= ? LIMIT 1",
+                (int(from_tick), int(to_tick)),
+            ).fetchone()
+        return r is not None
+
+    def burn_backfill_runs(self) -> list[dict]:
+        """Completed backfill windows, newest first."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM burn_backfill_runs ORDER BY finished_at DESC").fetchall()
+        return [dict(r) for r in rows]
 
     def put_day_ticks(self, day: str, from_tick: int, to_tick: int,
                       complete: bool = False) -> None:
