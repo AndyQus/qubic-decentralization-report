@@ -752,15 +752,16 @@ def burn_reconciliation(store: Store) -> dict:
     """How the counted burns compare to the protocol's own burned counter.
 
     This is the check that stops the series from publishing a figure nobody can
-    corroborate. Measured 2026-09-20: the scan counted 17.6 Mrd QU over ~10,000
-    ticks while `burnedQus` moved by 0 over the following 66,666 ticks. Every
-    counted transfer was EXACTLY 1,000,000 QU, ~2 per tick, from a rotating set
-    of senders — the shape of a fixed protocol fee, not of discretionary supply
-    burning, and the official counter excludes it.
+    corroborate. It earned its place: on 2026-09-20 the scan counted 17.6 Mrd QU
+    over ~10,000 ticks while `burnedQus` did not move at all over the following
+    66,666 ticks. The counter was right — the transfers were being refunded
+    inside their own transaction and nothing was burned (see burn.burn_events).
 
-    So the measurement is reported with its disagreement attached rather than as
-    a bare number: `status` is `unreconciled` until an epoch boundary has been
-    observed on both sides, and `consistent` / `diverging` once it has.
+    The lesson that outlives that particular bug: where our count and the
+    protocol's counter disagree, the counter is the authority. So a measurement
+    is reported with its disagreement attached rather than as a bare number:
+    `status` is `unreconciled` until an epoch boundary has been observed on both
+    sides, and `consistent` / `diverging` once it has.
     """
     totals = store.burn_totals()
     measured = {int(r["key"]): r for r in store.burn_series(by="epoch")}
