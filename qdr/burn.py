@@ -14,6 +14,12 @@ curve presented as measurement. This module therefore *counts the events* from a
 Bob node's tick logs, and the RPC total becomes the epoch-boundary anchor those
 sums are reconciled against (CONCEPT_BURN §3).
 
+Tick logs carry no timestamp, so a scan must be told which day it is counting.
+Near the chain head that is simply today (`pipeline.scan_burns`). For older
+ticks the day is resolved by measurement from `/v1/ticks/{t}/tick-data` — see
+`qdr/dating.py` — which is what makes a historical backfill honest rather than
+an interpolation.
+
 Two event shapes carry burns, and they are not the same thing:
 
   * `QU_TRANSFER` to a burn sink — the uniform 1,000,000 QU computor outflow.
@@ -99,15 +105,26 @@ def event_day(entry: dict) -> Optional[str]:
     End-epoch entries carry `"26-09-02 12:00:05"` — a two-digit year. **Ordinary
     tick-log entries carry no timestamp at all** (measured against a live node,
     2026-09-19: the entry has `tick`, `epoch`, `logId`, addresses and amount, and
-    no time field of any kind). Nor does any RPC endpoint expose a tick's wall
-    time: `/v2/ticks/{t}` is Not Found and `/v2/epochs/{e}/ticks` returns only
-    `{tickNumber, isEmpty}`.
+    no time field of any kind). So this returns None for most events, and the
+    caller supplies the day.
 
-    So this returns None for most live events, and the scanner dates them by
-    when it observed them instead (see `scan_range`). Deriving a date from the
-    tick number would mean assuming a constant tick rate; the measured rate
-    varies, and a burn filed under the wrong day is exactly the kind of quiet
-    error this project refuses to ship.
+    This docstring used to add that no RPC endpoint exposes a tick's wall time
+    either, having found `/v2/ticks/{t}` Not Found and `/v2/epochs/{e}/ticks`
+    carrying only `{tickNumber, isEmpty}`. That conclusion was too broad: the
+    **v1** route answers.
+
+        GET /v1/ticks/80849178/tick-data -> timestamp 1789603200000
+                                         =  2026-09-20 00:00:00 UTC
+
+    Measured 2026-09-20 across epoch 231 and back into 230: present, in
+    milliseconds, strictly increasing. A tick can therefore be dated by
+    measurement after the fact, which is what `qdr/dating.py` does and what lets
+    `pipeline.backfill_burns` fill days that predate the worker.
+
+    Deriving a date from the tick NUMBER would still be wrong — that assumes a
+    constant tick rate, and the measured rate (1.55/s over three days) is
+    nothing like the ~2.7/s this repo once assumed. Reading the timestamp is not
+    that: it is measurement, not inference.
     """
     raw = entry.get("timestamp")
     if not raw or not isinstance(raw, str):

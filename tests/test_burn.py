@@ -518,7 +518,11 @@ def test_an_hour_of_ticks_is_not_labelled_a_whole_day(tmp_path):
     point = pipeline.build_burn_series(store, by="day")["series"][0]
 
     assert point["partial"] is True
-    assert point["coverage"] < 0.05, "an hour must not look like a full day"
+    # ~10,000 ticks is about 1.8 hours of a real day (measured 1.58 ticks/s ->
+    # ~136,500 ticks/day). The bound was 0.05 when the code divided by an
+    # assumed 2.7 ticks/s; that denominator was 71% too large, so it flattered
+    # every coverage figure. 0.10 is the same claim against the measured day.
+    assert point["coverage"] < 0.10, "an hour must not look like a full day"
     assert point["scanned_ticks"] == 10_001
 
 

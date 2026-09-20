@@ -160,6 +160,20 @@ CREATE TABLE IF NOT EXISTS burn_buckets (
 CREATE INDEX IF NOT EXISTS ix_burn_epoch ON burn_buckets(epoch);
 CREATE INDEX IF NOT EXISTS ix_burn_day   ON burn_buckets(day);
 
+-- A UTC day's real tick span, measured from /v1/ticks/{t}/tick-data rather than
+-- assumed from a tick rate. Coverage ("did we scan all of this day?") used to be
+-- computed against a constant 86400 * 2.7 ticks; measured over three real days
+-- the rate is 1.58 and varies by 29% between days, so that constant flagged
+-- fully-scanned days as partial. With the day's own boundaries stored, coverage
+-- is a measurement divided by a measurement.
+CREATE TABLE IF NOT EXISTS day_ticks (
+    day        TEXT PRIMARY KEY,   -- UTC 'YYYY-MM-DD'
+    from_tick  INTEGER NOT NULL,   -- first tick whose timestamp falls in the day
+    to_tick    INTEGER NOT NULL,   -- last such tick
+    complete   INTEGER NOT NULL DEFAULT 0,  -- 1 once the day is over and bounded
+    measured_at INTEGER NOT NULL
+);
+
 -- The official cumulative counter, sampled at epoch boundaries. This is the
 -- anchor the measured buckets reconcile against, and the only figure directly
 -- comparable to what explorer.qubic.org publishes. Measured 2026-09-19: it does
@@ -793,6 +807,36 @@ class Store:
                     "UPDATE burn_scan_state SET last_tick=?, updated_at=? WHERE id=1",
                     (int(last_tick), now),
                 )
+
+    def put_day_ticks(self, day: str, from_tick: int, to_tick: int,
+                      complete: bool = False) -> None:
+        """Record a UTC day's measured tick span.
+
+        Widening only: a later pass that sees more of the day extends the span,
+        it never narrows it. A day is `complete` once its end was found by
+        measurement (the first tick of the next day exists), which is what lets
+        coverage distinguish "we scanned the whole day" from "the day is still
+        running".
+        """
+        with self._tx() as c:
+            c.execute(
+                "INSERT INTO day_ticks (day,from_tick,to_tick,complete,measured_at) "
+                "VALUES (?,?,?,?,?) "
+                "ON CONFLICT(day) DO UPDATE SET "
+                "from_tick=MIN(from_tick,excluded.from_tick), "
+                "to_tick=MAX(to_tick,excluded.to_tick), "
+                "complete=MAX(complete,excluded.complete), "
+                "measured_at=excluded.measured_at",
+                (day, int(from_tick), int(to_tick), 1 if complete else 0,
+                 int(time.time())),
+            )
+
+    def day_ticks(self) -> dict[str, dict]:
+        """Measured tick spans per day, keyed by 'YYYY-MM-DD'."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT day,from_tick,to_tick,complete FROM day_ticks").fetchall()
+        return {r["day"]: dict(r) for r in rows}
 
     def burn_scan_state(self) -> Optional[dict]:
         with self._lock:

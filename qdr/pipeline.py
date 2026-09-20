@@ -17,7 +17,7 @@ import os
 import time
 from typing import Optional
 
-from . import __version__, burn
+from . import __version__, burn, dating
 from .client import CachedClient, QubicRPCError
 from .clustering import (
     Cluster,
@@ -518,10 +518,16 @@ def mining_growth(store: Store, epoch: int, window_s: int = 900) -> Optional[flo
 # History only grows; the burn series is windowed like the timeseries is.
 DEFAULT_BURN_DAYS = 90
 
-# How far behind the chain head a scan may be and still date its events by the
-# observation time. At the measured ~2.7 ticks/s, 100,000 ticks is ~10 hours —
-# comfortably inside a day, so a worker that fell behind overnight still dates
-# correctly, while one replaying last week's ticks does not.
+# How far behind the chain head a live scan may be and still date its events by
+# the observation time. Re-measured 2026-09-20 over three days of real ticks:
+# 1.55 ticks/s, not the ~2.7 this comment used to assume — so 100,000 ticks is
+# ~18 hours, not ~10. That is still inside a day, which is what the rule needs,
+# but the margin is much thinner than it looked.
+#
+# It matters far less than it used to: a pass that falls further behind no
+# longer has to discard those ticks, because `backfill_burns` can date them by
+# measurement (see qdr/dating.py). The live scan still prefers observation time
+# — it is free and exact near the head — and the backfill picks up the rest.
 MAX_DATING_LAG_TICKS = 100_000
 
 # Ceiling on a catch-up pass. 120 calls x 500 ticks = 60,000 ticks, about 6 hours
@@ -611,12 +617,15 @@ def scan_burns(
     # counting burns minutes after they happen.
     #
     # When the pointer is further behind than a day's worth of ticks (an outage,
-    # a long restart), those ticks cannot be dated at all. Grinding through them
-    # chunk by chunk would spend every pass on ticks it must discard while TODAY's
-    # burns scroll past uncounted — the scan would never catch up, and the chart
-    # would stay empty. So the pointer skips to the head and the gap is recorded
-    # as unmeasured. Losing a stretch we cannot date is the honest outcome;
-    # misdating it, or missing the present while chasing it, is not.
+    # a long restart), this pass cannot date those ticks by observation. Grinding
+    # through them chunk by chunk would spend every pass on ticks it must discard
+    # while TODAY's burns scroll past uncounted — the scan would never catch up,
+    # and the chart would stay empty. So the pointer skips to the head.
+    #
+    # That skipped stretch is no longer lost, only deferred: `backfill_burns`
+    # dates those ticks by measurement (`/v1/ticks/{t}/tick-data`) and counts
+    # them properly. The live scan's job is to keep up with the present; filling
+    # the past is a separate pass with a source of truth this one does not need.
     skipped_from = None
     if max(0, tick - start) > MAX_DATING_LAG_TICKS:
         skipped_from = start
@@ -660,10 +669,162 @@ def scan_burns(
               "gaps": out["gaps"], "complete": out["complete"],
               "behind": max(0, tick - out["scanned_to"])}
     if skipped_from is not None:
-        # Surfaced, not swallowed: this is a hole in the measured series, and the
-        # page says so rather than presenting the remaining days as continuous.
+        # Surfaced, not swallowed: this is a hole in the measured series. It is
+        # now a fillable one — `--burn-backfill --burn-from <lo> --burn-to <hi>`
+        # counts exactly this range with measured dates — but until that runs,
+        # the page says the days are incomplete rather than implying continuity.
         result["skipped_undatable"] = [skipped_from, start - 1]
     return result
+
+
+def backfill_burns(
+    client: CachedClient,
+    store: Store,
+    bob: BobClient,
+    from_tick: Optional[int] = None,
+    to_tick: Optional[int] = None,
+    max_calls: int = 400,
+    progress=None,
+) -> dict:
+    """Count burns in PAST ticks, dating them by measurement rather than by now.
+
+    `scan_burns` can only date what it watches happen: tick logs carry no
+    timestamp, so it stamps events with the day it observed them, and that is
+    only true near the chain head. Everything older it skipped — which is why
+    the burn series started the day the worker did.
+
+    This closes that hole. `/v1/ticks/{t}/tick-data` gives a tick's real wall
+    time, so `dating.day_boundaries` can resolve the exact tick range of each
+    UTC day (~20 lookups per boundary by bisection, not one per tick), and a
+    scan of those ranges files every burn under the day it actually happened.
+    No tick-rate assumption is involved anywhere — which matters, because the
+    rate the old code reasoned from (~2.7/s) is nearly double the measured one.
+
+    Each day is scanned and stored separately, so an interrupted backfill leaves
+    correct days behind rather than a half-counted smear across the boundary. A
+    range Bob cannot serve ends that day's pass and is reported in `gaps`
+    instead of being silently treated as zero burns.
+
+    Returns {days, scanned, calls, gaps, boundaries}. Bounded by `max_calls`
+    across the whole run so it cannot monopolise a public node; call it again to
+    continue.
+    """
+    head = None
+    try:
+        info = client.tick_info()
+        head = int(info.get("tick") or 0)
+        epoch = int(info.get("epoch") or 0)
+    except QubicRPCError:
+        return {"scanned": 0, "reason": "rpc unreachable"}
+
+    # Never scan past what Bob has INDEXED — an unindexed tick answers empty,
+    # which is indistinguishable from "no burns" (the same trap scan_burns
+    # documents).
+    try:
+        status = bob.status()
+        indexed = int(status.get("currentIndexingTick") or 0)
+        initial = int(status.get("initialTick") or 0)
+    except (BobError, TypeError, ValueError):
+        indexed, initial = 0, 0
+
+    hi = int(to_tick) if to_tick is not None else (indexed or head)
+    if indexed:
+        hi = min(hi, indexed)
+    # Bob's own history floor: asking below it is answered with an error, not data.
+    lo = int(from_tick) if from_tick is not None else max(initial, hi - 500_000)
+    if initial:
+        lo = max(lo, initial)
+    if lo > hi:
+        return {"scanned": 0, "reason": "nothing to backfill", "from_tick": lo}
+
+    ranges = dating.day_boundaries(client.tick_timestamp, lo, hi)
+    if not ranges:
+        # No tick in the range carries a timestamp. Saying so beats inventing a
+        # date for burns we cannot place.
+        return {"scanned": 0, "reason": "range carries no dated tick",
+                "from_tick": lo, "to_tick": hi}
+
+    # Record each day's measured span before scanning. This is what lets
+    # coverage be a measurement over a measurement instead of a division by an
+    # assumed tick rate. A day is `complete` when a later range exists, i.e. its
+    # end was found by measurement rather than by running out of chain.
+    today = burn.observed_day()
+    for i, r in enumerate(ranges):
+        bounded = (i < len(ranges) - 1) and r["day"] != today
+        store.put_day_ticks(r["day"], r["from_tick"], r["to_tick"],
+                            complete=bounded)
+
+    days_written, calls, gaps, scanned = 0, 0, [], 0
+    for r in ranges:
+        if calls >= max_calls:
+            break
+        budget = max_calls - calls
+        out = burn.scan_range(
+            bob, r["from_tick"], r["to_tick"], epoch=epoch,
+            max_calls=budget,
+            # The day is MEASURED for this whole tick range, so it is the right
+            # default for the undated events inside it — unlike the live scan,
+            # which can only use "today".
+            default_day=r["day"],
+        )
+        calls += out["calls"]
+        gaps.extend(out["gaps"])
+        scanned += max(0, out["scanned_to"] - r["from_tick"] + 1)
+        # Store the window that was SCANNED, not the span the events happened to
+        # fall in. Two reasons, both load-bearing:
+        #
+        #  * `put_burn_bucket` supersedes stored buckets *contained* in the new
+        #    window. An event-span window (say the one tick that held a burn)
+        #    contains nothing, so the live scan's narrow buckets would survive
+        #    beside the backfill's and the day would be counted twice.
+        #  * the tick window is what makes a figure recomputable by a third
+        #    party (store.py's own rule). "We scanned this range and found this"
+        #    is checkable; "we found this somewhere" is not.
+        #
+        # A day whose scan found NO burns still gets a bucket, for the same
+        # reason: a zero we measured and a day we never scanned are different
+        # claims, and only the bucket's tick window tells them apart.
+        covered_to = min(out["scanned_to"], r["to_tick"])
+        found = out["days"].get(r["day"])
+        agg = found or {"burned": 0, "burn_events": 0, "contract_burned": 0,
+                        "contract_events": 0, "by_contract": {}}
+        if covered_to >= r["from_tick"]:
+            store.put_burn_bucket(
+                from_tick=r["from_tick"], to_tick=covered_to,
+                epoch=epoch, day=r["day"],
+                burned=agg["burned"], burn_events=agg["burn_events"],
+                contract_burned=agg["contract_burned"],
+                contract_events=agg["contract_events"],
+                by_contract=agg["by_contract"],
+            )
+            days_written += 1
+        # Events dated to a DIFFERENT day than the range they were scanned in
+        # can only come from an entry carrying its own timestamp (end-epoch
+        # logs do). Those are stored on their own event span: the scanned window
+        # belongs to the range's day, not to theirs.
+        for day, other in out["days"].items():
+            if day == r["day"]:
+                continue
+            store.put_burn_bucket(
+                from_tick=other["from_tick"] or r["from_tick"],
+                to_tick=other["to_tick"] or covered_to,
+                epoch=epoch, day=day,
+                burned=other["burned"], burn_events=other["burn_events"],
+                contract_burned=other["contract_burned"],
+                contract_events=other["contract_events"],
+                by_contract=other["by_contract"],
+            )
+            days_written += 1
+        if progress:
+            progress({"day": r["day"], "from_tick": r["from_tick"],
+                      "to_tick": out["scanned_to"], "calls": calls,
+                      "complete": out["complete"]})
+        if not out["complete"]:
+            break            # stopped at a gap; resume here next run
+
+    return {"days": days_written, "scanned": scanned, "calls": calls,
+            "gaps": gaps, "from_tick": lo, "to_tick": hi,
+            "boundaries": ranges}
 
 
 def burn_coverage(store: Store) -> dict:
@@ -703,6 +864,7 @@ def build_burn_series(store: Store, by: str = "day",
     """
     rows = store.burn_series(by=by, limit=limit)
     state = store.burn_scan_state()
+    spans = store.day_ticks()
     series = []
     cumulative = 0
     for r in rows:
@@ -720,15 +882,27 @@ def build_burn_series(store: Store, by: str = "day",
             "cumulative": cumulative,
             "measured": True,
         }
-        # How much of the period the scan actually covered. A day is ~233,280
-        # ticks; a bucket holding 10,000 of them is one hour, and labelling that
-        # "19.09." invites the reader to take an hour for a day. Measured
-        # 2026-09-19: exactly that happened, and the bar read 17.6 Mrd/day.
+        # How much of the period the scan actually covered. A bucket holding
+        # 10,000 ticks is about an hour, and labelling that "19.09." invites the
+        # reader to take an hour for a day. Measured 2026-09-19: exactly that
+        # happened, and the bar read 17.6 Mrd/day.
+        #
+        # The denominator is the day's OWN measured tick span where we have it
+        # (see store.day_ticks). Dividing by a constant instead assumed a fixed
+        # tick rate; the real rate averages 1.58/s and varies 29% between days,
+        # which made complete days report 50-65% coverage and carry a "partial"
+        # warning. TICKS_PER_DAY remains only for days never dated.
         if by == "day" and scanned:
+            span = spans.get(r["key"])
+            period = None
+            if span and span.get("complete"):
+                period = int(span["to_tick"]) - int(span["from_tick"]) + 1
             point["scanned_ticks"] = scanned
-            point["period_ticks"] = TICKS_PER_DAY
-            point["coverage"] = round(min(1.0, scanned / TICKS_PER_DAY), 4)
-            point["partial"] = scanned < TICKS_PER_DAY * 0.95
+            point["period_ticks"] = period or TICKS_PER_DAY
+            point["period_measured"] = bool(period)
+            point["coverage"] = round(
+                min(1.0, scanned / (period or TICKS_PER_DAY)), 4)
+            point["partial"] = scanned < (period or TICKS_PER_DAY) * 0.95
         series.append(point)
     out = {
         "by": by,
@@ -743,9 +917,21 @@ def build_burn_series(store: Store, by: str = "day",
     return out
 
 
-# A day at the measured 2.7 ticks/s. Used to say how much of a day a bucket
-# actually covers, never to project a partial bucket up to a full one.
-TICKS_PER_DAY = int(86400 * 2.7)
+# A day's worth of ticks, used only to say how much of a day a bucket covers —
+# never to project a partial bucket up to a full one.
+#
+# This was 86400 * 2.7, and that was wrong enough to matter. Measured
+# 2026-09-20 from real day boundaries (`/v1/ticks/{t}/tick-data`, see
+# qdr/dating.py), three complete UTC days ran 151,983 / 138,564 / 117,846 ticks
+# — an average of 1.58 ticks/s, not 2.7. Against the old constant a FULLY
+# scanned day scored 50-65% coverage and was flagged `partial`, so the page
+# warned that complete days were incomplete.
+#
+# The rate is not constant either — those three days vary by 29% between
+# themselves — so any single number here is an approximation. It stays as a
+# fallback for buckets whose day boundaries are not known, and `coverage` is
+# capped at 1.0 so an above-average day cannot report more than a whole day.
+TICKS_PER_DAY = int(86400 * 1.58)
 
 
 def burn_reconciliation(store: Store) -> dict:

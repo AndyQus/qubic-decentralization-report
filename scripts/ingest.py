@@ -138,6 +138,13 @@ def main() -> int:
                     help="with --burn-scan: start at this tick instead of resuming")
     ap.add_argument("--burn-calls", type=int, default=None,
                     help="with --burn-scan: chunk budget for this pass")
+    ap.add_argument("--burn-backfill", action="store_true",
+                    help="count burns in PAST ticks, dated by measured tick "
+                         "timestamps (/v1/ticks/{t}/tick-data) rather than by "
+                         "observation time — fills days before the worker ran")
+    ap.add_argument("--burn-to", type=int, metavar="TICK",
+                    help="with --burn-backfill: stop at this tick (default: "
+                         "Bob's current indexing tick)")
     ap.add_argument("--burn-status", action="store_true",
                     help="what the burn scan has measured, and its coverage")
     ap.add_argument("--refresh-stale", action="store_true",
@@ -274,6 +281,31 @@ def main() -> int:
               f"{out['days_written']} day(s) written, {out['behind']} ticks behind")
         for g in out.get("gaps") or []:
             print(f"  ! gap, will retry from {g[0]}: {g[0]}..{g[1]}", file=sys.stderr)
+        return 0
+
+    if args.burn_backfill:
+        if bob is None:
+            print("burn backfill needs a Bob node; pass --bob or drop --no-bob",
+                  file=sys.stderr)
+            return 2
+
+        def _tick(ev):
+            done = "" if ev["complete"] else "  (stopped at a gap)"
+            print(f"  {ev['day']}  ticks {ev['from_tick']}..{ev['to_tick']}"
+                  f"  [{ev['calls']} calls]{done}", flush=True)
+
+        out = pipeline.backfill_burns(
+            client, store, bob,
+            from_tick=args.burn_from, to_tick=args.burn_to,
+            max_calls=args.burn_calls or 400, progress=_tick)
+        if out.get("reason"):
+            print(f"burn backfill: {out['reason']}")
+            return 0
+        print(f"burn backfill: ticks {out['from_tick']}..{out['to_tick']} "
+              f"({out['scanned']:,} ticks, {out['calls']} calls), "
+              f"{out['days']} day-bucket(s) written")
+        for g in out.get("gaps") or []:
+            print(f"  ! gap, not counted: {g[0]}..{g[1]}", file=sys.stderr)
         return 0
 
     if args.snapshot:

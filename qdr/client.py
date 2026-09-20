@@ -228,6 +228,49 @@ class CachedClient:
         data = self._get(f"/v1/balances/{identity}", use_cache=False)
         return data["balance"] if isinstance(data, dict) and "balance" in data else data
 
+    def tick_timestamp(self, tick: int) -> Optional[int]:
+        """Wall-clock time of a tick as a UTC unix second, or None if unknown.
+
+        **This is the endpoint that makes historical burn dating possible.** The
+        burn scanner long assumed no such source existed: tick logs carry no
+        timestamp (still true), and `/v2/ticks/{t}` is indeed Not Found — which
+        is what the earlier note in `burn.event_day` recorded. But the **v1**
+        route answers, and it answers for the whole of Bob's retained history:
+
+            GET /v1/ticks/80500000/tick-data
+            -> tickData.timestamp = "1789637050000"   (ms)  = 2026-09-17 09:24:10Z
+
+        Measured 2026-09-20 across epoch 231 and back into 230 (tick 80,000,000
+        = 2026-09-14): timestamps are present and strictly increasing, so a tick
+        can be dated by measurement rather than by assuming a tick rate. That
+        distinction is the whole point — the measured rate is 1.55 ticks/s, not
+        the 2.7 the scanner's arithmetic once assumed, and a day bucketed on the
+        wrong rate drifts by hours.
+
+        None means "this tick carries no data" (a skipped tick, which is normal
+        and common at epoch start) or the route refused. Callers must treat None
+        as unknown and probe a neighbour, never as a date.
+
+        Cached on disk: a past tick's timestamp is immutable, so the second
+        lookup of the same tick costs nothing. Only the network path is slow
+        (~0.5 s), which is why `dating.py` bisects rather than walking ticks.
+        """
+        try:
+            data = self._get(f"/v1/ticks/{int(tick)}/tick-data")
+        except QubicRPCError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        td = data.get("tickData")
+        if not isinstance(td, dict) or not td:
+            return None                      # empty = tick skipped, not an error
+        raw = td.get("timestamp")
+        try:
+            ms = int(raw)
+        except (TypeError, ValueError):
+            return None
+        return ms // 1000 if ms > 0 else None
+
     def identity_transfers(self, identity: str) -> list[dict]:
         data = self._get(f"/identities/{identity}/transfer-transactions")
         # shape may nest under "transferTransactionsPerTick" or similar; normalize best-effort
