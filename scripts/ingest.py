@@ -218,9 +218,36 @@ def main() -> int:
         if latest:
             print(f"official total: {latest['burned_total']:,} QU "
                   f"(epoch {latest['epoch']})")
-        for row in store.burn_series(by="day")[-14:]:
-            print(f"  {row['key']}  {row['burned']:>18,} QU  "
-                  f"{row['events']:>6} events")
+        # Per day: what was counted, and how much of the day was actually
+        # scanned. Coverage is the difference between "this day burned X" and
+        # "the slice of it we looked at burned X" — the page distinguishes them,
+        # so the CLI should too.
+        series = pipeline.build_burn_series(store, by="day")["series"]
+        for point in series[-14:]:
+            cov = point.get("coverage")
+            mark = ""
+            if cov is not None:
+                src = "" if point.get("period_measured") else "~"
+                mark = f"  {src}{cov:>6.1%} of day"
+                if point.get("partial"):
+                    mark += " (partial)"
+            print(f"  {point['key']}  {point['burned']:>18,} QU  "
+                  f"{point['events']:>6} events  "
+                  f"{point['contract_burned']:>12,} QU contract{mark}")
+
+        # Which contract burned what — the only source that says what a burn was
+        # FOR, resolved to names via Qubic's own registry.
+        from qdr import contracts as _contracts
+        by_contract = store.burn_by_contract()
+        if by_contract:
+            print("  by contract:")
+            for idx, amount in sorted(by_contract.items(), key=lambda kv: -kv[1]):
+                d = _contracts.describe(int(idx) if str(idx).lstrip("-").isdigit()
+                                        else idx)
+                name = d.get("label") or d.get("name") or f"index {idx}"
+                if not d.get("known"):
+                    name = f"index {idx} (not in registry)"
+                print(f"    {name:<28} {amount:>14,} QU")
         cov = pipeline.burn_coverage(store)
         for c in cov["epochs"][-5:]:
             ratio = "n/a" if c["ratio"] is None else f"{c['ratio']:.3f}"

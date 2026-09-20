@@ -189,3 +189,42 @@ def test_dating_cost_stays_bounded():
     pipeline.backfill_burns(client, fresh_store(), FakeBob(indexed=head),
                             from_tick=LO, to_tick=head, max_calls=2000)
     assert client.lookups < 500, f"{client.lookups} timestamp lookups"
+
+
+# -- coverage: a measurement over a measurement -----------------------------
+
+def test_a_complete_day_is_not_flagged_partial_at_its_own_length():
+    """The bug this replaced: coverage divided by an assumed 2.7 ticks/s, so a
+    day fully scanned at the real 1.58/s reported ~60% and warned 'partial'."""
+    store = fresh_store()
+    lo, hi = 1_000_000, 1_117_845            # 117,846 ticks: a real 09-19
+    store.put_day_ticks("2026-09-19", lo, hi, complete=True)
+    store.put_burn_bucket(from_tick=lo, to_tick=hi, epoch=231,
+                          day="2026-09-19", burned=42, burn_events=1)
+    point = pipeline.build_burn_series(store, by="day")["series"][0]
+    assert point["period_measured"] is True
+    assert point["coverage"] == 1.0
+    assert point["partial"] is False
+
+
+def test_a_partial_scan_of_a_known_day_still_reads_partial():
+    """The measured denominator must not flatter an incomplete scan."""
+    store = fresh_store()
+    lo, hi = 1_000_000, 1_117_845
+    store.put_day_ticks("2026-09-19", lo, hi, complete=True)
+    store.put_burn_bucket(from_tick=lo, to_tick=lo + 9_999, epoch=231,
+                          day="2026-09-19", burned=7, burn_events=1)
+    point = pipeline.build_burn_series(store, by="day")["series"][0]
+    assert point["partial"] is True
+    assert point["coverage"] < 0.10
+
+
+def test_an_unbounded_day_falls_back_and_says_so():
+    """Today is still running: its length is not yet measurable."""
+    store = fresh_store()
+    store.put_day_ticks("2026-09-20", 1_000_000, 1_010_000, complete=False)
+    store.put_burn_bucket(from_tick=1_000_000, to_tick=1_010_000, epoch=231,
+                          day="2026-09-20", burned=3, burn_events=1)
+    point = pipeline.build_burn_series(store, by="day")["series"][0]
+    assert point["period_measured"] is False
+    assert point["period_ticks"] == pipeline.TICKS_PER_DAY
