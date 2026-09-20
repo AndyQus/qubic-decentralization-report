@@ -275,6 +275,7 @@ worker has to keep running rather than being reconstructable after the fact.
 |---|---|---|
 | Tick / tick quality | ~2.7 ticks/s (160/min) | 15-60 s |
 | Computor list, revenue, clustering | once per epoch | on epoch change |
+| Ant-colony mining state (peer port 21841) | continuous; ~146 solutions/min measured 2026-09-20 | 30 s, **and stored** |
 
 Epoch **length varies a lot** — 1.08M to 2.29M ticks across epochs 223-229 (~4.4 days at the
 measured rate), so anything showing "progress through the epoch" must derive the expected
@@ -283,5 +284,14 @@ constant.
 
 This is why the service has two clocks: `/v1/pulse` (cheap, cached ~10 s, safe to poll every
 15 s) carries what actually moves, while the report is only recomputed when the epoch turns.
+
+Mining state has a third property the others do not: **it is not replayable.** The colony
+figures come from a node's peer port, not the RPC, and a node answers only what it looks like
+at that moment — there is no historical query, and a closed epoch's colony state cannot be
+recovered from anywhere. Caching it is therefore not enough; it has to be *sampled and stored*
+or it is lost. The ingest worker writes one reading every `QDR_MINING_SAMPLE_INTERVAL` (30 s,
+matching the API's own cache TTL so no fetched reading is discarded) into `mining_samples`,
+windowed to the last two epochs, with a permanent one-row-per-epoch summary in `mining_epochs`.
+Measured cost: 0.8 MB per epoch of raw samples, ~100 bytes per epoch of summary.
 Re-running a 676-operator analysis every minute would burn RPC budget to produce an identical
 answer for four days.

@@ -24,12 +24,21 @@
 #      dated by when it was observed — which is only valid near the chain head.
 #      That makes this a watch-loop job by nature: it is the continuous scanning
 #      that keeps it close enough to the head to date anything at all.
+#   2c. Sample mining state. The colony's live figures are not on the RPC and are
+#      not replayable: a node answers what it looks like right now, so a reading
+#      not taken is gone. The watch loop starts a sampler thread that stores one
+#      reading every QDR_MINING_SAMPLE_INTERVAL seconds and keeps a rolling
+#      two-epoch window of them (~2 MB), which is what gives the mining page a
+#      curve instead of a single number.
 #   3. Export after every pass, so dashboard/data.js and api/sample/*.json can
 #      never drift behind the store the way they did before.
 set -eu
 
 BACKFILL="${QDR_BACKFILL_EPOCHS:-10}"
 INTERVAL="${QDR_INGEST_INTERVAL:-300}"
+# Mining state moves far faster than the report does, so it has its own cadence:
+# the watch loop above runs every 5 minutes, this samples every 30 seconds.
+MINING_INTERVAL="${QDR_MINING_SAMPLE_INTERVAL:-30}"
 
 # Everything this worker prints also goes to a file in the shared volume, so the
 # API can serve it at /v1/log and /log.html can answer "is it doing anything?"
@@ -87,14 +96,20 @@ python scripts/ingest.py --refresh-stale ||   echo "[worker] stale refresh incom
 echo "[worker] seeding the burn scan ..."
 python scripts/ingest.py --burn-scan ||   echo "[worker] burn scan incomplete; the watch loop will continue it" >&2
 
+# One mining reading before the watch loop, for the same reason the burn scan is
+# seeded: the page should have a measurement in hand at start, not after the
+# first interval. Two points make a curve, so the loop fills it out from here.
+echo "[worker] taking a first mining sample ..."
+python scripts/ingest.py --mining-sample ||   echo "[worker] no node answered; the watch loop will keep trying" >&2
+
 python scripts/ingest.py --export || true
 
 # The watch loop survives RPC errors on its own, but it cannot start at all if
 # the RPC is down at that moment (it needs one tick-info call to find the current
 # epoch). A supervisor loop makes that a delay instead of an outage: the service
 # comes up by itself when the network does, without anyone restarting a container.
-echo "[worker] watching · interval ${INTERVAL}s"
+echo "[worker] watching · interval ${INTERVAL}s · mining sampled every ${MINING_INTERVAL}s"
 while true; do
-  python scripts/ingest.py --watch --interval "${INTERVAL}" --export-each ||     echo "[worker] watch exited ($?); retrying in 60s" >&2
+  python scripts/ingest.py --watch --interval "${INTERVAL}"     --mining-interval "${MINING_INTERVAL}" --export-each ||     echo "[worker] watch exited ($?); retrying in 60s" >&2
   sleep 60
 done

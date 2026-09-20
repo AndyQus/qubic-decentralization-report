@@ -13,6 +13,7 @@ whichever snapshot was built last.
 """
 from __future__ import annotations
 
+import os
 import time
 from typing import Optional
 
@@ -439,6 +440,78 @@ def slot_distribution(store: Store, epoch: int) -> Optional[dict]:
         "distinct_values": len(counts),
         "bands": bands, "deciles": deciles,
     }
+
+
+# -- mining ----------------------------------------------------------------
+# Live mining state is not on the RPC and is not replayable: a node answers what
+# the colony looks like right now. A sample not taken is gone, which is why this
+# is collected on a timer rather than derived on demand.
+#
+# Sampled at the cadence the API already queries a node (QDR_MINING_TTL, 30s):
+# a coarser interval would throw away readings the service had in hand. At that
+# rate one epoch of samples is ~1 MB, and only MINING_KEEP_EPOCHS of them are
+# retained, so the raw table stays around 2 MB no matter how long this runs.
+MINING_SAMPLE_INTERVAL_S = int(os.environ.get("QDR_MINING_SAMPLE_INTERVAL", "30"))
+
+
+def sample_mining(store: Store, peers: Optional[list[str]] = None) -> Optional[dict]:
+    """Take one reading of live mining state and store it.
+
+    Returns the stored row, or None when no node answered — an unreachable node
+    is a normal, transient state here (these are other people's machines), so it
+    is reported by absence rather than raised.
+    """
+    from qdr import antnode
+
+    try:
+        data = antnode.collect(peers=peers)
+    except Exception:
+        return None
+    if data.get("status") != "live":
+        return None
+
+    ep = data.get("epoch") or {}
+    epoch = ep.get("epoch")
+    if not epoch:
+        # Without an epoch the sample cannot be placed in the window that gets
+        # pruned, and a mis-filed row would be deleted on the wrong boundary.
+        return None
+
+    colony = data.get("colony") or {}
+    node = data.get("node") or {}
+    row = {
+        "at": int(data.get("fetched_at") or time.time()),
+        "epoch": int(epoch),
+        "tick": ep.get("tick"),
+        "solution_count": colony.get("solution_count"),
+        "threshold": colony.get("threshold"),
+        "free_ann_slots": colony.get("free_ann_slots"),
+        "peers_responding": node.get("peers_responding"),
+        "node_ip": node.get("ip"),
+        "latency_ms": node.get("latency_ms"),
+    }
+    store.put_mining_sample(**row)
+    return row
+
+
+def mining_growth(store: Store, epoch: int, window_s: int = 900) -> Optional[float]:
+    """Solutions per minute over the last `window_s`, measured from stored samples.
+
+    Read from the table rather than from two consecutive fetches, so the figure
+    is a trend over minutes and is correct immediately after a restart instead
+    of only once the process has polled twice.
+    """
+    rows = [r for r in store.mining_series(epoch=epoch, since=int(time.time()) - window_s)
+            if r.get("solution_count") is not None]
+    if len(rows) < 2:
+        return None
+    first, last = rows[0], rows[-1]
+    elapsed_min = (last["at"] - first["at"]) / 60.0
+    # The counter only ever rises within an epoch; a fall means the window spans
+    # a reset, and no rate can be read across that boundary.
+    if elapsed_min <= 0 or last["solution_count"] < first["solution_count"]:
+        return None
+    return round((last["solution_count"] - first["solution_count"]) / elapsed_min, 1)
 
 
 # -- burn ------------------------------------------------------------------

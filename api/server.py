@@ -170,6 +170,7 @@ def api_index():
             # The page that consumes this is deliberately unlisted; the data behind
             # it is not secret, so the endpoint is indexed like any other.
             "/v1/mining",
+            "/v1/mining/series",
             "/health",
         ],
         "dashboard": "/dashboard/",
@@ -466,21 +467,124 @@ def mining():
                 pass
         data.setdefault("epoch", {})["expected_ticks"] = expected
 
-    # Growth rate, measured between two real fetches rather than assumed. The colony
-    # only ever adds solutions, so a drop means a new epoch reset the counter.
+    # Growth rate, measured rather than assumed. Preferably from the stored
+    # samples: that is a trend over ~15 minutes and it is right immediately after
+    # a restart, whereas the in-process pair below is a single 30s interval that
+    # starts empty on every deploy. The pair is kept as the fallback for when the
+    # ingest worker is not running (a plain `docker run` of the API alone).
     count = (data.get("colony") or {}).get("solution_count")
-    prev, prev_at = _mining_cache["prev_count"], _mining_cache["prev_at"]
+    epoch_no = (data.get("epoch") or {}).get("epoch")
     if data.get("status") == "live" and count is not None:
-        if prev is not None and count >= prev and now > prev_at:
-            elapsed_min = (now - prev_at) / 60.0
-            if elapsed_min > 0:
-                data["colony"]["delta_per_min"] = round((count - prev) / elapsed_min, 1)
+        rate = None
+        if epoch_no:
+            try:
+                rate = pipeline.mining_growth(get_store(), int(epoch_no))
+            except Exception:
+                rate = None
+        if rate is not None:
+            data["colony"]["delta_per_min"] = rate
+            data["colony"]["delta_source"] = "stored"
+        else:
+            prev, prev_at = _mining_cache["prev_count"], _mining_cache["prev_at"]
+            if prev is not None and count >= prev and now > prev_at:
+                elapsed_min = (now - prev_at) / 60.0
+                if elapsed_min > 0:
+                    data["colony"]["delta_per_min"] = round((count - prev) / elapsed_min, 1)
+                    data["colony"]["delta_source"] = "live"
         _mining_cache.update(prev_count=count, prev_at=now)
 
     _mining_cache.update(at=now, data=data)
     out = dict(data)
     out["next_refresh_in"] = round(MINING_TTL_S)
     return out
+
+
+# The stored mining history. Sampling is the ingest worker's job; this only
+# reads what it wrote, so the endpoint costs one indexed query and never a node
+# call. Cached briefly because a new sample can only appear every 30s anyway.
+_mining_series_cache: dict = {}
+MINING_SERIES_TTL_S = float(os.environ.get("QDR_MINING_SERIES_TTL", "20"))
+
+# Ceiling on points returned. An epoch at a 30s cadence holds ~12,700 samples;
+# sending them all would cost a megabyte to draw a line a few hundred pixels
+# wide, so the series is thinned server-side to this many evenly spaced points.
+MINING_MAX_POINTS = 500
+
+
+@app.get("/v1/mining/series", tags=["service"],
+         summary="Stored history of live mining state")
+def mining_series(
+    epoch: int | None = Query(None, description="Which epoch. Omitted: the most "
+                                                "recent one sampled."),
+    points: int = Query(MINING_MAX_POINTS, ge=2, le=MINING_MAX_POINTS,
+                        description="Maximum points to return; the series is "
+                                    "thinned evenly to fit."),
+    window: int | None = Query(None, ge=60,
+                               description="Only the last N seconds, instead of "
+                                           "the whole epoch."),
+):
+    """What the colony has been doing over the running epoch, as measured.
+
+    Every point was sampled from a node — there is no interpolation and no
+    back-fill before the first sample, because mining state is not replayable:
+    a reading not taken cannot be reconstructed afterwards.
+
+    Raw samples are kept for the last two epochs only. `epochs` carries the
+    permanent one-row-per-epoch summary, which outlives that window.
+    """
+    import time as _t
+
+    store = get_store()
+    key = (epoch, points, window)
+    hit = _mining_series_cache.get(key)
+    now = _t.time()
+    if hit and now - hit["at"] < MINING_SERIES_TTL_S:
+        return hit["data"]
+
+    target = epoch
+    if target is None:
+        latest = store.latest_mining_sample()
+        if latest is None:
+            raise _no_data("mining history")
+        target = latest["epoch"]
+
+    since = int(now) - window if window else None
+    rows = store.mining_series(epoch=target, since=since)
+    if not rows:
+        raise _no_data("mining history")
+
+    # Even thinning, with the last row always kept: the newest point is the one
+    # the live poll will append to, and a gap there would show as a jump.
+    total = len(rows)
+    if total > points:
+        step = total / float(points)
+        picked = [rows[int(i * step)] for i in range(points)]
+        if picked[-1]["at"] != rows[-1]["at"]:
+            picked[-1] = rows[-1]
+        rows = picked
+
+    data = {
+        "epoch": target,
+        "series": [
+            {"at": r["at"], "tick": r["tick"],
+             "solution_count": r["solution_count"],
+             "threshold": r["threshold"],
+             "free_ann_slots": r["free_ann_slots"],
+             "peers_responding": r["peers_responding"]}
+            for r in rows
+        ],
+        "points": len(rows),
+        "sampled_total": total,
+        "first_at": rows[0]["at"],
+        "last_at": rows[-1]["at"],
+        "interval_s": pipeline.MINING_SAMPLE_INTERVAL_S,
+        "growth_per_min": pipeline.mining_growth(store, target),
+        "epochs": store.mining_epochs(limit=50),
+        "measured": True,
+    }
+    _mining_series_cache.clear()      # one shape of this query is enough to hold
+    _mining_series_cache[key] = {"at": now, "data": data}
+    return data
 
 
 # The burn figures move on the epoch clock (the official counter) and on the

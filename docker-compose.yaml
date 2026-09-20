@@ -54,6 +54,12 @@ services:
       # epoch boundary (~4.4 days), but balance snapshots must be taken while the
       # boundary is passing, so this stays well under it.
       - QDR_INGEST_INTERVAL=${QDR_INGEST_INTERVAL:-300}
+      # How often live mining state is sampled into the store. Much faster than
+      # the ingest interval above, because this is a live reading that cannot be
+      # recovered later — the report only changes at an epoch boundary, the
+      # colony changes every tick. Only the last two epochs of samples are kept
+      # (~2 MB); the per-epoch summary is permanent.
+      - QDR_MINING_SAMPLE_INTERVAL=${QDR_MINING_SAMPLE_INTERVAL:-30}
     volumes:
       - /root/qdr/data:/data
     depends_on:

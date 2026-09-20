@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -34,6 +35,51 @@ from qdr.client import CachedClient, QubicRPCError
 from qdr.clustering import load_registry
 from qdr.revenue import ARBITRATOR_IDENTITY, verify_arbitrator
 from qdr.store import Store
+
+
+def start_mining_sampler(store: Store, interval: int) -> threading.Thread:
+    """Sample live mining state on its own timer, in the background.
+
+    It runs beside the main watch loop rather than inside it because the two
+    have nothing in common but the store: the report only changes at an epoch
+    boundary (~4.4 days, hence a 300s loop), while mining state is a live
+    reading that is gone if not taken. Sharing one interval would force either
+    a useless flood of report recomputes or a mining curve with 5-minute gaps.
+
+    The store is WAL-mode and lock-guarded, so two writers are safe.
+    Failures are swallowed on purpose: these are other people's nodes, and an
+    unreachable one must never take the ingest worker down with it.
+    """
+    def loop() -> None:
+        last_prune = 0.0
+        while True:
+            # Measured 2026-09-20: a collect() takes 10-17s, because it probes
+            # several peers. Sleeping the full interval *after* that stretched a
+            # 30s cadence to 47s, so the wait is what remains of the interval,
+            # not the whole of it.
+            started = time.time()
+            try:
+                pipeline.sample_mining(store)
+            except Exception as e:      # never let a sampling error kill the thread
+                print(f"[mining] sample failed: {e}", file=sys.stderr)
+            try:
+                # Hourly is far more often than an epoch boundary (~4.4 days);
+                # the point is only that no single prune ever has much to do.
+                if time.time() - last_prune > 3600:
+                    dropped = store.prune_mining()
+                    last_prune = time.time()
+                    if dropped:
+                        print(f"[mining] pruned {dropped} sample(s) "
+                              f"outside the {store.MINING_KEEP_EPOCHS}-epoch window")
+            except Exception as e:
+                print(f"[mining] prune failed: {e}", file=sys.stderr)
+            # A floor of a second keeps this a loop rather than a spin, for the
+            # case where one pass somehow takes longer than the whole interval.
+            time.sleep(max(1.0, interval - (time.time() - started)))
+
+    t = threading.Thread(target=loop, name="mining-sampler", daemon=True)
+    t.start()
+    return t
 
 
 def export_snapshots(store: Store) -> None:
@@ -98,6 +144,16 @@ def main() -> int:
                     help="re-derive every epoch computed by an older code version, "
                          "then exit (run on startup so a deploy never serves figures "
                          "its own code has since corrected)")
+    ap.add_argument("--mining-sample", action="store_true",
+                    help="take one live mining sample into the store and exit")
+    ap.add_argument("--mining-status", action="store_true",
+                    help="what the mining sampler has stored")
+    ap.add_argument("--mining-interval", type=int,
+                    default=pipeline.MINING_SAMPLE_INTERVAL_S,
+                    help="with --watch: seconds between mining samples "
+                         f"(default {pipeline.MINING_SAMPLE_INTERVAL_S})")
+    ap.add_argument("--no-mining", action="store_true",
+                    help="with --watch: do not sample mining state")
     ap.add_argument("--export", action="store_true", help="write static snapshots from the store")
     ap.add_argument("--export-each", action="store_true",
                     help="with --watch: re-export the static snapshots after every pass, "
@@ -115,6 +171,34 @@ def main() -> int:
 
     if args.export:
         export_snapshots(store)
+        return 0
+
+    if args.mining_sample:
+        row = pipeline.sample_mining(store)
+        if row is None:
+            print("no Qubic node answered — nothing sampled", file=sys.stderr)
+            return 1
+        print(f"epoch {row['epoch']} tick {row['tick']}: "
+              f"{row['solution_count']:,} solutions, threshold {row['threshold']} "
+              f"(via {row['node_ip']})")
+        return 0
+
+    if args.mining_status:
+        latest = store.latest_mining_sample()
+        if latest is None:
+            print("mining sampler has not run yet")
+            return 0
+        age = int(time.time()) - latest["at"]
+        print(f"latest sample: epoch {latest['epoch']}, "
+              f"{latest['solution_count']:,} solutions, {age}s ago")
+        rate = pipeline.mining_growth(store, latest["epoch"])
+        if rate is not None:
+            print(f"growth (15 min): {rate}/min")
+        print(f"samples held: {store.stats()['mining_samples']:,} "
+              f"(window: {store.MINING_KEEP_EPOCHS} epochs)")
+        for row in store.mining_epochs(limit=10):
+            print(f"  epoch {row['epoch']:>5}  final {row['final_count'] or 0:>12,}  "
+                  f"peak {row['peak_count'] or 0:>12,}  {row['samples']:>6} samples")
         return 0
 
     if args.burn_status:
@@ -233,6 +317,9 @@ def main() -> int:
 
     if args.watch:
         print(f"watching · refreshing the live epoch every {args.interval}s · Ctrl-C to stop")
+        if not args.no_mining:
+            start_mining_sampler(store, args.mining_interval)
+            print(f"           mining state sampled every {args.mining_interval}s")
         while True:
             try:
                 # snapshot first: revenue for an epoch can only be derived if its

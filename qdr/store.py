@@ -182,6 +182,43 @@ CREATE TABLE IF NOT EXISTS burn_scan_state (
     first_tick      INTEGER NOT NULL,   -- first tick ever counted: where measurement begins
     updated_at      INTEGER NOT NULL
 );
+
+-- Live mining state, sampled from a node's peer port (DATA_SOURCES.md §8).
+--
+-- None of this is on the RPC and none of it is replayable: a node answers what
+-- the colony looks like NOW, so a sample not taken is a sample lost forever.
+-- That is the whole reason this table exists -- the API's in-process cache holds
+-- exactly one reading and forgets it on restart.
+--
+-- Sampled at the same cadence the API already queries a node (QDR_MINING_TTL,
+-- 30s), because a coarser sample would discard readings we had in hand.
+CREATE TABLE IF NOT EXISTS mining_samples (
+    at               INTEGER PRIMARY KEY,  -- unix ts; one sample per second at most
+    epoch            INTEGER NOT NULL,
+    tick             INTEGER,
+    solution_count   INTEGER,
+    threshold        INTEGER,
+    free_ann_slots   INTEGER,
+    peers_responding INTEGER,
+    node_ip          TEXT,
+    latency_ms       INTEGER
+);
+CREATE INDEX IF NOT EXISTS ix_mining_epoch ON mining_samples(epoch, at);
+
+-- One row per epoch, summarising what the samples showed. Samples are pruned to
+-- a rolling window; this is not, and it is tiny (~100 bytes per 4.4 days), so
+-- long-run history survives without keeping the detail that produced it. Same
+-- split as burn_buckets (detail, windowed) vs burn_totals (anchor, permanent).
+CREATE TABLE IF NOT EXISTS mining_epochs (
+    epoch           INTEGER PRIMARY KEY,
+    final_count     INTEGER,   -- last solution_count seen in the epoch
+    peak_count      INTEGER,
+    avg_threshold   REAL,
+    samples         INTEGER NOT NULL DEFAULT 0,
+    first_at        INTEGER,
+    last_at         INTEGER,
+    updated_at      INTEGER NOT NULL
+);
 """
 
 
@@ -762,6 +799,138 @@ class Store:
             r = self._conn.execute("SELECT * FROM burn_scan_state WHERE id=1").fetchone()
         return dict(r) if r else None
 
+    # ---- mining samples ----------------------------------------------------
+    # How many epochs of raw samples to keep. Two, not one, because
+    # solution_count resets to zero at an epoch boundary: a one-epoch window
+    # would delete the previous peak at exactly the moment the drop appears,
+    # leaving a curve that starts near zero with nothing explaining why.
+    MINING_KEEP_EPOCHS = 2
+
+    def put_mining_sample(
+        self,
+        at: int,
+        epoch: int,
+        tick: Optional[int] = None,
+        solution_count: Optional[int] = None,
+        threshold: Optional[int] = None,
+        free_ann_slots: Optional[int] = None,
+        peers_responding: Optional[int] = None,
+        node_ip: Optional[str] = None,
+        latency_ms: Optional[int] = None,
+    ) -> None:
+        """Record one reading of live mining state, and fold it into the epoch row.
+
+        Two samples landing in the same second are the same reading twice (the
+        API caches for 30s), so the later one simply wins rather than doubling
+        the epoch's sample count.
+        """
+        def _i(v):
+            return int(v) if v is not None else None
+
+        with self._tx() as c:
+            c.execute(
+                "INSERT INTO mining_samples (at,epoch,tick,solution_count,threshold,"
+                "free_ann_slots,peers_responding,node_ip,latency_ms) "
+                "VALUES (?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(at) DO UPDATE SET "
+                "epoch=excluded.epoch, tick=excluded.tick, "
+                "solution_count=excluded.solution_count, threshold=excluded.threshold, "
+                "free_ann_slots=excluded.free_ann_slots, "
+                "peers_responding=excluded.peers_responding, "
+                "node_ip=excluded.node_ip, latency_ms=excluded.latency_ms",
+                (int(at), int(epoch), _i(tick), _i(solution_count), _i(threshold),
+                 _i(free_ann_slots), _i(peers_responding), node_ip, _i(latency_ms)),
+            )
+            # The summary is recomputed from the samples still present rather
+            # than incremented, so a re-written second cannot drift it. It is
+            # one indexed scan over a single epoch's rows.
+            c.execute(
+                "INSERT INTO mining_epochs "
+                "(epoch,final_count,peak_count,avg_threshold,samples,"
+                " first_at,last_at,updated_at) "
+                "SELECT ?, "
+                "  (SELECT solution_count FROM mining_samples "
+                "    WHERE epoch=? AND solution_count IS NOT NULL "
+                "    ORDER BY at DESC LIMIT 1), "
+                "  MAX(solution_count), AVG(threshold), COUNT(*), "
+                "  MIN(at), MAX(at), ? "
+                "FROM mining_samples WHERE epoch=? "
+                "ON CONFLICT(epoch) DO UPDATE SET "
+                "  final_count=excluded.final_count, "
+                # A pruned window can only ever lower MAX(solution_count), and the
+                # epoch's real peak is a fact we already observed -- so the stored
+                # peak is kept whenever it is the higher of the two.
+                "  peak_count=MAX(COALESCE(mining_epochs.peak_count,0), "
+                "                 COALESCE(excluded.peak_count,0)), "
+                "  avg_threshold=excluded.avg_threshold, "
+                "  samples=excluded.samples, "
+                "  first_at=MIN(COALESCE(mining_epochs.first_at, excluded.first_at), "
+                "               excluded.first_at), "
+                "  last_at=excluded.last_at, updated_at=excluded.updated_at",
+                (int(epoch), int(epoch), int(time.time()), int(epoch)),
+            )
+
+    def mining_series(
+        self,
+        epoch: Optional[int] = None,
+        since: Optional[int] = None,
+        limit: Optional[int] = None,
+    ) -> list[dict]:
+        """Stored mining samples, oldest first so a chart can draw them directly.
+
+        `limit` keeps the most RECENT samples (then reverses), matching
+        burn_series: a windowed read should show now, not the start of history.
+        """
+        where, args = [], []
+        if epoch is not None:
+            where.append("epoch=?")
+            args.append(int(epoch))
+        if since is not None:
+            where.append("at>=?")
+            args.append(int(since))
+        sql = "SELECT * FROM mining_samples"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY at DESC"
+        if limit is not None:
+            sql += f" LIMIT {int(limit)}"
+        with self._lock:
+            rows = self._conn.execute(sql, args).fetchall()
+        return [dict(r) for r in reversed(rows)]
+
+    def mining_epochs(self, limit: Optional[int] = None) -> list[dict]:
+        """Per-epoch mining summaries, oldest first. Never pruned."""
+        sql = "SELECT * FROM mining_epochs ORDER BY epoch DESC"
+        if limit is not None:
+            sql += f" LIMIT {int(limit)}"
+        with self._lock:
+            rows = self._conn.execute(sql).fetchall()
+        return [dict(r) for r in reversed(rows)]
+
+    def latest_mining_sample(self) -> Optional[dict]:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM mining_samples ORDER BY at DESC LIMIT 1").fetchone()
+        return dict(r) if r else None
+
+    def prune_mining(self, keep_epochs: Optional[int] = None) -> int:
+        """Drop samples older than the newest `keep_epochs` epochs. Returns rows deleted.
+
+        Only the raw samples go; mining_epochs keeps the summary of every epoch
+        ever sampled, so pruning costs resolution, never history.
+        """
+        keep = int(keep_epochs if keep_epochs is not None else self.MINING_KEEP_EPOCHS)
+        if keep < 1:
+            raise ValueError("keep_epochs must be at least 1")
+        with self._tx() as c:
+            row = c.execute(
+                "SELECT epoch FROM mining_samples GROUP BY epoch "
+                "ORDER BY epoch DESC LIMIT 1 OFFSET ?", (keep - 1,)).fetchone()
+            if row is None:
+                return 0    # fewer epochs on record than we keep: nothing to do
+            cur = c.execute("DELETE FROM mining_samples WHERE epoch < ?", (int(row[0]),))
+            return cur.rowcount or 0
+
     def stats(self) -> dict:
         with self._lock:
             def one(q: str, *a) -> int:
@@ -777,4 +946,6 @@ class Store:
                 "balance_snapshots": one("SELECT COUNT(*) FROM balance_snapshots"),
                 "burn_buckets": one("SELECT COUNT(*) FROM burn_buckets"),
                 "burn_totals": one("SELECT COUNT(*) FROM burn_totals"),
+                "mining_samples": one("SELECT COUNT(*) FROM mining_samples"),
+                "mining_epochs": one("SELECT COUNT(*) FROM mining_epochs"),
             }

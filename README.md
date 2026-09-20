@@ -300,6 +300,30 @@ docker image prune -f              # remove the superseded image
 | `QDR_LIVE_MAX_AGE` | Seconds the running epoch may be stale before a request recomputes it | `300` |
 | `QDR_BOB_URL` | Bob node carrying the epoch-end payouts (use your own node) | `https://bob.qubic.li/qubic` |
 | `QDR_PULSE_TTL` | Seconds the live pulse is cached | `10` |
+| `QDR_MINING_TTL` | Seconds a live mining reading is cached before a node is queried again | `30` |
+| `QDR_MINING_SAMPLE_INTERVAL` | Seconds between mining samples written to the store by the ingest worker | `30` |
+
+### Mining history: why it is stored
+
+Everything else in this report can be rebuilt from the chain. Live mining state
+cannot: the colony figures are served from a node's peer port, not the RPC, and a
+node answers what it looks like **right now**. A reading not taken is gone.
+
+So the ingest worker samples it on a timer and writes it to the store, and the
+mining page draws that stored series rather than whatever the browser happened to
+see. Two consequences worth knowing:
+
+* **Raw samples are windowed to the last two epochs** (~2 MB total, measured at
+  0.8 MB per epoch). Two and not one, because `solution_count` resets to zero at
+  an epoch boundary — a one-epoch window would delete the previous peak at exactly
+  the moment the drop appears.
+* **`mining_epochs` keeps one row per epoch forever** (~100 bytes per 4.4 days):
+  final count, peak, mean threshold. Pruning costs resolution, never history.
+  Same split as `burn_buckets` (detail, windowed) and `burn_totals` (anchor,
+  permanent).
+
+Nothing is interpolated and nothing is back-filled before the first sample. A
+gap in the curve is a gap in the measurement, and is shown as one.
 
 ## Status
 

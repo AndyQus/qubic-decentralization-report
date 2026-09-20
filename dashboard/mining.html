@@ -20,150 +20,59 @@
     5. Einordnung — was das Mining NICHT ist (prominent)
 -->
 
+<link rel="stylesheet" href="./theme.css">
+
 <style>
-/* ─── Design Tokens ────────────────────────────────────────────────────────── */
+/* ─── Page-specific tokens ──────────────────────────────────────────────────
+   Surfaces, text, accents, the glass card and the header come from theme.css —
+   the shared system taken from spotlight/dividends.qubic.tools. Only what this
+   page needs on top is defined here.
+
+   The colony canvas runs behind the whole page, so panels stay translucent and
+   the glow/pulse colours follow the system accent rather than a second green. */
 :root {
-  /* Light theme (baseline) */
-  --bg:       #eef3f6;
-  --bg2:      #f6f9fb;
-  --surface:  #ffffff;
-  --surface2: #f1f5f8;
-  --border:   #d8e2e8;
-  --text:     #132430;
-  --muted:    #546773;
-  --faint:    #8698a2;
-  --accent:   #0aa17e;
-  --accent2:  #1f7fe0;
-  --warn:     #c9820f;
-  --danger:   #e0435f;
-  --shadow:   0 6px 20px rgba(20,40,55,.10);
-  /* Panels are translucent so the colony shows through them. Light needs a higher
-     floor than dark: dark text over a busy light ground loses contrast fastest. */
-  --panel:    color-mix(in srgb, var(--surface) 62%, transparent);
-  --warn-bg:  rgba(201,130,15,.10); --warn-fg: #8a5c07; --warn-link: #1f7fe0;
-  --radius:   14px;
-  --mono:     ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --sans:     system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-
-  /* Semantic colours (mining-specific) */
-  --hero-glow:  rgba(10,161,126,.18);
-  --pulse-ring: rgba(10,161,126,.45);
+  --panel:      color-mix(in srgb, #ffffff 62%, transparent);
+  --hero-glow:  rgba(126, 111, 255, .16);
+  --pulse-ring: rgba(3, 105, 161, .45);
+  --warn-bg:    rgba(180, 83, 9, .10);
+  --warn-fg:    #8a5c07;
+  --warn-link:  #0369a1;
 }
-
-/* Dark — system default */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg:       #0c141b;
-    --bg2:      #101820;
-    --surface:  #16232e;
-    --surface2: #1b2c38;
-    --border:   #263846;
-    --text:     #e6eef2;
-    --muted:    #8aa0ab;
-    --faint:    #5c7180;
-    --accent:   #22d3a6;
-    --accent2:  #3b9dff;
-    --warn:     #f5a623;
-    --danger:   #ff5c7a;
-    --shadow:   0 6px 24px rgba(0,0,0,.35);
-    --panel:    color-mix(in srgb, var(--surface) 50%, transparent);
-  --warn-bg:  rgba(245,166,35,.09); --warn-fg: #c8993f; --warn-link: #3b9dff;
-    --warn-bg:  rgba(245,166,35,.09); --warn-fg: #c8993f; --warn-link: #3b9dff;
-    --hero-glow:  rgba(34,211,166,.15);
-    --pulse-ring: rgba(34,211,166,.45);
+    --panel:      color-mix(in srgb, #1a2332 62%, transparent);
+    --hero-glow:  rgba(78, 224, 252, .15);
+    --pulse-ring: rgba(78, 224, 252, .45);
+    --warn-bg:    rgba(245, 166, 35, .09);
+    --warn-fg:    #c8993f;
+    --warn-link:  #4ee0fc;
   }
 }
-
-/* Dark — explicit toggle */
 :root[data-theme="dark"] {
-  --bg:       #0c141b;
-  --bg2:      #101820;
-  --surface:  #16232e;
-  --surface2: #1b2c38;
-  --border:   #263846;
-  --text:     #e6eef2;
-  --muted:    #8aa0ab;
-  --faint:    #5c7180;
-  --accent:   #22d3a6;
-  --accent2:  #3b9dff;
-  --warn:     #f5a623;
-  --danger:   #ff5c7a;
-  --shadow:   0 6px 24px rgba(0,0,0,.35);
-  --panel:    color-mix(in srgb, var(--surface) 50%, transparent);
-  --hero-glow:  rgba(34,211,166,.15);
-  --pulse-ring: rgba(34,211,166,.45);
+  --panel:      color-mix(in srgb, #1a2332 62%, transparent);
+  --hero-glow:  rgba(78, 224, 252, .15);
+  --pulse-ring: rgba(78, 224, 252, .45);
+  --warn-bg:    rgba(245, 166, 35, .09);
+  --warn-fg:    #c8993f;
+  --warn-link:  #4ee0fc;
 }
 
-/* ─── Reset & Base ──────────────────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; }
+/* ─── Base ──────────────────────────────────────────────────────────────────── */
 html { scroll-behavior: smooth; }
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--sans);
-  -webkit-font-smoothing: antialiased;
-  line-height: 1.5;
-}
-a { color: var(--accent2); text-decoration: none; }
-a:hover { text-decoration: underline; }
 
 /* ─── Header ────────────────────────────────────────────────────────────────── */
-header.top {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  background: linear-gradient(180deg, var(--bg2) 70%, transparent);
-  border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-.top-inner {
-  max-width: 100%;
-  padding: 14px 24px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.logo {
-  width: 32px; height: 32px; border-radius: 9px; flex: 0 0 auto;
-  background: radial-gradient(circle at 30% 30%, var(--accent), #0b7d63);
-  box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset;
-}
+/* Header, links, segmented control and icon button come from theme.css
+   (.qs-header, .qs-link, .qs-seg, .qs-icon-btn). This page spans the full
+   viewport width rather than the shared 1440px column, because the colony
+   canvas behind it is full-bleed — so only the width is overridden. */
+.qs-header-inner { max-width: 100%; padding: 14px 24px; gap: 16px; flex-wrap: wrap; }
 .brand h1 {
   font-size: 15px; margin: 0; font-weight: 650;
   letter-spacing: .2px; white-space: nowrap;
 }
 .brand .sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
-.spacer { flex: 1 1 auto; }
-.controls { display: flex; align-items: center; gap: 8px; }
-/* Language switch — same control as the report's header, so the two pages read
-   as one site rather than two. */
-.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px;
-  overflow: hidden; background: var(--surface); }
-.seg button { background: transparent; border: 0; color: var(--muted);
-  padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
-  font-family: var(--sans); }
-.seg button.active { background: var(--accent); color: #04231b; }
-:root[data-theme="light"] .seg button.active { color: #fff; }
-
-.icon-btn {
-  width: 36px; height: 32px; border: 1px solid var(--border);
-  border-radius: 9px; background: var(--surface);
-  color: var(--text); cursor: pointer; font-size: 14px;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.how-link {
-  display: inline-flex; align-items: center; height: 32px;
-  padding: 0 12px; border-radius: 9px; border: 1px solid var(--border);
-  background: var(--surface); color: var(--muted);
-  font-size: 12.5px; font-weight: 600; white-space: nowrap;
-}
-.how-link:hover {
-  color: var(--text); border-color: var(--accent); text-decoration: none;
-}
+.logo { width: 32px; height: 32px; }
+.how-link { height: 32px; font-size: 12.5px; font-weight: 600; }
 
 /* ─── Refresh Ticker ────────────────────────────────────────────────────────── */
 .refresh-bar {
@@ -372,6 +281,50 @@ header.top {
   line-height: 1.55; max-width: 760px;
 }
 .sc-body { padding: 16px 20px 20px; }
+
+/* ─── Verlaufs-Chart ────────────────────────────────────────────────────────── */
+.hist-wrap { position: relative; min-height: 260px; }
+/* Fixed height with an untouched viewBox, same reasoning as burn.html: with
+   `…meet` and height:auto a wide card would letterbox the plot. */
+.hist-svg { display: block; width: 100%; height: 260px; }
+.hist-svg[hidden] { display: none; }
+.hist-svg text { font-family: var(--sans); fill: var(--muted); }
+.hist-svg .grid-line { stroke: var(--border); stroke-width: 1; opacity: .55; }
+.hist-svg .axis-line { stroke: var(--border); stroke-width: 1; }
+.hist-svg .hist-line {
+  fill: none; stroke: var(--accent); stroke-width: 2;
+  stroke-linejoin: round; stroke-linecap: round;
+}
+.hist-svg .hist-area { fill: var(--accent); opacity: .10; stroke: none; }
+.hist-svg .hist-dot { fill: var(--accent); }
+.hist-svg .hist-hit { fill: transparent; cursor: crosshair; }
+.hist-svg .hist-cursor { stroke: var(--accent); stroke-width: 1; opacity: .5; }
+.hist-empty {
+  position: absolute; inset: 0; margin: 0;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 0 24px;
+  font-size: 12.5px; color: var(--muted); line-height: 1.6;
+}
+.hist-meta { font-size: 11.5px; color: var(--muted); }
+.hist-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap;
+  margin-top: 10px; font-size: 11.5px; color: var(--muted);
+}
+.hist-legend { display: inline-flex; align-items: center; gap: 7px; }
+.hist-legend i {
+  width: 10px; height: 10px; border-radius: 3px;
+  background: var(--accent); display: inline-block;
+}
+.hist-tip {
+  position: fixed; z-index: 50; pointer-events: none;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 9px; box-shadow: var(--shadow);
+  padding: 8px 11px; font-size: 12px; color: var(--text);
+  line-height: 1.5; white-space: nowrap;
+}
+.hist-tip[hidden] { display: none; }
+.hist-tip b { font-variant-numeric: tabular-nums; }
 
 /* ─── Two-column layout for Node + Aufgabe ──────────────────────────────────── */
 .two-col {
@@ -633,10 +586,10 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
 <!-- ═══════════════════════════════════════════════════════════
      HEADER
 ═══════════════════════════════════════════════════════════ -->
-<header class="top">
-  <div class="top-inner">
+<header class="top qs-header">
+  <div class="top-inner qs-header-inner">
     <div class="brand">
-      <div class="logo" aria-hidden="true"></div>
+      <div class="logo qs-logo" aria-hidden="true"></div>
       <div>
         <h1>Mining Live</h1>
         <div class="sub"><span data-i18n="subtitle">Ant Colony · Qubic Decentralization Report</span></div>
@@ -651,12 +604,17 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
         <span style="color:var(--faint)">·</span>
         <span><span data-i18n="inWord">in</span> <span id="r-countdown">–</span>s</span>
       </div>
-      <a class="how-link" href="./burn.html"><span data-i18n="burnReport">Burn</span></a>
-      <a class="how-link" href="./"><span data-i18n="backToReport">← Report</span></a>
-      <div class="seg" id="lang-seg">
+      <nav class="qs-nav" id="site-nav" aria-label="Sections">
+        <a class="how-link qs-link" href="./" data-i18n="navReport">Report</a>
+        <a class="how-link qs-link" href="./burn.html" data-i18n="burnReport">Burn</a>
+        <a class="how-link qs-link" href="./mining.html" aria-current="page" data-i18n="miningLive">Mining Live</a>
+        <a class="how-link qs-link" href="./how-it-works.html" data-i18n="howItWorks">How it works</a>
+      </nav>
+      <button class="qs-icon-btn qs-burger" id="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">☰</button>
+      <div class="qs-seg" id="lang-seg">
         <button data-lang="en">EN</button><button data-lang="de">DE</button>
       </div>
-      <button class="icon-btn" id="theme-btn" title="Farbschema wechseln" aria-label="Farbschema wechseln">🌙</button>
+      <button class="qs-icon-btn" id="theme-btn" title="Farbschema wechseln" aria-label="Farbschema wechseln">🌙</button>
     </div>
   </div>
 </header>
@@ -724,6 +682,28 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
      HAUPTINHALT
 ═══════════════════════════════════════════════════════════ -->
 <div class="main-grid">
+
+  <!-- ── Verlauf der Epoche ───────────────────────────────────────── -->
+  <section class="section-card" id="history-card">
+    <div class="sc-head">
+      <h2 class="sc-title" data-i18n="histTitle">Verlauf dieser Epoche</h2>
+      <span class="hist-meta" id="hist-meta"></span>
+    </div>
+    <p class="sc-desc">
+      <span data-i18n="histDesc">Jeder Punkt ist eine echte Messung an einem Node. Der Zustand des Schwarms lässt sich nicht nachträglich rekonstruieren — was nicht gemessen wurde, fehlt.</span>
+    </p>
+    <div class="sc-body">
+      <div class="hist-wrap">
+        <svg class="hist-svg" id="hist-chart" viewBox="0 0 900 260"
+             preserveAspectRatio="xMinYMin meet" role="img"></svg>
+        <p class="hist-empty" id="hist-empty" hidden></p>
+      </div>
+      <div class="hist-foot" id="hist-foot" hidden>
+        <span class="hist-legend"><i></i><span data-i18n="histLegend">Akzeptierte Lösungen</span></span>
+        <span id="hist-range"></span>
+      </div>
+    </div>
+  </section>
 
   <!-- Zweispaltige Karten: Node + Aufgabe -->
   <div class="two-col">
@@ -954,6 +934,9 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
   const LS_LANG = "qdr.lang";
   const I18N = {
     en: {
+      navReport: "Report",
+      miningLive: "Mining Live",
+      howItWorks: "How it works",
       subtitle: "Ant Colony \u00B7 Qubic Decentralization Report",
       backToReport: "\u2190 Report", inWord: "in", burnReport: "Burn",
       heroLabel: "Accepted solutions (swarm)", solutionsWord: "solutions",
@@ -965,6 +948,14 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
       unavailDefault: "Data will be fetched again automatically.",
       unavailFile: "This page was opened as a file (file://) and has no API. Start the server and open it through that: python -m uvicorn api.server:app --port 8000 \u2192 http://127.0.0.1:8000/dashboard/mining.html",
       unavailApi: "API not reachable",
+      histTitle: "This epoch so far",
+      histDesc: "Every point is a real reading taken from a node. Swarm state cannot be reconstructed after the fact — whatever was not measured is simply missing.",
+      histLegend: "Accepted solutions",
+      histEmpty: "No history yet. The first points appear once the ingest worker has been sampling for a few minutes.",
+      histOffline: "History is unavailable — the API did not answer.",
+      histPoints: "{n} of {total} readings",
+      histSince: "since {t}",
+      histGrowth: "{n} / min",
       nodeTitle: "Node status",
       nodeDesc: "Which peer was queried, its latency, and how many neighbours answer.",
       connecting: "Connecting\u2026", connLive: "Connection active",
@@ -1001,6 +992,9 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
       agoS: "{n} s ago", agoMin: "{n} min ago", agoStd: "{n} h ago"
     },
     de: {
+      navReport: "Report",
+      miningLive: "Mining Live",
+      howItWorks: "Wie es funktioniert",
       subtitle: "Ant Colony \u00B7 Qubic Decentralization Report",
       backToReport: "\u2190 Report", inWord: "in", burnReport: "Burn",
       heroLabel: "Akzeptierte L\u00F6sungen (Schwarm)", solutionsWord: "L\u00F6sungen",
@@ -1012,6 +1006,14 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
       unavailDefault: "Daten werden automatisch erneut abgerufen.",
       unavailFile: "Diese Seite wurde als Datei ge\u00F6ffnet (file://) und hat keine API. Starte den Server und \u00F6ffne sie dar\u00FCber: python -m uvicorn api.server:app --port 8000 \u2192 http://127.0.0.1:8000/dashboard/mining.html",
       unavailApi: "API nicht erreichbar",
+      histTitle: "Verlauf dieser Epoche",
+      histDesc: "Jeder Punkt ist eine echte Messung an einem Node. Der Zustand des Schwarms lässt sich nicht nachträglich rekonstruieren — was nicht gemessen wurde, fehlt.",
+      histLegend: "Akzeptierte Lösungen",
+      histEmpty: "Noch kein Verlauf. Die ersten Punkte erscheinen, sobald der Ingest-Worker einige Minuten gemessen hat.",
+      histOffline: "Verlauf nicht verfügbar — die API hat nicht geantwortet.",
+      histPoints: "{n} von {total} Messungen",
+      histSince: "seit {t}",
+      histGrowth: "{n} / Min.",
       nodeTitle: "Node-Status",
       nodeDesc: "Welcher Peer gerade abgefragt wurde, seine Latenz und wie viele Nachbarn antworten.",
       connecting: "Verbindungsaufbau\u2026", connLive: "Verbindung aktiv",
@@ -1140,6 +1142,9 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
        the last response; otherwise they would keep the previous language. */
     if (lastData) render(lastData);
     else showLoading();
+    /* Chart-Beschriftungen sind keine data-i18n-Knoten, also neu zeichnen --
+       sonst bliebe die Fußzeile in der vorherigen Sprache stehen. */
+    if (typeof drawHistory === "function" && histSeries.length) drawHistory();
   }
   document.querySelectorAll("#lang-seg button").forEach(b => {
     b.addEventListener("click", () => {
@@ -1549,6 +1554,289 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
     }
   }
 
+  /* ═══════════════════════════════════════════════════════════
+     VERLAUF — was der Schwarm über die Epoche hinweg getan hat.
+
+     Die Reihe kommt aus der DB (/v1/mining/series), nicht aus dem Browser:
+     Mining-Zustand ist nicht nachspielbar, also muss der Server ihn messen.
+     Der Live-Poll hängt seinen Punkt hinten an, damit die Kurve im selben
+     30-Sekunden-Takt weiterläuft, in dem sie gespeichert wurde.
+  ═══════════════════════════════════════════════════════════ */
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  let histSeries = [];      // [{at, solution_count, tick, threshold}]
+  let histEpoch  = null;
+  let histTotal  = 0;
+  let histTip    = null;
+
+  function svgEl(name, attrs, text) {
+    const n = document.createElementNS(SVG_NS, name);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  /* Uhrzeit statt Datum: die Reihe deckt eine Epoche ab (~4,4 Tage), und auf
+     der x-Achse interessiert der Tagesverlauf, nicht das Kalenderdatum. */
+  function histClock(ts) {
+    const d = new Date(ts * 1000);
+    const p = n => String(n).padStart(2, "0");
+    return p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function histStamp(ts) {
+    const d = new Date(ts * 1000);
+    const p = n => String(n).padStart(2, "0");
+    return p(d.getDate()) + "." + p(d.getMonth() + 1) + ". " + histClock(ts);
+  }
+
+  function showHistEmpty(msg) {
+    const svg = document.getElementById("hist-chart");
+    const empty = document.getElementById("hist-empty");
+    svg.innerHTML = "";
+    svg.hidden = true;
+    empty.hidden = false;
+    empty.textContent = msg;
+    document.getElementById("hist-foot").hidden = true;
+    document.getElementById("hist-meta").textContent = "";
+  }
+
+  function drawHistory() {
+    const svg = document.getElementById("hist-chart");
+    const empty = document.getElementById("hist-empty");
+    const pts = histSeries.filter(p => p.solution_count != null);
+
+    /* Eine einzelne Messung ist kein Verlauf: zwei Punkte sind das Minimum,
+       aus dem sich eine Linie und eine Aussage ergeben. */
+    if (pts.length < 2) {
+      showHistEmpty(t("histEmpty"));
+      return;
+    }
+    empty.hidden = true;
+    svg.hidden = false;
+    svg.innerHTML = "";
+
+    const H = 260, padL = 62, padR = 16, padT = 14, padB = 34;
+    const avail = Math.max(320, Math.floor(
+      (svg.parentElement && svg.parentElement.clientWidth) || 900));
+    const W = avail;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+
+    const vals = pts.map(p => p.solution_count);
+    const tMin = pts[0].at, tMax = pts[pts.length - 1].at;
+    let vMin = Math.min.apply(null, vals), vMax = Math.max.apply(null, vals);
+    /* Die Kurve steigt über eine Epoche um Größenordnungen; eine bei 0
+       beginnende y-Achse drückte die letzten Stunden zu einer flachen Linie
+       zusammen. Also wird der gemessene Bereich gezeigt — mit etwas Luft,
+       und die Achse ist beschriftet, damit der Verzicht auf den Nullpunkt
+       ablesbar bleibt. */
+    const span = Math.max(1, vMax - vMin);
+    vMin = Math.max(0, vMin - span * 0.08);
+    vMax = vMax + span * 0.08;
+
+    const x = ts => padL + ((ts - tMin) / Math.max(1, tMax - tMin)) * plotW;
+    const y = v  => padT + plotH - ((v - vMin) / Math.max(1, vMax - vMin)) * plotH;
+
+    const TICKS = 4;
+    for (let i = 0; i <= TICKS; i++) {
+      const v = vMin + (vMax - vMin) * i / TICKS, yy = y(v);
+      svg.appendChild(svgEl("line", {
+        class: "grid-line", x1: padL, x2: W - padR,
+        y1: yy.toFixed(1), y2: yy.toFixed(1)
+      }));
+      svg.appendChild(svgEl("text", {
+        x: padL - 8, y: (yy + 4).toFixed(1), "text-anchor": "end", "font-size": "11"
+      }, fmtCompactCount(v, (vMax - vMin) / TICKS)));
+    }
+    svg.appendChild(svgEl("line", {
+      class: "axis-line", x1: padL, x2: W - padR,
+      y1: padT + plotH, y2: padT + plotH
+    }));
+
+    const coords = pts.map(p => [x(p.at), y(p.solution_count)]);
+    const d = coords.map((c, i) =>
+      (i ? "L" : "M") + c[0].toFixed(1) + " " + c[1].toFixed(1)).join(" ");
+    const baseY = padT + plotH;
+    svg.appendChild(svgEl("path", {
+      class: "hist-area",
+      d: d + " L " + coords[coords.length - 1][0].toFixed(1) + " " + baseY +
+         " L " + coords[0][0].toFixed(1) + " " + baseY + " Z"
+    }));
+    svg.appendChild(svgEl("path", { class: "hist-line", d: d }));
+    const last = coords[coords.length - 1];
+    svg.appendChild(svgEl("circle", {
+      class: "hist-dot", cx: last[0].toFixed(1), cy: last[1].toFixed(1), r: 3.5
+    }));
+
+    /* x-Achse: so viele Marken, wie ohne Überlappung sicher passen. */
+    const labels = Math.max(2, Math.min(8, Math.floor(plotW / 92)));
+    for (let i = 0; i <= labels; i++) {
+      const ts = tMin + (tMax - tMin) * i / labels;
+      svg.appendChild(svgEl("text", {
+        x: x(ts).toFixed(1), y: H - padB + 18,
+        "text-anchor": i === 0 ? "start" : (i === labels ? "end" : "middle"),
+        "font-size": "11"
+      }, histClock(ts)));
+    }
+
+    /* Hover: eine Trefferfläche über die volle Plotbreite, der nächste Punkt
+       gewinnt. Ein Hit-Rect je Messung wären bis zu 400 Knoten für nichts. */
+    const cursor = svgEl("line", {
+      class: "hist-cursor", x1: 0, x2: 0, y1: padT, y2: baseY, opacity: 0
+    });
+    svg.appendChild(cursor);
+    const hit = svgEl("rect", {
+      class: "hist-hit", x: padL, y: padT, width: plotW, height: plotH
+    });
+    svg.appendChild(hit);
+
+    function nearest(evt) {
+      const r = svg.getBoundingClientRect();
+      const px = (evt.clientX - r.left) / r.width * W;
+      let best = 0, bestD = Infinity;
+      for (let i = 0; i < coords.length; i++) {
+        const dd = Math.abs(coords[i][0] - px);
+        if (dd < bestD) { bestD = dd; best = i; }
+      }
+      return best;
+    }
+    function onMove(evt) {
+      const i = nearest(evt);
+      cursor.setAttribute("x1", coords[i][0].toFixed(1));
+      cursor.setAttribute("x2", coords[i][0].toFixed(1));
+      cursor.setAttribute("opacity", 1);
+      showHistTip(evt, pts[i]);
+    }
+    hit.addEventListener("mousemove", onMove);
+    hit.addEventListener("click", onMove);          /* Touch: tippen zeigt den Wert */
+    hit.addEventListener("mouseleave", () => {
+      cursor.setAttribute("opacity", 0);
+      hideHistTip();
+    });
+
+    /* Fußzeile: woher die Reihe kommt und wie viel davon gezeichnet ist. */
+    document.getElementById("hist-foot").hidden = false;
+    document.getElementById("hist-range").textContent =
+      t("histSince", { t: histStamp(tMin) });
+    document.getElementById("hist-meta").textContent =
+      t("histPoints", { n: fmtInt(pts.length), total: fmtInt(histTotal || pts.length) });
+  }
+
+  /* Kompakte Achsenbeschriftung: "1,15 M" statt 1.148.916 — sonst ist die
+     y-Achse breiter als der Plot.
+
+     Die Nachkommastellen richten sich nach dem ABSTAND der Gitterlinien, nicht
+     nach dem Wert: über eine Epoche liegen sie Millionen auseinander, in zehn
+     Minuten nur ein paar tausend. Eine feste Genauigkeit beschriftete im zweiten
+     Fall vier Linien identisch — die Achse behauptete dann, gleiche Werte lägen
+     an verschiedenen Höhen. */
+  function fmtCompactCount(n, stepSize) {
+    const v = Number(n);
+    if (!isFinite(v)) return "–";
+    const step = Math.abs(Number(stepSize)) || Math.abs(v) || 1;
+
+    /* Die Einheit richtet sich nach dem ABSTAND der Gitterlinien, nicht nach der
+       Größe des Werts. Über eine Epoche liegen die Marken Zehntausende
+       auseinander und "1,15 M" ist richtig; in zehn Minuten sind es ein paar
+       hundert, und dieselbe Einheit beschriftete vier Linien identisch — die
+       Achse behauptete dann, gleiche Werte lägen auf verschiedenen Höhen.
+       Also: so viele Nachkommastellen wie nötig, und wenn es davon mehr als
+       zwei bräuchte, eine Stufe feiner rechnen. */
+    const unit = (div, suffix) => {
+      let k = 0;
+      while (k < 2 && step / div < Math.pow(10, -k) * 1.5) k++;
+      if (step / div < Math.pow(10, -k) * 1.5) return null;   // zu fein für diese Einheit
+      return (v / div).toFixed(k).replace(".", ",") + suffix;
+    };
+
+    if (Math.abs(v) >= 1e6) {
+      const m = unit(1e6, " M");
+      if (m !== null) return m;
+    }
+    if (Math.abs(v) >= 1e3) {
+      const k = unit(1e3, "k");
+      if (k !== null) return k;
+    }
+    return Math.round(v).toLocaleString("de-DE");
+  }
+
+  function showHistTip(evt, p) {
+    if (!histTip) {
+      histTip = document.createElement("div");
+      histTip.className = "hist-tip";
+      document.body.appendChild(histTip);
+    }
+    histTip.hidden = false;
+    histTip.innerHTML =
+      "<b>" + escHtml(fmtInt(p.solution_count)) + "</b> " +
+      escHtml(t("solutionsWord")) + "<br>" +
+      escHtml(histStamp(p.at)) +
+      (p.tick ? " · " + escHtml(t("tickWord")) + " " + escHtml(fmtInt(p.tick)) : "");
+    const pad = 14;
+    let left = evt.clientX + pad, top = evt.clientY + pad;
+    const r = histTip.getBoundingClientRect();
+    if (left + r.width > window.innerWidth - 8) left = evt.clientX - r.width - pad;
+    if (top + r.height > window.innerHeight - 8) top = evt.clientY - r.height - pad;
+    histTip.style.left = Math.max(8, left) + "px";
+    histTip.style.top = Math.max(8, top) + "px";
+  }
+  function hideHistTip() { if (histTip) histTip.hidden = true; }
+
+  function loadHistory() {
+    if (apiBase === null) { showHistEmpty(t("histEmpty")); return; }
+    fetch(apiUrl("/v1/mining/series?points=400"), { cache: "no-store" })
+      .then(r => {
+        /* 503 heißt: der Sampler hat noch nichts geschrieben. Das ist ein
+           normaler Anfangszustand, kein Fehler — entsprechend formuliert. */
+        if (r.status === 503) return null;
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(d => {
+        if (!d) { showHistEmpty(t("histEmpty")); return; }
+        histSeries = d.series || [];
+        histEpoch  = d.epoch;
+        histTotal  = d.sampled_total || histSeries.length;
+        drawHistory();
+      })
+      .catch(err => {
+        console.warn("[mining] history fetch error:", err);
+        showHistEmpty(t("histOffline"));
+      });
+  }
+
+  /* Der Live-Poll hängt seinen Punkt an die gespeicherte Reihe an, statt sie
+     neu zu laden: derselbe 30-Sekunden-Takt, in dem der Server sie schreibt,
+     also wächst die Kurve nahtlos weiter. Ein Epochenwechsel setzt sie zurück —
+     der Zähler beginnt dann wieder bei 0, und die alte Reihe beschriebe eine
+     andere Epoche. */
+  function appendHistoryPoint(data) {
+    if (!data || data.status !== "live") return;
+    const c = data.colony || {}, e = data.epoch || {};
+    if (c.solution_count == null || !e.epoch) return;
+
+    if (histEpoch !== null && e.epoch !== histEpoch) {
+      histSeries = []; histEpoch = e.epoch; histTotal = 0;
+      loadHistory();
+      return;
+    }
+    if (histEpoch === null) histEpoch = e.epoch;
+
+    const at = data.fetched_at || Math.floor(Date.now() / 1000);
+    const lastPt = histSeries[histSeries.length - 1];
+    if (lastPt && at - lastPt.at < 5) return;     /* derselbe gecachte Messwert */
+
+    histSeries.push({
+      at: at, tick: e.tick, solution_count: c.solution_count,
+      threshold: c.threshold, free_ann_slots: c.free_ann_slots,
+      peers_responding: (data.node || {}).peers_responding
+    });
+    histTotal += 1;
+    /* Nicht unbegrenzt anhängen: über Stunden wüchse die Reihe sonst ins
+       Unbestimmte, obwohl der Plot nur ein paar hundert Punkte auflöst. */
+    if (histSeries.length > 600) histSeries = histSeries.slice(-500);
+    drawHistory();
+  }
+
   /* ── Polling ──────────────────────────────────────────────────────────── */
   function poll() {
     clearTimeout(pollTimer);
@@ -1575,6 +1863,7 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
         flashEl(document.querySelector(".hero-count-wrap"));
 
         render(data);
+        appendHistoryPoint(data);
 
         nextIn = (data.next_refresh_in > 0) ? data.next_refresh_in : 30;
         startCountdown(nextIn);
@@ -1757,10 +2046,55 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
   /* Ant-Colony-Hintergrund starten */
   drawAntCanvas();
 
+  /* Gespeicherter Verlauf. Getrennt vom Poll geladen: der Poll liefert einen
+     Messwert, dieser Aufruf die Historie dahinter -- und er darf scheitern,
+     ohne die Live-Anzeige mitzunehmen. */
+  loadHistory();
+
+  /* Die viewBox folgt der Containerbreite, also muss die Kurve nach einer
+     Größenänderung neu gezeichnet werden. Entprellt, damit ein Ziehen am
+     Fensterrand nicht pro Pixel neu rechnet. */
+  let histResizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(histResizeTimer);
+    histResizeTimer = setTimeout(() => {
+      if (histSeries.length) drawHistory();
+    }, 180);
+  }, { passive: true });
+
   /* Erstes Polling */
   poll();
 
 })();
+
+  /* ─── Navigation (Burger) ─────────────────────────────────────────────────
+     The nav collapses below 860px. Closing on outside click and on Escape is
+     what keeps it from trapping a touch user behind an open panel. */
+  (function initNav() {
+    const toggle = document.getElementById("nav-toggle");
+    const nav = document.getElementById("site-nav");
+    if (!toggle || !nav) return;
+    function setOpen(open) {
+      nav.classList.toggle("open", open);
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    toggle.addEventListener("click", e => {
+      e.stopPropagation();
+      setOpen(!nav.classList.contains("open"));
+    });
+    document.addEventListener("click", e => {
+      if (nav.classList.contains("open") && !nav.contains(e.target)) setOpen(false);
+    });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") setOpen(false);
+    });
+    /* Reaching the desktop breakpoint must drop the .open state, or the panel
+       stays stuck open as an odd floating box next to the bar. */
+    window.addEventListener("resize", () => {
+      if (window.innerWidth > 860) setOpen(false);
+    }, { passive: true });
+  })();
+
 </script>
 </body>
 </html>
