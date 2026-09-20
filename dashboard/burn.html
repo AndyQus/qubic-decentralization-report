@@ -27,7 +27,7 @@
     4. Einordnung — was gemessen ist und was nicht
 -->
 
-<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./theme.css?v=ffad27c3">
 
 <style>
 /* ─── Page-specific tokens ──────────────────────────────────────────────────
@@ -109,23 +109,17 @@ html { scroll-behavior: smooth; }
   font-variant-numeric: tabular-nums;
 }
 .hero-unit { font-size: 12px; color: var(--muted); }
+/* Die Kacheln sind die gemeinsamen `.qs-stat` aus theme.css — dieselbe Kachel
+   wie die Computor-Slots im Report. Hier steht nur, wo sie sitzen: zentriert
+   unter der Gesamtsumme, nicht in einem eigenen Raster wie auf der Report-Seite.
+   `--stat-accent` faerbt die Akzentschiene in der Glut dieser Seite statt im
+   Cyan der Marke; die Kachelform bleibt identisch. */
 .hero-facts {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
-  margin-top: 18px;
+  --stat-accent: var(--burn);
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 14px;
+  margin-top: 20px;
 }
-.fact {
-  border: 1px solid var(--border);
-  border-radius: 11px; padding: 10px 14px; min-width: 132px;
-}
-.fact-label {
-  font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--faint); font-weight: 700;
-}
-.fact-value {
-  font-family: var(--mono); font-size: 16px; font-weight: 700; margin-top: 3px;
-  font-variant-numeric: tabular-nums;
-}
-.fact-sub { font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+.hero-facts .qs-stat { flex: 0 1 190px; text-align: left; }
 
 /* ─── Chart ─────────────────────────────────────────────────────────────────── */
 .chart-controls {
@@ -161,7 +155,7 @@ html { scroll-behavior: smooth; }
 /* Ein ungeprüfter Wert in einer Kachel, die sonst gesicherte Zahlen trägt. Die
    Farbe allein trüge die Aussage nicht (Rot/Orange lesen sich als "hoch", nicht
    als "unsicher"), also steht das Fragezeichen im Text und die Farbe stützt es. */
-.fact-value.unsure { color: var(--warn); }
+.hero-facts .qs-stat .s-val.unsure { color: var(--warn); }
 
 /* Der Index bleibt sichtbar, auch wenn ein Name da ist: die Rohdaten der Kette
    tragen den Index, und wer gegen einen Explorer prüft, braucht ihn. */
@@ -213,18 +207,53 @@ table.data td:first-child { font-family: var(--sans); }
 
 /* ─── Contract-Panel ────────────────────────────────────────────────────────── */
 .ct-row {
-  display: grid; grid-template-columns: 90px 1fr 120px;
+  display: grid; grid-template-columns: 186px 1fr 120px 62px;
   gap: 10px; align-items: center; padding: 7px 0;
   border-bottom: 1px solid var(--border);
 }
 .ct-row:last-child { border-bottom: 0; }
-.ct-idx { font-family: var(--mono); font-size: 12.5px; font-weight: 700; }
+/* Ein langer Name ("Computor Controlled Fund") darf die Zeile nicht doppelt so
+   hoch machen wie ihre Nachbarn — die Spalte ist breit genug für die übliche
+   Länge, der Ausreißer wird leicht verkleinert statt umgebrochen. */
+.ct-idx {
+  font-size: 12.5px; font-weight: 700; line-height: 1.25;
+  min-width: 0; overflow-wrap: anywhere; hyphens: auto;
+}
 .ct-bar-track { background: var(--surface2); border-radius: 4px; height: 9px; }
-.ct-bar { background: var(--contract); border-radius: 4px; height: 9px; }
+/* min-width so the smallest contract still shows a mark. A linear bar over six
+   orders of magnitude renders the bottom rows at 0.0002% — indistinguishable
+   from "no burns at all", which is the one thing the row must not say. The
+   number beside it stays exact, so the floor costs no accuracy. */
+.ct-bar {
+  background: var(--contract); border-radius: 4px; height: 9px;
+  min-width: 3px;
+}
 .ct-val {
   font-family: var(--mono); font-size: 12.5px; text-align: right;
   font-variant-numeric: tabular-nums;
 }
+/* The share is what makes the six-orders spread legible: QEarn 99.4% against
+   QUtil 0.0002% says in two columns what the bars cannot. */
+.ct-share {
+  font-family: var(--mono); font-size: 11px; text-align: right;
+  color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.ct-total {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 10px; margin-top: 12px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--muted);
+}
+.ct-total strong {
+  font-family: var(--mono); font-size: 13px; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+/* Die Einordnung steht unter der Summe, nicht über der Tabelle: sie beantwortet
+   eine Frage, die erst die Summe aufwirft. */
+.ct-window {
+  margin: 10px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--muted);
+}
+.ct-window strong { color: var(--text); }
 
 /* ─── Notices ───────────────────────────────────────────────────────────────── */
 .notice {
@@ -241,13 +270,23 @@ table.data td:first-child { font-family: var(--sans); }
   .brand h1 { font-size: 15px; }
   main { padding: 16px 14px 44px; }
   .card { padding: 14px; }
-  .hero-facts { gap: 8px; }
-  .fact { flex: 1 1 calc(50% - 8px); min-width: 0; }
+  .hero-facts { gap: 10px; }
+  .hero-facts .qs-stat { flex: 1 1 calc(50% - 10px); min-width: 0; }
   /* Die Umschaltung wird vollbreit, Touch-Ziele ≥ 44 px. */
   .chart-controls { gap: 6px; }
   .chart-controls .seg { flex: 1 1 100%; }
   .chart-controls .seg button { flex: 1; min-height: 44px; font-size: 13px; }
-  .ct-row { grid-template-columns: 62px 1fr 96px; gap: 8px; }
+  /* Auf dem Telefon rutscht der Name in eine eigene Zeile über Balken und Zahl,
+     statt auf 62 px abgeschnitten zu werden — "Computor Controlled Fund" passt
+     in keine schmale Spalte. Der Anteil entfällt hier; die Zahl trägt sie. */
+  .ct-row {
+    grid-template-columns: 1fr 96px; grid-template-areas: "name name" "bar val";
+    gap: 6px 8px;
+  }
+  .ct-idx { grid-area: name; }
+  .ct-bar-track { grid-area: bar; }
+  .ct-val { grid-area: val; }
+  .ct-share { display: none; }
   .how-link { padding: 8px 10px; }
 }
 
@@ -294,36 +333,36 @@ table.data td:first-child { font-family: var(--sans); }
 <main class="qs-main">
 
   <!-- 1 — HERO ------------------------------------------------------------- -->
-  <section class="qs-card qs-card--translucent hero" id="hero">
+  <section class="qs-card hero" id="hero">
     <canvas class="furnace" id="furnace" aria-hidden="true"></canvas>
     <div class="hero-label" data-i18n="heroLabel">Burned supply, total</div>
     <div class="hero-count" id="hero-total">–</div>
     <div class="hero-unit" id="hero-unit" data-i18n="quWord">QU</div>
     <div class="hero-facts">
-      <div class="fact">
-        <div class="fact-label" data-i18n="shareLabel">Share of supply</div>
-        <div class="fact-value" id="f-share">–</div>
-        <div class="fact-sub" data-i18n="shareSub">of ever-issued QU</div>
+      <div class="qs-stat glass-card themed">
+        <div class="s-label" data-i18n="shareLabel">Share of supply</div>
+        <div class="s-val small" id="f-share">–</div>
+        <div class="s-sub" data-i18n="shareSub">of ever-issued QU</div>
       </div>
-      <div class="fact">
-        <div class="fact-label" data-i18n="measuredLabel">Measured today</div>
-        <div class="fact-value" id="f-today">–</div>
-        <div class="fact-sub" id="f-today-sub">–</div>
+      <div class="qs-stat glass-card">
+        <div class="s-label" data-i18n="measuredLabel">Measured today</div>
+        <div class="s-val small" id="f-today">–</div>
+        <div class="s-sub" id="f-today-sub">–</div>
       </div>
-      <div class="fact">
-        <div class="fact-label" data-i18n="epochLabel">Epoch</div>
-        <div class="fact-value" id="f-epoch">–</div>
-        <div class="fact-sub" data-i18n="epochSub">official counter</div>
+      <div class="qs-stat glass-card">
+        <div class="s-label" data-i18n="epochLabel">Epoch</div>
+        <div class="s-val small" id="f-epoch">–</div>
+        <div class="s-sub" data-i18n="epochSub">official counter</div>
       </div>
-      <div class="fact">
-        <div class="fact-label" data-i18n="rateLabel">Burn rate</div>
-        <div class="fact-value" id="f-rate">–</div>
-        <div class="fact-sub" data-i18n="rateSub">projected from scanned ticks</div>
+      <div class="qs-stat glass-card themed">
+        <div class="s-label" data-i18n="rateLabel">Burn rate</div>
+        <div class="s-val small" id="f-rate">–</div>
+        <div class="s-sub" data-i18n="rateSub">projected from scanned ticks</div>
       </div>
-      <div class="fact">
-        <div class="fact-label" data-i18n="coverageLabel">Coverage</div>
-        <div class="fact-value" id="f-coverage">–</div>
-        <div class="fact-sub" id="f-coverage-sub">measured vs. official</div>
+      <div class="qs-stat glass-card">
+        <div class="s-label" data-i18n="coverageLabel">Coverage</div>
+        <div class="s-val small" id="f-coverage">–</div>
+        <div class="s-sub" id="f-coverage-sub">measured vs. official</div>
       </div>
     </div>
     <!-- Sagt in Worten, was die Animation zeigt — und wenn sie steht, warum. -->
@@ -385,8 +424,10 @@ table.data td:first-child { font-family: var(--sans); }
   <!-- 3 — CONTRACT --------------------------------------------------------- -->
   <section class="qs-card qs-card--translucent" id="contract-card" hidden>
     <h2 data-i18n="ctTitle">Burns attributed to a contract</h2>
-    <p class="desc" data-i18n="ctDesc">A separate panel on purpose: these run six orders of magnitude below the computor burns, so a shared axis would hide them entirely. Names come from the registry Qubic publishes for the official explorer, so a newly deployed contract appears by name on its own; an index that registry does not list stays an index.</p>
+    <p class="desc" data-i18n="ctDesc">A separate panel on purpose: these are counted from BURNING events and are a different kind of burn from the transfers above, so they are never summed with them. Names come from the registry Qubic publishes for the official explorer, so a newly deployed contract appears by name on its own; an index that registry does not list stays an index.</p>
     <div id="ct-list"></div>
+    <div class="ct-total" id="ct-total"></div>
+    <p class="ct-window" id="ct-window" hidden></p>
   </section>
 
   <!-- 4 — EINORDNUNG ------------------------------------------------------- -->
@@ -401,7 +442,35 @@ table.data td:first-child { font-family: var(--sans); }
 </main>
 
 <footer class="qs-footer">
-  <span data-i18n="footDisclaimer">Measured from public data. No figure on this page is estimated or interpolated. Use for analysis, not as a basis for investment decisions.</span>
+  <!-- Same footer as index and mining: the legal links belong on every public
+       page, and the caveats travel with the numbers. Only discData names what
+       THIS page measures. -->
+  <div class="fdisc">
+    <b data-i18n="discLabel">Disclaimer:</b>
+    <span data-i18n="discBeta">This page is currently in beta status.</span>
+    <span data-i18n="discData">Burn events are counted by this project from a Qubic node's tick logs and reconciled against the official counter in</span>
+    <span><a href="https://rpc.qubic.org" target="_blank" rel="noreferrer">rpc.qubic.org</a>.</span>
+    <span data-i18n="footDisclaimer">Measured from public data. No figure on this page is estimated or interpolated.</span>
+    <span data-i18n="discNoGuarantee">We do not guarantee the completeness, accuracy, or availability of the data.</span>
+    <b data-i18n="discDemo">Use it for analysis purposes only — not as a basis for investment decisions.</b>
+  </div>
+
+  <div class="fbar">
+    <div class="fleft">
+      <span class="flogo" aria-hidden="true"></span>
+      <span>&copy; <span id="foot-year">2026</span> <span data-i18n="sponsored">Qubic – Sponsored by AndyQus</span></span>
+    </div>
+    <div class="flinks">
+      <a href="https://qubic.org" target="_blank" rel="noreferrer">Qubic.org</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://github.com/AndyQus/qubic-decentralization-report" target="_blank" rel="noreferrer">GitHub</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://qubic.org/terms-of-service" target="_blank" rel="noreferrer" data-i18n="tos">Terms of Service</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://qubic.org/privacy-policy" target="_blank" rel="noreferrer" data-i18n="privacy">Privacy Policy</a>
+    </div>
+    <div class="fright"><a href="./log.html">Status &amp; Log</a></div>
+  </div>
 </footer>
 
 <div class="tip" id="tip" role="status" aria-live="polite"></div>
@@ -449,12 +518,23 @@ table.data td:first-child { font-family: var(--sans); }
       modeDelta: "Per period", modeCumulative: "Cumulative",
       legendBurned: "Burned per period", legendCum: "Cumulative (measured range)",
       ctTitle: "Burns attributed to a contract",
-      ctDesc: "A separate panel on purpose: these run six orders of magnitude below the computor burns, so a shared axis would hide them entirely. Names come from the registry Qubic publishes for the official explorer, so a newly deployed contract appears by name on its own; an index that registry does not list stays an index.",
+      ctDesc: "A separate panel on purpose: these are counted from BURNING events and are a different kind of burn from the transfers above, so they are never summed with them. Names come from the registry Qubic publishes for the official explorer, so a newly deployed contract appears by name on its own; an index that registry does not list stays an index.",
       ctIndex: "Contract", ctShare: "share",
+      ctTotal: "Total attributed to a contract",
+      ctWinTitle: "Measured window:",
+      ctWinRange: "{from} to {to} ({days} days with contract burns, {ep}) — not the chain's history.",
+      ctWinEpoch: "epoch {n}", ctWinEpochs: "epochs {a}–{b}",
+      ctWinOne: "{day} only — not the chain's history.",
+      ctWinRatio: "That is {pct} of the {total} QU the protocol's own counter reports burned since genesis; everything burned before this scan began is not in this table.",
       aboutTitle: "Where these numbers come from",
       aboutBody: "The official counter (/v1/latest-stats → burnedQus) is cumulative and authoritative, but it is an epoch aggregate: measured over 375 ticks it did not move by a single QU. So a per-day series cannot come from it. This project counts the burn events themselves from a Bob node's tick logs and reconciles the sum against the official counter at every epoch boundary — that ratio is the coverage figure above. Where coverage falls below 100%, a burn category exists that this scan does not recognise yet, and it is reported rather than hidden.",
       aboutLink: "How this report works →",
-      footDisclaimer: "Measured from public data. No figure on this page is estimated or interpolated. Use for analysis, not as a basis for investment decisions.",
+      footDisclaimer: "Measured from public data. No figure on this page is estimated or interpolated.",
+      discLabel: "Disclaimer:", discBeta: "This page is currently in beta status.",
+      discData: "Burn events are counted by this project from a Qubic node's tick logs and reconciled against the official counter in",
+      discNoGuarantee: "We do not guarantee the completeness, accuracy, or availability of the data.",
+      discDemo: "Use it for analysis purposes only — not as a basis for investment decisions.",
+      sponsored: "Qubic – Sponsored by AndyQus", tos: "Terms of Service", privacy: "Privacy Policy",
       thEvents: "Events", thBurned: "Burned (QU)", thPeriod: "Period",
       thCumulative: "Cumulative (QU)",
       tipEvents: "Burn events", tipBurned: "Burned", tipCum: "Cumulative",
@@ -498,12 +578,23 @@ table.data td:first-child { font-family: var(--sans); }
       modeDelta: "Pro Periode", modeCumulative: "Kumulativ",
       legendBurned: "Verbrannt pro Periode", legendCum: "Kumulativ (gemessener Bereich)",
       ctTitle: "Burns mit Contract-Zuordnung",
-      ctDesc: "Bewusst ein eigenes Panel: diese liegen sechs Größenordnungen unter den Computor-Burns, eine gemeinsame Achse würde sie vollständig verschwinden lassen. Die Namen stammen aus der Registry, die Qubic für den offiziellen Explorer veröffentlicht — ein neu deployter Contract erscheint also von selbst mit Namen; ein Index, den die Registry nicht führt, bleibt ein Index.",
+      ctDesc: "Bewusst ein eigenes Panel: diese werden aus BURNING-Ereignissen gezählt und sind eine andere Art von Burn als die Transfers oben — sie werden deshalb nie mit ihnen summiert. Die Namen stammen aus der Registry, die Qubic für den offiziellen Explorer veröffentlicht — ein neu deployter Contract erscheint also von selbst mit Namen; ein Index, den die Registry nicht führt, bleibt ein Index.",
       ctIndex: "Contract", ctShare: "Anteil",
+      ctTotal: "Summe mit Contract-Zuordnung",
+      ctWinTitle: "Gemessener Zeitraum:",
+      ctWinRange: "{from} bis {to} ({days} Tage mit Contract-Burns, {ep}) — nicht die Historie der Chain.",
+      ctWinEpoch: "Epoche {n}", ctWinEpochs: "Epochen {a}–{b}",
+      ctWinOne: "nur {day} — nicht die Historie der Chain.",
+      ctWinRatio: "Das sind {pct} der {total} QU, die der protokolleigene Zähler seit Genesis als verbrannt meldet; alles, was vor dem Start dieses Scans verbrannt wurde, steht nicht in dieser Tabelle.",
       aboutTitle: "Woher diese Zahlen kommen",
       aboutBody: "Der offizielle Zähler (/v1/latest-stats → burnedQus) ist kumulativ und maßgeblich, aber ein Epochen-Aggregat: über 375 Ticks gemessen bewegte er sich um keinen einzigen QU. Eine Tagesreihe kann also nicht von ihm kommen. Dieses Projekt zählt die Burn-Ereignisse selbst aus den Tick-Logs eines Bob-Nodes und gleicht die Summe an jeder Epochengrenze gegen den offiziellen Zähler ab — dieses Verhältnis ist die Abdeckung oben. Fällt sie unter 100 %, existiert eine Burn-Kategorie, die dieser Scan noch nicht erkennt; sie wird ausgewiesen statt versteckt.",
       aboutLink: "Wie dieser Report funktioniert →",
-      footDisclaimer: "Aus öffentlichen Daten gemessen. Keine Zahl auf dieser Seite ist geschätzt oder interpoliert. Zu Analysezwecken, nicht als Grundlage für Anlageentscheidungen.",
+      footDisclaimer: "Aus öffentlichen Daten gemessen. Keine Zahl auf dieser Seite ist geschätzt oder interpoliert.",
+      discLabel: "Hinweis:", discBeta: "Diese Seite befindet sich im Beta-Status.",
+      discData: "Burn-Ereignisse werden von diesem Projekt aus den Tick-Logs eines Qubic-Nodes gezählt und gegen den offiziellen Zähler abgeglichen in",
+      discNoGuarantee: "Wir übernehmen keine Gewähr für Vollständigkeit, Richtigkeit oder Verfügbarkeit der Daten.",
+      discDemo: "Nutzung nur zu Analysezwecken — keine Grundlage für Investitionsentscheidungen.",
+      sponsored: "Qubic – Sponsored by AndyQus", tos: "Nutzungsbedingungen", privacy: "Datenschutz",
       thEvents: "Ereignisse", thBurned: "Verbrannt (QU)", thPeriod: "Periode",
       thCumulative: "Kumulativ (QU)",
       tipEvents: "Burn-Ereignisse", tipBurned: "Verbrannt", tipCum: "Kumulativ",
@@ -1149,11 +1240,13 @@ table.data td:first-child { font-family: var(--sans); }
       return;
     }
     card.hidden = false;
-    const max = Math.max.apply(null, contracts.by_contract.map(c => c.burned).concat([1]));
+    const rows = contracts.by_contract;
+    const max = Math.max.apply(null, rows.map(c => c.burned).concat([1]));
+    const total = rows.reduce((a, c) => a + c.burned, 0);
     /* Name statt Index, wo die offizielle Registry einen kennt. Kennt sie keinen
        (ein Contract, der neuer ist als die Registry-Datei), bleibt der Index
        stehen — ein erfundener Name wäre schlimmer als eine nackte Zahl. */
-    list.innerHTML = contracts.by_contract.map(c => {
+    list.innerHTML = rows.map(c => {
       const label = c.label || c.name;
       const title = label
         ? escapeHtml(label)
@@ -1161,13 +1254,85 @@ table.data td:first-child { font-family: var(--sans); }
       const sub = label
         ? `<span class="ct-sub">${escapeHtml(t("ctIndex"))} ${escapeHtml(String(c.index))}</span>`
         : "";
+      /* Anteil aus den eigenen Zeilen gerechnet, nicht aus c.share: fragt die
+         Seite eine einzelne Epoche ab, bezieht sich der Anteil dann auf das,
+         was hier tatsächlich steht. */
+      const frac = total ? (c.burned / total) : 0;
+      /* Unter 0,01 % wird "0,00 %" zur Falschaussage über eine Zeile, die sehr
+         wohl gebrannt hat — "<0,01 %" ist die ehrliche Schreibweise. Die Zahl
+         darin kommt aus fmtPct, damit das Dezimaltrennzeichen der Sprache folgt. */
+      const pctText = (frac > 0 && frac < 0.0001)
+        ? "<" + fmtPct(0.0001, 2)
+        : fmtPct(frac, 2);
+      /* Die Adresse ist das, was diese Zeile fälschungssicher macht: sie lässt
+         sich im offiziellen Explorer nachschlagen. Sie gehört in den Tooltip,
+         nicht in die Zeile — sonst erschlägt sie den Namen. */
+      const tip = [label ? label : null,
+                   t("ctIndex") + " " + String(c.index),
+                   c.address || null,
+                   fmtInt(c.burned) + " QU"]
+                  .filter(Boolean).join(" · ");
       return `
-      <div class="ct-row">
+      <div class="ct-row" title="${escapeHtml(tip)}">
         <div class="ct-idx">${title}${sub}</div>
-        <div class="ct-bar-track"><div class="ct-bar" style="width:${(c.burned / max * 100).toFixed(1)}%"></div></div>
+        <div class="ct-bar-track"><div class="ct-bar" style="width:${(c.burned / max * 100).toFixed(2)}%"></div></div>
         <div class="ct-val">${escapeHtml(fmtInt(c.burned))}</div>
+        <div class="ct-share">${escapeHtml(pctText)}</div>
       </div>`;
     }).join("");
+    /* Die Summe gehört sichtbar dazu: sechs Zeilen, deren größte 99 % trägt,
+       laden sonst zum Kopfrechnen ein. */
+    const foot = document.getElementById("ct-total");
+    if (foot) {
+      foot.innerHTML = `<span>${escapeHtml(t("ctTotal"))}</span>` +
+        `<strong>${escapeHtml(fmtInt(total))} QU</strong>`;
+    }
+    renderContractWindow(total);
+  }
+
+  /* Ohne diese Zeile lädt die Summe oben zur einen Fehllesung ein, die sie nicht
+     zulassen darf: dass sie mit dem Zähler im Header vergleichbar wäre. Der
+     zählt seit Genesis, diese Tabelle zählt die Tage, die dieses Projekt
+     gescannt hat — derzeit eine Handvoll. Der Zeitraum kommt aus den Buckets
+     selbst, nicht aus einer im Code festgeschriebenen Zahl. */
+  function renderContractWindow(total) {
+    const el = document.getElementById("ct-window");
+    if (!el) return;
+    const w = contracts && contracts.window;
+    if (!w || !w.first_day || !w.last_day) { el.hidden = true; return; }
+    el.hidden = false;
+
+    const from = dayLabel(w.first_day), to = dayLabel(w.last_day);
+    /* Eine Epoche oder mehrere — beides kommt aus den Daten, damit die Zeile
+       nicht altert, sobald die nächste Epochengrenze überschritten ist. */
+    const ep = (w.first_epoch == null) ? ""
+      : (w.first_epoch === w.last_epoch)
+        ? t("ctWinEpoch", { n: w.first_epoch })
+        : t("ctWinEpochs", { a: w.first_epoch, b: w.last_epoch });
+    const span = (w.first_day === w.last_day)
+      ? t("ctWinOne", { day: from })
+      : t("ctWinRange", { from: from, to: to, days: fmtInt(w.days), ep: ep });
+
+    /* Der Anteil am offiziellen Gesamtzähler macht die Größenordnung konkret:
+       "0,0018 %" sagt mehr als jede Formulierung mit "nur ein Ausschnitt". */
+    let ratio = "";
+    const off = contracts.official_total;
+    if (off && total) {
+      const frac = total / off;
+      /* Zwei Nachkommastellen auf der Schwelle: "<0,01 %" liest sich wie eine
+         Aussage, "<0,0100 %" wie ein Rundungsartefakt. */
+      const txt = (frac > 0 && frac < 0.0001) ? "<" + fmtPct(0.0001, 2)
+                                              : fmtPct(frac, 4);
+      ratio = " " + t("ctWinRatio", { pct: txt, total: fmtInt(off) });
+    }
+    el.innerHTML = `<strong>${escapeHtml(t("ctWinTitle"))}</strong> ` +
+                   escapeHtml(span + ratio);
+  }
+
+  function dayLabel(day) {
+    const q = dayParts(day);
+    if (!q) return String(day);
+    return lang === "de" ? `${q.d}.${q.m}.${q.y}` : `${q.y}-${q.m}-${q.d}`;
   }
 
   /* ─── Laden ─────────────────────────────────────────────────────────────── */
@@ -1294,6 +1459,10 @@ table.data td:first-child { font-family: var(--sans); }
   syncSeg("mode-seg", "mode", mode);
   applyTheme();
   applyLang();
+  // The footer year is filled here rather than hardcoded, so the page does not
+  // start claiming the wrong year on 1 January.
+  var fy = document.getElementById("foot-year");
+  if (fy) fy.textContent = String(new Date().getFullYear());
   loadAll();
 })();
 </script>

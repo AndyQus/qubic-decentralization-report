@@ -15,7 +15,7 @@ with sync_playwright() as p:
     # 1) dashboard served by the API (same-origin auto-fetch of /v1/dashboard-data)
     pg.goto(BASE + "/dashboard/", wait_until="networkidle"); pg.wait_for_timeout(1400)
     ok_epoch = pg.text_content("#hdr-epoch")
-    ok_ops = pg.text_content(".kpi .k-val")
+    ok_ops = pg.text_content(".qs-stat .s-val")
     pg.screenshot(path=str(ROOT/"scripts"/"shot_served_dashboard.png"), full_page=True)
     print("dashboard served: epoch=", ok_epoch, "first KPI=", ok_ops)
 

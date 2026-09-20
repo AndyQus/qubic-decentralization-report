@@ -648,8 +648,13 @@ def burn_contracts(epoch: int | None = Query(None, description="Restrict to one 
     """Burns carrying a `contractIndexBurnedFor`, summed per contract index.
 
     These are reported separately from the transfer burns, never summed with
-    them: measured across epochs 225-228 they run ~0.3-0.5 M QU per epoch against
-    trillions from the computor burns, so a shared total would hide them entirely.
+    them: they are a different kind of event (BURNING, not a QU_TRANSFER to a
+    burn sink), and summing two different things into one figure would be wrong
+    regardless of their relative size. That size is not fixed — measured over
+    2026-09-16..20 the contract burns ran ~60x ABOVE the transfer burns in the
+    same window, the reverse of what an earlier note here assumed — which is
+    another reason the page states its measured window rather than implying the
+    total covers the chain's history.
 
     Each row carries the contract's NAME, resolved against the registry Qubic
     publishes and the official explorer itself renders
@@ -678,7 +683,17 @@ def burn_contracts(epoch: int | None = Query(None, description="Restrict to one 
         row.update({key: val for key, val in contracts.describe(idx).items()
                     if key in ("name", "label", "address", "known")})
         rows.append(row)
+    # The window is not decoration: without it this total reads as a lifetime
+    # figure and gets compared against the header's cumulative counter, which
+    # covers the chain since genesis. It covers the days we have scanned.
+    window = get_store().burn_contract_window(epoch)
+    _official_row = get_store().latest_burn_total()
+    official = (_official_row or {}).get("burned_total")
     return {"epoch": epoch, "total": sum(totals.values()), "by_contract": rows,
+            "window": window,
+            # Published so the page can state the ratio rather than let a reader
+            # assume one. None when the official counter has not been sampled.
+            "official_total": official,
             "registry": {
                 "source": contracts.REGISTRY_URL,
                 "contracts_known": len(contracts.registry()),
@@ -799,12 +814,36 @@ def dashboard_data():
     raise _no_data("report")
 
 
+class _RevalidatingStatics(StaticFiles):
+    """StaticFiles that tells the browser to check back before reusing a file.
+
+    Starlette sends only ETag and Last-Modified, and no Cache-Control. A browser
+    that gets no instruction is free to invent its own freshness window, and it
+    does: the file is then reused for hours without a request reaching us. That
+    was survivable while every page carried its own CSS inline, because the HTML
+    came fresh each time. Now that the design lives in dashboard/theme.css, a
+    stale copy of that one file strips the styling off pages whose markup already
+    expects it — the tiles lose their card, their rail and their type scale, and
+    the page looks broken rather than merely old.
+
+    `no-cache` is not "do not cache": it stores the file and revalidates it, so a
+    304 still costs no bytes. It only removes the browser's licence to skip
+    asking. The pages link theme.css with a ?v=<hash> that changes whenever the
+    file does, which handles proxies in between that ignore this header.
+    """
+
+    def file_response(self, *args, **kwargs):
+        resp = super().file_response(*args, **kwargs)
+        resp.headers.setdefault("Cache-Control", "no-cache")
+        return resp
+
+
 # Serve the reference dashboard as static files at /dashboard (mounted last so the
 # /v1 API routes above always take precedence). When opened via http the dashboard
 # fetches this same origin's /v1/dashboard-data automatically.
 if DASHBOARD_DIR.exists():
-    app.mount("/dashboard", StaticFiles(directory=str(DASHBOARD_DIR), html=True), name="dashboard")
+    app.mount("/dashboard", _RevalidatingStatics(directory=str(DASHBOARD_DIR), html=True), name="dashboard")
 
 _EXAMPLES = ROOT / "examples"
 if _EXAMPLES.exists():
-    app.mount("/examples", StaticFiles(directory=str(_EXAMPLES), html=True), name="examples")
+    app.mount("/examples", _RevalidatingStatics(directory=str(_EXAMPLES), html=True), name="examples")

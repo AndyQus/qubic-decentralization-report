@@ -20,7 +20,7 @@
     5. Einordnung — was das Mining NICHT ist (prominent)
 -->
 
-<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./theme.css?v=ffad27c3">
 
 <style>
 /* ─── Page-specific tokens ──────────────────────────────────────────────────
@@ -34,45 +34,27 @@
   --panel:      color-mix(in srgb, #ffffff 62%, transparent);
   --hero-glow:  rgba(126, 111, 255, .16);
   --pulse-ring: rgba(3, 105, 161, .45);
-  --warn-bg:    rgba(180, 83, 9, .10);
-  --warn-fg:    #8a5c07;
-  --warn-link:  #0369a1;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --panel:      color-mix(in srgb, #1a2332 62%, transparent);
     --hero-glow:  rgba(78, 224, 252, .15);
     --pulse-ring: rgba(78, 224, 252, .45);
-    --warn-bg:    rgba(245, 166, 35, .09);
-    --warn-fg:    #c8993f;
-    --warn-link:  #4ee0fc;
   }
 }
 :root[data-theme="dark"] {
   --panel:      color-mix(in srgb, #1a2332 62%, transparent);
   --hero-glow:  rgba(78, 224, 252, .15);
   --pulse-ring: rgba(78, 224, 252, .45);
-  --warn-bg:    rgba(245, 166, 35, .09);
-  --warn-fg:    #c8993f;
-  --warn-link:  #4ee0fc;
 }
 
 /* ─── Base ──────────────────────────────────────────────────────────────────── */
 html { scroll-behavior: smooth; }
 
 /* ─── Header ────────────────────────────────────────────────────────────────── */
-/* Header, links, segmented control and icon button come from theme.css
-   (.qs-header, .qs-link, .qs-seg, .qs-icon-btn). This page spans the full
-   viewport width rather than the shared 1440px column, because the colony
-   canvas behind it is full-bleed — so only the width is overridden. */
-.qs-header-inner { max-width: 100%; padding: 14px 24px; gap: 16px; flex-wrap: wrap; }
-.brand h1 {
-  font-size: 15px; margin: 0; font-weight: 650;
-  letter-spacing: .2px; white-space: nowrap;
-}
-.brand .sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
-.logo { width: 32px; height: 32px; }
-.how-link { height: 32px; font-size: 12.5px; font-weight: 600; }
+/* Header, links, segmented control and icon button all come from theme.css.
+   Nothing about the header is redefined here any more — that is what makes it
+   sit in the same place as on the other pages. */
 
 /* ─── Refresh Ticker ────────────────────────────────────────────────────────── */
 .refresh-bar {
@@ -90,6 +72,10 @@ html { scroll-behavior: smooth; }
 }
 .refresh-bar.stale .r-dot { animation: none; background: var(--warn); }
 .refresh-bar.error .r-dot { animation: none; background: var(--danger); }
+/* Loading is not a warning: the first fetch is simply in flight, so the dot keeps
+   the accent colour and pulses faster instead of turning amber the way `stale`
+   does. Reading an amber dot on every page entry taught the wrong thing. */
+.refresh-bar.loading .r-dot { background: var(--accent); animation: rpulse 1s ease-out infinite; }
 @keyframes rpulse {
   0%   { box-shadow: 0 0 0 0 var(--pulse-ring); }
   70%  { box-shadow: 0 0 0 8px transparent; }
@@ -97,6 +83,27 @@ html { scroll-behavior: smooth; }
 }
 @media (prefers-reduced-motion: reduce) {
   .refresh-bar .r-dot { animation: none; }
+}
+
+/* ─── Loading placeholders ──────────────────────────────────────────────────────
+   A value that is on its way looks different from a value that is missing. The
+   dashes alone could not tell those apart, so anything still in flight carries a
+   slow shimmer; the first render strips the class and the shimmer stops. */
+.is-loading {
+  color: transparent !important;
+  background: linear-gradient(90deg,
+      color-mix(in srgb, var(--muted) 14%, transparent) 25%,
+      color-mix(in srgb, var(--muted) 26%, transparent) 50%,
+      color-mix(in srgb, var(--muted) 14%, transparent) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: 6px;
+  /* Without this the glow would trace the invisible glyphs. */
+  text-shadow: none !important;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .is-loading { animation: none; }
 }
 
 /* ─── Flash on new data ─────────────────────────────────────────────────────── */
@@ -113,23 +120,21 @@ html { scroll-behavior: smooth; }
 .hero {
   position: relative;
   overflow: hidden;
-  padding: 52px 24px 44px;
+  padding: 52px var(--gutter) 44px;
   background: var(--bg);
 }
 /* The colony runs behind the whole page, not just the hero: the swarm is what the
    page is about, and a viewport-fixed canvas keeps it present while scrolling
    without ever growing the document or scrolling with it. Behind everything
    (z-index 0 against the cards' own stacking), and never interactive. */
-.hero-canvas {
-  position: fixed; inset: 0;
-  width: 100%; height: 100%;
-  pointer-events: none;
-  z-index: 0;
-  opacity: .9;
-}
+/* .hero-canvas is a .qs-canvas from theme.css; only the opacity override for
+   this page's denser colony stays local. */
 /* Content sits above the canvas. Cards keep their own solid backgrounds, so the
    animation reads as depth behind them rather than texture through them. */
-.hero, .main-grid, footer, header.top { position: relative; z-index: 1; }
+/* Content above the canvas. The header is left out on purpose — it is
+   sticky at z-index 30 (theme.css), and pinning it to 1 here put it level
+   with the cards, which hid the open mobile menu behind the first one. */
+.hero, .main-grid, footer { position: relative; z-index: 1; }
 /* The hero no longer paints over it. */
 .hero { background: transparent; }
 /* Light keeps nearly the same opacity as dark -- the old .3 made the colony
@@ -142,7 +147,13 @@ html { scroll-behavior: smooth; }
 
 .hero-inner {
   position: relative; z-index: 2;
-  max-width: 1440px; margin: 0 auto;
+  /* .hero carries the 24px gutter itself, so the inner box has to stop at the
+     content width MINUS those gutters -- otherwise the hero centres a 1440px
+     box inside (viewport - 48px) while .main-grid centres a 1440px box that
+     already contains its padding, and the two columns drift apart by 48px on
+     wide screens. calc keeps them aligned at every width. */
+  max-width: calc(var(--content-width) - 2 * var(--gutter));
+  margin: 0 auto;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 32px 48px;
@@ -258,7 +269,8 @@ html { scroll-behavior: smooth; }
 
 /* ─── Main Content Grid ─────────────────────────────────────────────────────── */
 .main-grid {
-  max-width: 1440px; margin: 0 auto; padding: 0 24px 64px;
+  max-width: var(--content-width); margin: 0 auto;
+  padding: 0 var(--gutter) 64px;
 }
 
 /* ─── Section Card ──────────────────────────────────────────────────────────── */
@@ -338,33 +350,13 @@ html { scroll-behavior: smooth; }
 }
 
 /* ─── Node Status Section ───────────────────────────────────────────────────── */
+/* Die Kacheln sind die gemeinsamen `.qs-stat` aus theme.css — dieselbe Kachel
+   wie die Computor-Slots im Report und die Kennzahlen auf der Burn-Seite. Hier
+   steht nur noch das Raster: zwei Spalten statt auto-fit, weil IP-Adresse und
+   Node-Version neben- statt untereinander gehören. */
 .node-grid {
-  display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
 }
-.node-cell {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
-}
-.nc-label {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--faint); font-weight: 650; margin-bottom: 5px;
-}
-.nc-val {
-  font-size: 18px; font-weight: 700;
-  font-variant-numeric: tabular-nums; letter-spacing: -.02em;
-  color: var(--text); word-break: break-all;
-}
-.nc-val.accent { color: var(--accent); }
-.nc-val.code {
-  font-family: var(--mono); font-size: 13.5px;
-  font-weight: 600; letter-spacing: 0; word-break: break-all;
-}
-.nc-sub { font-size: 11.5px; color: var(--faint); margin-top: 3px; }
-.nc-full { grid-column: 1 / -1; }
 
 /* Connection indicator */
 .conn-row {
@@ -407,13 +399,16 @@ html { scroll-behavior: smooth; }
 .tp-row {
   display: flex; flex-direction: column; gap: 2px;
 }
+/* Die Task-Parameter bleiben rahmenlose Zeilen statt Kacheln — sechs Kacheln
+   neben dem vierkachligen Node-Panel wären erdrückend. Beschriftung und Zahl
+   sprechen aber dieselbe Sprache wie `.s-label` / `.s-val.small` in theme.css,
+   damit dasselbe Wort nicht in zwei Schriftgrößen auftaucht. */
 .tp-label {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--faint); font-weight: 650;
+  font-size: 12px; color: var(--muted); font-weight: 600;
 }
 .tp-val {
-  font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums;
-  color: var(--text); letter-spacing: -.01em;
+  font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--text); letter-spacing: -.02em;
 }
 .tp-unit { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 3px; }
 
@@ -421,8 +416,7 @@ html { scroll-behavior: smooth; }
   margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
 }
 .hash-label {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--faint); font-weight: 650; margin-bottom: 5px;
+  font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 5px;
 }
 .hash-val {
   font-family: var(--mono); font-size: 12px; color: var(--muted);
@@ -440,8 +434,7 @@ html { scroll-behavior: smooth; }
   margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
 }
 .trit-label {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--faint); font-weight: 650; margin-bottom: 10px;
+  font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 10px;
 }
 .trit-bars { display: flex; gap: 0; border-radius: 8px; overflow: hidden; height: 26px; }
 .trit-seg {
@@ -469,35 +462,15 @@ html { scroll-behavior: smooth; }
 }
 
 /* ─── Revenue Section ───────────────────────────────────────────────────────── */
-.rev-kpis {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.rev-kpi {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 10px; padding: 12px 14px;
-}
-.rk-label {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--faint); font-weight: 650; margin-bottom: 5px;
-}
-.rk-val {
-  font-size: 22px; font-weight: 720; font-variant-numeric: tabular-nums;
-  letter-spacing: -.02em; color: var(--text);
-}
-.rk-of { font-size: 13px; font-weight: 500; color: var(--faint); }
-.rk-sub { font-size: 11.5px; color: var(--faint); margin-top: 2px; }
-.rk-val.accent { color: var(--accent); }
+/* Ebenfalls `.qs-stat`; nur der Abstand zum Histogramm darunter ist lokal. */
+.rev-kpis { margin-bottom: 20px; }
 
 /* Histogram */
 .histogram-wrap {
   position: relative;
 }
 .histogram-label {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--faint); font-weight: 650; margin-bottom: 8px;
+  font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 8px;
 }
 #histogram-canvas {
   width: 100%; height: 120px;
@@ -544,22 +517,7 @@ html { scroll-behavior: smooth; }
 [hidden] { display: none !important; }
 
 /* ─── Footer ─────────────────────────────────────────────────────────────────  */
-footer {
-  border-top: 1px solid var(--border);
-  padding: 20px 24px 32px;
-  font-size: 12px; color: var(--faint);
-  display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between;
-  align-items: center; max-width: 100%;
-}
-footer code { font-family: var(--mono); color: var(--muted); }
 footer { flex-direction: column; align-items: stretch; gap: 14px; }
-.fdisc { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
-  gap: 4px; text-align: center; padding: 8px 10px; border-radius: 6px; line-height: 1.55;
-  background: var(--warn-bg); color: var(--warn-fg); }
-.fdisc a { color: var(--warn-link); }
-.fdisc a:hover { text-decoration: underline; }
-.fbar { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between;
-  align-items: center; }
 .flinks { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .flinks a { color: var(--accent); }
 .flinks a:hover { text-decoration: underline; }
@@ -567,10 +525,9 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
 
 /* ─── Responsive ─────────────────────────────────────────────────────────────  */
 @media (max-width: 600px) {
-  .hero { padding: 36px 16px 32px; }
+  .hero { padding: 36px var(--gutter-mobile) 32px; }
   .hero-count { font-size: clamp(44px, 14vw, 72px); }
-  .top-inner { padding: 12px 16px; }
-  .main-grid { padding: 0 16px 48px; }
+  .main-grid { padding: 0 var(--gutter-mobile) 48px; }
   .sc-body { padding: 12px 16px 16px; }
   .sc-head { padding: 14px 16px 0; }
   .sc-desc { margin: 4px 16px 0; }
@@ -624,7 +581,7 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
 ═══════════════════════════════════════════════════════════ -->
 <!-- Ameisenkolonie-Animation: Hintergrund der gesamten Seite, viewport-fixiert.
      Steht vor dem Inhalt im Markup und hinter ihm in der Stapelreihenfolge. -->
-<canvas class="hero-canvas" id="ant-canvas" aria-hidden="true"></canvas>
+<canvas class="qs-canvas hero-canvas" id="ant-canvas" aria-hidden="true"></canvas>
 
 <section class="hero" id="hero-section">
   <div class="hero-inner">
@@ -721,27 +678,27 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
           <span class="conn-dot" id="conn-dot"></span>
           <span class="conn-label" id="conn-label" data-i18n="connecting">Verbindungsaufbau…</span>
         </div>
-        <div class="node-grid">
-          <div class="node-cell">
-            <div class="nc-label" data-i18n="ipAddr">IP-Adresse</div>
-            <div class="nc-val code" id="node-ip">–</div>
+        <div class="node-grid qs-stats">
+          <div class="qs-stat glass-card">
+            <div class="s-label" data-i18n="ipAddr">IP-Adresse</div>
+            <div class="s-val code" id="node-ip">–</div>
           </div>
-          <div class="node-cell">
-            <div class="nc-label" data-i18n="latency">Latenz</div>
-            <div class="nc-val accent" id="node-latency">–</div>
-            <div class="nc-sub" data-i18n="latencySub">TCP-Roundtrip zum Node</div>
+          <div class="qs-stat glass-card accent">
+            <div class="s-label" data-i18n="latency">Latenz</div>
+            <div class="s-val small" id="node-latency">–</div>
+            <div class="s-sub" data-i18n="latencySub">TCP-Roundtrip zum Node</div>
           </div>
-          <div class="node-cell">
-            <div class="nc-label" data-i18n="nodeVersion">Node-Version</div>
-            <div class="nc-val" id="node-version">–</div>
+          <div class="qs-stat glass-card">
+            <div class="s-label" data-i18n="nodeVersion">Node-Version</div>
+            <div class="s-val small" id="node-version">–</div>
           </div>
-          <div class="node-cell">
-            <div class="nc-label" data-i18n="peersWord">Peers</div>
-            <div class="nc-val" id="node-peers">–</div>
-            <div class="nc-sub" id="node-peers-sub"></div>
+          <div class="qs-stat glass-card">
+            <div class="s-label" data-i18n="peersWord">Peers</div>
+            <div class="s-val small" id="node-peers">–</div>
+            <div class="s-sub" id="node-peers-sub"></div>
           </div>
-          <div class="node-cell nc-full">
-            <div class="nc-label" data-i18n="peerConns">Peer-Verbindungen</div>
+          <div class="qs-stat glass-card qs-stat--full">
+            <div class="s-label" data-i18n="peerConns">Peer-Verbindungen</div>
             <div class="peers-bar" id="peers-bar" aria-label="Peer-Status-Visualisierung"></div>
           </div>
         </div>
@@ -819,34 +776,34 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
       <span data-i18n="revDesc">Direkt vom Node: drei Score-Dimensionen über alle 676 Computor-Slots. Mid-Epoch-Werte sind laut Core-Dokumentation näherungsweise — erst am Epochenende exakt.</span>
     </p>
     <div class="sc-body">
-      <div class="rev-kpis">
-        <div class="rev-kpi">
-          <div class="rk-label" data-i18n="slotsTotal">Slots gesamt</div>
-          <div class="rk-val accent" id="rev-slots">–</div>
+      <div class="rev-kpis qs-stats">
+        <div class="qs-stat glass-card accent">
+          <div class="s-label" data-i18n="slotsTotal">Slots gesamt</div>
+          <div class="s-val" id="rev-slots">–</div>
         </div>
-        <div class="rev-kpi">
-          <div class="rk-label">TX nonzero</div>
-          <div class="rk-val" id="rev-tx">–</div>
-          <div class="rk-of">/ 676</div>
+        <div class="qs-stat glass-card">
+          <div class="s-label">TX nonzero</div>
+          <div class="s-val" id="rev-tx">–</div>
+          <div class="s-of s-of--own-line">/ 676</div>
         </div>
-        <div class="rev-kpi">
-          <div class="rk-label">Oracle nonzero</div>
-          <div class="rk-val" id="rev-oracle">–</div>
-          <div class="rk-of">/ 676</div>
+        <div class="qs-stat glass-card">
+          <div class="s-label">Oracle nonzero</div>
+          <div class="s-val" id="rev-oracle">–</div>
+          <div class="s-of s-of--own-line">/ 676</div>
         </div>
-        <div class="rev-kpi">
-          <div class="rk-label">Doge nonzero</div>
-          <div class="rk-val" id="rev-doge">–</div>
-          <div class="rk-of">/ 676</div>
+        <div class="qs-stat glass-card">
+          <div class="s-label">Doge nonzero</div>
+          <div class="s-val" id="rev-doge">–</div>
+          <div class="s-of s-of--own-line">/ 676</div>
         </div>
-        <div class="rev-kpi">
-          <div class="rk-label" data-i18n="top10">Top-10-Anteil</div>
-          <div class="rk-val" id="rev-top10">–</div>
-          <div class="rk-sub" data-i18n="top10Sub">sehr gleichmäßig wenn &lt; 5%</div>
+        <div class="qs-stat glass-card">
+          <div class="s-label" data-i18n="top10">Top-10-Anteil</div>
+          <div class="s-val" id="rev-top10">–</div>
+          <div class="s-sub" data-i18n="top10Sub">sehr gleichmäßig wenn &lt; 5%</div>
         </div>
-        <div class="rev-kpi">
-          <div class="rk-label">IPC</div>
-          <div class="rk-val" style="font-size:15px;letter-spacing:-.01em" id="rev-ipc">–</div>
+        <div class="qs-stat glass-card">
+          <div class="s-label">IPC</div>
+          <div class="s-val small" id="rev-ipc">–</div>
         </div>
       </div>
 
@@ -873,7 +830,7 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
 <!-- ═══════════════════════════════════════════════════════════
      FOOTER
 ═══════════════════════════════════════════════════════════ -->
-<footer>
+<footer class="qs-footer">
   <!-- Same disclaimer treatment as the report's footer: this page is read as a
        statement about the network, so the caveats travel with it. -->
   <div class="fdisc">
@@ -952,6 +909,7 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
       histDesc: "Every point is a real reading taken from a node. Swarm state cannot be reconstructed after the fact — whatever was not measured is simply missing.",
       histLegend: "Accepted solutions",
       histEmpty: "No history yet. The first points appear once the ingest worker has been sampling for a few minutes.",
+      histLoading: "Loading history…",
       histOffline: "History is unavailable — the API did not answer.",
       histPoints: "{n} of {total} readings",
       histSince: "since {t}",
@@ -1010,6 +968,7 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
       histDesc: "Jeder Punkt ist eine echte Messung an einem Node. Der Zustand des Schwarms lässt sich nicht nachträglich rekonstruieren — was nicht gemessen wurde, fehlt.",
       histLegend: "Akzeptierte Lösungen",
       histEmpty: "Noch kein Verlauf. Die ersten Punkte erscheinen, sobald der Ingest-Worker einige Minuten gemessen hat.",
+      histLoading: "Verlauf wird geladen…",
       histOffline: "Verlauf nicht verfügbar — die API hat nicht geantwortet.",
       histPoints: "{n} von {total} Messungen",
       histSince: "seit {t}",
@@ -1224,6 +1183,10 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
 
   /* ── Render: Unavailable ──────────────────────────────────────────────── */
   function showUnavailable(reason) {
+    /* Also reached straight from the fetch error path, which never passes through
+       render() -- so the shimmer has to come off here too, or a page that failed
+       to reach the API would keep pretending to load. */
+    clearLoadingMarks();
     document.getElementById("hero-unavail").hidden = false;
     document.getElementById("hero-unavail-reason").textContent =
       reason || t("unavailDefault");
@@ -1522,6 +1485,11 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
   function render(data) {
     lastData = data;
 
+    /* Whatever the answer says, it is an answer: the shimmer comes off before the
+       branch below, so an "unavailable" response shows its dashes plainly rather
+       than shimmering forever as if something were still on its way. */
+    clearLoadingMarks();
+
     if (data.status !== "live") {
       showUnavailable(data.reason || null);
       return;
@@ -1783,11 +1751,17 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
 
   function loadHistory() {
     if (apiBase === null) { showHistEmpty(t("histEmpty")); return; }
+    /* Say the request is running. Otherwise the card sits blank and then jumps to
+       "no history yet", which reads as a verdict when it was still a question. */
+    showHistEmpty(t("histLoading"));
     fetch(apiUrl("/v1/mining/series?points=400"), { cache: "no-store" })
       .then(r => {
         /* 503 heißt: der Sampler hat noch nichts geschrieben. Das ist ein
-           normaler Anfangszustand, kein Fehler — entsprechend formuliert. */
-        if (r.status === 503) return null;
+           normaler Anfangszustand, kein Fehler — entsprechend formuliert.
+           404 heißt: die laufende API ist älter als dieser Endpunkt. Auch das
+           ist "noch kein Verlauf" und kein Fehler der Seite — sie sagt es mit
+           demselben Satz, statt einen Ausfall zu melden, den es nicht gibt. */
+        if (r.status === 503 || r.status === 404) return null;
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       })
@@ -2028,13 +2002,31 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
 
   /* ── Initialisierung ─────────────────────────────────────────────────── */
 
-  /* Demo-Daten sofort einblenden — damit die Seite nicht leer aussieht
-     bevor der erste Fetch abgeschlossen ist. Alle Werte werden beim
-     ersten echten Response überschrieben; sie sind als Platzhalter
-     nie als "echt" gekennzeichnet, weil sie in <1 Sek. ersetzt werden. */
+  /* Kein Platzhalter-Wert, sondern ein sichtbarer Ladezustand: erfundene Zahlen
+     wären für einen Sekundenbruchteil nicht von echten Messungen zu
+     unterscheiden, und genau das darf diese Seite nicht tun. Stattdessen
+     schimmern die Felder, bis die erste echte Antwort da ist. */
+  /* Every field the first fetch will fill. Listed once so the shimmer goes on and
+     comes off the same set -- a field marked but never cleared would shimmer for
+     the life of the page. */
+  const LOADING_FIELDS = [
+    "hero-count", "hero-delta", "hero-threshold", "hero-epoch-badge",
+    "ep-ticks", "ep-of", "ep-pct", "ep-tick-abs"
+  ];
+  function clearLoadingMarks() {
+    LOADING_FIELDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove("is-loading");
+    });
+  }
   function showLoading() {
-    setRefreshState("stale");
-    document.getElementById("hero-count").textContent = "…";
+    /* `loading`, not `stale`: nothing is out of date yet, the first request is
+       simply still in flight. */
+    setRefreshState("loading");
+    LOADING_FIELDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add("is-loading");
+    });
     document.getElementById("r-ago").textContent = t("loading");
     document.getElementById("r-countdown").textContent = "–";
   }

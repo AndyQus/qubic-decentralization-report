@@ -4,56 +4,31 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Qubic Decentralization Report</title>
+<link rel="stylesheet" href="./theme.css?v=ffad27c3">
+
 <style>
+  /* Surfaces, text, accents, the glass card and the header all come from
+     theme.css — the shared design system taken from spotlight/dividends
+     .qubic.tools. Only the report's own semantic colours live here: these
+     encode attribution state (declared / linked / flagged), so they must stay
+     distinguishable from each other and from the system accent, which already
+     means "interactive". */
   :root{
-    --bg:#0c141b; --bg2:#101820; --surface:#16232e; --surface2:#1b2c38;
-    --border:#263846; --text:#e6eef2; --muted:#8aa0ab; --faint:#5c7180;
-    --accent:#22d3a6; --accent2:#3b9dff; --warn:#f5a623; --danger:#ff5c7a;
-    --warn-bg:rgba(245,166,35,.09); --warn-fg:#c8993f; --warn-link:#3b9dff;
-    --declared:#22d3a6; --unattributed:#5c7180; --linked:#f5a623; --flagged:#ff5c7a; --confirmed:#3fb0ff;
-    --shadow:0 6px 24px rgba(0,0,0,.35);
-    --radius:14px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --declared:#22c55e; --unattributed:#6b7280; --linked:#f59e0b;
+    --flagged:#ef4444; --confirmed:#4ee0fc;
   }
   :root[data-theme="light"]{
-    --bg:#eef3f6; --bg2:#f6f9fb; --surface:#ffffff; --surface2:#f1f5f8;
-    --border:#d8e2e8; --text:#132430; --muted:#546773; --faint:#8698a2;
-    --accent:#0aa17e; --accent2:#1f7fe0; --warn:#c9820f; --danger:#e0435f;
-    --warn-bg:rgba(201,130,15,.10); --warn-fg:#8a5c07; --warn-link:#1f7fe0;
-    --declared:#0aa17e; --unattributed:#93a6b0; --linked:#c9820f; --flagged:#e0435f; --confirmed:#1273c4;
-    --shadow:0 6px 20px rgba(20,40,55,.10);
+    --declared:#16a34a; --unattributed:#9ca3af; --linked:#b45309;
+    --flagged:#dc2626; --confirmed:#0369a1;
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
-    -webkit-font-smoothing:antialiased;line-height:1.45}
-  a{color:var(--accent2);text-decoration:none}
-  .wrap{max-width:1160px;margin:0 auto;padding:0 20px 64px}
+  /* line-height comes from theme.css (1.5). Overriding it here made this
+     page's header one pixel shorter than the others. */
+  /* Same content width as mining.html and burn.html, so the three pages
+     read as one site rather than three. */
+  .wrap{max-width:var(--content-width);margin:0 auto;padding:0 var(--gutter) 64px;position:relative;z-index:1}
 
   /* header */
-  header.top{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,var(--bg2),var(--bg2) 70%,transparent);
-    border-bottom:1px solid var(--border);backdrop-filter:blur(6px)}
-  .top-inner{max-width:1160px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-  .brand{display:flex;align-items:center;gap:12px;min-width:0}
-  .logo{width:34px;height:34px;border-radius:9px;flex:0 0 auto;
-    background:radial-gradient(circle at 30% 30%,var(--accent),#0b7d63);
-    box-shadow:0 0 0 1px rgba(255,255,255,.08) inset}
-  .brand h1{font-size:16px;margin:0;font-weight:650;letter-spacing:.2px;white-space:nowrap}
-  .brand .sub{font-size:12px;color:var(--muted);margin-top:1px}
-  .spacer{flex:1 1 auto}
-  .controls{display:flex;align-items:center;gap:8px}
-  .seg{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden;background:var(--surface)}
-  .seg[hidden]{display:none}
-  .seg button{background:transparent;border:0;color:var(--muted);padding:7px 11px;font-size:12.5px;
-    font-weight:600;cursor:pointer;font-family:var(--sans)}
-  .seg button.active{background:var(--accent);color:#04231b}
-  :root[data-theme="light"] .seg button.active{color:#fff}
-  .icon-btn{width:38px;height:34px;border:1px solid var(--border);border-radius:9px;background:var(--surface);
-    color:var(--text);cursor:pointer;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
-  .how-link{display:inline-flex;align-items:center;height:34px;padding:0 12px;border-radius:9px;
-    border:1px solid var(--border);background:var(--surface);color:var(--muted);
-    font-size:12.5px;font-weight:600;white-space:nowrap}
-  .how-link:hover{color:var(--text);border-color:var(--accent);text-decoration:none}
-  @media (max-width:560px){.how-link{padding:0 10px;font-size:12px}}
+  .qs-seg[hidden]{display:none}
 
   .sample-badge{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--warn);
     border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);background:color-mix(in srgb,var(--warn) 12%,transparent);
@@ -79,6 +54,22 @@
       transparent 55%),var(--surface);
     box-shadow:var(--shadow)}
   .live[hidden]{display:none}
+  /* While the first pulse is in flight the panel keeps its full height and shows
+     shimmering placeholders, so the page below it never jumps when data lands. */
+  .live.loading{--live-edge:var(--muted)}
+  .live.loading .live-pulse i{animation:none;opacity:.55}
+  .live.loading .lc-val,.live.loading .lc-sub,.live.loading .live-epoch{
+    color:transparent;background:linear-gradient(90deg,
+      color-mix(in srgb,var(--muted) 14%,transparent) 25%,
+      color-mix(in srgb,var(--muted) 26%,transparent) 50%,
+      color-mix(in srgb,var(--muted) 14%,transparent) 75%);
+    background-size:200% 100%;border-radius:6px;animation:shimmer 1.4s linear infinite}
+  .live.loading .lc-val{max-width:7.5ch}
+  .live.loading .lc-sub{max-width:11ch}
+  .live.loading .lc-fill{width:0}
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  @media (prefers-reduced-motion:reduce){
+    .live.loading .lc-val,.live.loading .lc-sub,.live.loading .live-epoch{animation:none} }
   .live-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
   .live-running{font-size:11.5px;color:var(--muted);white-space:nowrap}
   .live-epoch{font-size:.8125rem;font-weight:700;font-variant-numeric:tabular-nums;
@@ -144,29 +135,15 @@
     text-align:center;max-width:520px;margin:0 auto}
   @media (prefers-reduced-motion:reduce){ .dist-fill{transition:none} }
 
-  /* kpi grid */
-  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:14px;margin:20px 0 8px}
-  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:15px 16px;
-    box-shadow:var(--shadow);position:relative;overflow:hidden}
-  .kpi .k-label{font-size:12px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px}
-  .kpi .k-val{font-size:29px;font-weight:720;margin-top:8px;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
-  /* the "of 676" rides with the figure but must not compete with it */
-  .kpi .k-of{font-size:15px;font-weight:500;color:var(--faint);letter-spacing:0}
-  .kpi .k-sub{font-size:11.5px;color:var(--faint);margin-top:3px}
+  /* KPI grid. The tile itself (.qs-stat, .s-label, .s-val, .s-sub, .s-note and
+     the accent/warn rail) now lives in theme.css, so burn and mining can carry
+     the same one. Only the margin of this page's grid is local. */
+  .kpis{margin:20px 0 8px}
   /* Scope note on a figure whose unit is easy to misread (slots, not operators). */
   .tail-row td{color:var(--muted);font-style:italic}
-  .kpi .k-note{display:inline-block;margin-top:6px;padding:2px 7px;border-radius:5px;
-    font-size:10.5px;font-weight:600;letter-spacing:.02em;
-    color:var(--muted);background:var(--chip-bg,rgba(127,127,127,.14))}
-  .kpi.accent .k-val{color:var(--accent)}
-  .kpi.warn .k-val{color:var(--warn)}
-  .kpi::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);opacity:.0}
-  .kpi.accent::after{opacity:.9}
-  .kpi.warn::after{background:var(--warn);opacity:.9}
 
   /* panels */
-  .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-    box-shadow:var(--shadow);margin-top:22px;overflow:hidden}
+  .panel{margin-top:22px;overflow:hidden}
   .panel-head{padding:16px 18px 4px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
   .panel-head h2{font-size:15px;margin:0;font-weight:650}
   .panel-head p{margin:4px 0 0;font-size:12.5px;color:var(--muted);max-width:640px}
@@ -193,10 +170,8 @@
   .tile.small .t-meta{display:none}
   .tile.tiny .t-label{font-size:10px}
   .tile.hide-text *{display:none}
-  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
   .legend[hidden]{display:none}
   .legend span{display:inline-flex;align-items:center;gap:6px}
-  .legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
 
   /* timeline chart */
   .chart{position:relative;width:100%;height:260px;margin-top:4px}
@@ -230,36 +205,41 @@
   .bar-cell{position:relative}
   .bar-cell .bar{position:absolute;left:0;top:0;bottom:0;background:color-mix(in srgb,var(--accent) 16%,transparent);border-radius:4px}
   .bar-cell span{position:relative}
-
-  footer{margin-top:34px;font-size:12px;color:var(--faint)}
-  footer code{font-family:var(--mono);color:var(--muted)}
   /* disclaimer alert — mirrors the Spotlight footer's warning banner */
-  .fdisc{display:flex;flex-wrap:wrap;justify-content:center;align-items:baseline;gap:4px;
-         text-align:center;padding:8px 10px;border-radius:6px;line-height:1.55;
-         background:var(--warn-bg);color:var(--warn-fg);margin-bottom:14px}
-  .fdisc a{color:var(--warn-link);text-decoration:none}
-  .fdisc a:hover{text-decoration:underline}
-  .fbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;
-        border-top:1px solid var(--border);padding-top:16px}
-  .fbar .fleft{display:flex;align-items:center;gap:6px}
-  .fbar .flogo{width:22px;height:22px;border-radius:6px;background:var(--accent);flex:0 0 auto}
   .fbar .flinks{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px}
   .fbar .flinks a{color:var(--accent);text-decoration:none}
   .fbar .flinks a:hover{text-decoration:underline}
-  .fbar .fsep{color:var(--faint)}
-  .fbar .fright{text-align:right}
   @media (max-width:720px){
     .fbar{grid-template-columns:1fr;justify-items:center;text-align:center;gap:8px}
     .fbar .fright{text-align:center}
   }
-  @media (max-width:560px){.kpi .k-val{font-size:24px}.epoch-bar input[type=range]{width:130px}}
+  @media (max-width:560px){.epoch-bar input[type=range]{width:130px}}
+  /* The wide desktop padding (24px, matching mining.html) is too much on a
+     phone: with the Burn link added, the header controls overflowed and the
+     whole body scrolled sideways. Narrower gutters below 560px, which is where
+     that header stops fitting. */
+  @media (max-width:560px){
+    .wrap{padding:0 14px 48px}
+  }
 </style>
+<script>
+  /* The live panel holds its full height from first paint, showing placeholders
+     until the first pulse lands, so nothing below it jumps. Where no API can be
+     reached the pulse never arrives, so the panel is suppressed before it paints
+     rather than shimmering forever. Mirrors the apiBase resolution further down. */
+  (function(){
+    var p=new URLSearchParams(location.search).get("api");
+    if(p==null && typeof window.QDR_API!=="undefined") p=window.QDR_API;
+    if(p==null && location.protocol.indexOf("http")===0) p="";
+    if(p==null) document.write('<style>#live{display:none}<\/style>');
+  })();
+</script>
 </head>
 <body>
-<header class="top">
-  <div class="top-inner">
+<header class="top qs-header">
+  <div class="top-inner qs-header-inner">
     <div class="brand">
-      <div class="logo" aria-hidden="true"></div>
+      <div class="logo qs-logo" aria-hidden="true"></div>
       <div>
         <h1 data-i18n="title">Qubic Decentralization Report</h1>
         <div class="sub"><span data-i18n="epochLabel">Epoch</span> <b id="hdr-epoch">–</b> · <span id="hdr-tagline" data-i18n="tagline">how decentralized Qubic really is</span></div>
@@ -267,13 +247,17 @@
     </div>
     <div class="spacer"></div>
     <div class="controls">
-      <a class="how-link" href="./how-it-works.html" data-i18n="howItWorks">How it works</a>
-      <a class="how-link" href="./mining.html" data-i18n="miningLive">Mining Live</a>
-      <a class="how-link" href="./burn.html" data-i18n="burnReport">Burn</a>
-      <div class="seg" id="lang-seg">
+      <nav class="qs-nav" id="site-nav" aria-label="Sections">
+        <a class="how-link qs-link" href="./" aria-current="page" data-i18n="navReport">Report</a>
+        <a class="how-link qs-link" href="./burn.html" data-i18n="burnReport">Burn</a>
+        <a class="how-link qs-link" href="./mining.html" data-i18n="miningLive">Mining Live</a>
+        <a class="how-link qs-link" href="./how-it-works.html" data-i18n="howItWorks">How it works</a>
+      </nav>
+      <button class="qs-icon-btn qs-burger" id="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">☰</button>
+      <div class="qs-seg" id="lang-seg">
         <button data-lang="en">EN</button><button data-lang="de">DE</button>
       </div>
-      <button class="icon-btn" id="theme-btn" title="Theme">🌙</button>
+      <button class="qs-icon-btn" id="theme-btn" title="Theme">🌙</button>
     </div>
   </div>
 </header>
@@ -287,33 +271,33 @@
 
   <!-- Live epoch: the only part of the report that moves between epoch
        boundaries, so it gets its own panel and its own (fast) refresh. -->
-  <section class="live" id="live" hidden>
+  <section class="live loading" id="live">
     <div class="live-head">
-      <span class="live-epoch" id="live-epoch">&ndash;</span>
-      <span class="live-running" id="live-running"></span>
+      <span class="live-epoch" id="live-epoch">Epoch&nbsp;&ndash;&ndash;&ndash;</span>
+      <span class="live-running" id="live-running" data-i18n="liveLoading">loading live data&hellip;</span>
       <span class="live-rule"></span>
       <span class="live-pulse" id="live-pulse" title="live"><i></i><span data-i18n="liveNow">live</span></span>
     </div>
     <div class="live-grid">
       <div class="live-cell">
         <div class="lc-label" data-i18n="liveTick">Tick</div>
-        <div class="lc-val num" id="live-tick">&ndash;</div>
-        <div class="lc-sub" id="live-tick-sub">&nbsp;</div>
+        <div class="lc-val num" id="live-tick">0 000 000</div>
+        <div class="lc-sub" id="live-tick-sub">+0 · 0.0 t/s</div>
       </div>
       <div class="live-cell">
         <div class="lc-label" data-i18n="liveProgress">Epoch progress</div>
-        <div class="lc-val num" id="live-progress">&ndash;</div>
+        <div class="lc-val num" id="live-progress">00.0%</div>
         <div class="lc-bar"><div class="lc-fill" id="live-fill"></div></div>
       </div>
       <div class="live-cell">
         <div class="lc-label" data-i18n="liveQuality">Tick quality</div>
-        <div class="lc-val num" id="live-quality">&ndash;</div>
-        <div class="lc-sub" id="live-quality-sub">&nbsp;</div>
+        <div class="lc-val num" id="live-quality">00.00%</div>
+        <div class="lc-sub" id="live-quality-sub">last 10k 00.00%</div>
       </div>
       <div class="live-cell">
         <div class="lc-label" data-i18n="liveAddresses">Active addresses</div>
-        <div class="lc-val num" id="live-addr">&ndash;</div>
-        <div class="lc-sub" id="live-price">&nbsp;</div>
+        <div class="lc-val num" id="live-addr">000 000</div>
+        <div class="lc-sub" id="live-price">$0.0000000</div>
       </div>
     </div>
   </section>
@@ -321,17 +305,17 @@
   <div id="coverage-note" class="coverage-note" hidden></div>
 
   <!-- KPIs -->
-  <div class="kpis" id="kpis"></div>
+  <div class="kpis qs-stats" id="kpis"></div>
 
   <!-- Cluster map -->
-  <section class="panel">
+  <section class="panel glass-card">
     <div class="panel-head">
       <div>
         <h2 id="map-title" data-i18n="distTitle">Revenue across computor slots</h2>
         <p id="map-desc" data-i18n="distDesc">Ranked by revenue this epoch, highest first. The same view groups by operator as soon as slots are attributed.</p>
       </div>
       <div class="epoch-bar">
-        <div class="seg" id="size-seg">
+        <div class="qs-seg" id="size-seg">
           <button data-size="revenue" class="active" data-i18n="byRevenue">By revenue</button>
           <button data-size="slots" data-i18n="bySlots">By slots</button>
         </div>
@@ -346,7 +330,7 @@
         <div class="dist-bars" id="dist-bars"></div>
         <div class="dist-facts" id="dist-facts"></div>
       </div>
-      <div class="legend" id="legend">
+      <div class="qs-legend" id="legend">
         <span><i style="background:var(--declared)"></i><span data-i18n="declared">Declared (self-reported)</span></span>
         <span><i style="background:var(--unattributed)"></i><span data-i18n="unattributed">Unattributed</span></span>
         <span><i style="background:var(--linked)"></i><span data-i18n="linked">On-chain linked</span></span>
@@ -356,7 +340,7 @@
   </section>
 
   <!-- Timeline -->
-  <section class="panel">
+  <section class="panel glass-card">
     <div class="panel-head">
       <div>
         <h2 data-i18n="timelineTitle">Concentration over time</h2>
@@ -373,7 +357,7 @@
   </section>
 
   <!-- Operator table -->
-  <section class="panel" id="op-panel">
+  <section class="panel glass-card" id="op-panel">
     <div class="panel-head">
       <div>
         <h2 data-i18n="tableTitle">Operators this epoch</h2>
@@ -395,7 +379,7 @@
     </div>
   </section>
 
-  <footer>
+  <footer class="qs-footer">
     <div class="fdisc">
       <b data-i18n="discLabel">Disclaimer:</b>
       <span data-i18n="discBeta">This report is currently in beta status.</span>
@@ -439,6 +423,7 @@
   /* ---------- i18n ---------- */
   const I18N={
     en:{
+      navReport: "Report",
       title:"Qubic Decentralization Report", tagline:"how decentralized Qubic really is",
       miningLive:"Mining Live", burnReport:"Burn",
       epochLabel:"Epoch",
@@ -488,6 +473,7 @@
       liveNow:"live", liveTick:"Tick", liveProgress:"Epoch progress",
       liveQuality:"Tick quality", liveAddresses:"Active addresses",
       liveRecent:"last 10k:", perSecond:"ticks/s",
+      liveLoading:"loading live data…",
       coverageWarnTitle:"Slots, not operators — yet.",
       coverageWarnBody:"Every figure here is measured per computor slot. Who operates "+
         "those slots is a separate question this report cannot answer from the chain "+
@@ -504,6 +490,7 @@
       kTop1:"Top slot", kTop1Sub:"share of revenue"
     },
     de:{
+      navReport: "Report",
       title:"Qubic Dezentralisierungs-Report", tagline:"wie dezentral Qubic wirklich ist",
       miningLive:"Mining Live", burnReport:"Burn",
       epochLabel:"Epoche",
@@ -553,6 +540,7 @@
       liveNow:"live", liveTick:"Tick", liveProgress:"Epochen-Fortschritt",
       liveQuality:"Tick-Qualität", liveAddresses:"Aktive Adressen",
       liveRecent:"letzte 10k:", perSecond:"Ticks/s",
+      liveLoading:"Live-Daten werden geladen…",
       coverageWarnTitle:"Slots, noch nicht Betreiber.",
       coverageWarnBody:"Jede Zahl hier ist pro Computor-Slot gemessen. Wer diese Slots "+
         "betreibt, ist eine eigene Frage, die dieser Report aus der Chain allein nicht "+
@@ -627,8 +615,11 @@
     renderI18nText();
     document.querySelectorAll("#lang-seg button").forEach(b=>b.classList.toggle("active",b.dataset.lang===lang));
     renderStatusBadge();   // its text is data-driven, not a static data-i18n node
+    // While the panel is still a placeholder its text is a data-i18n node that
+    // renderI18nText() has already translated; only overwrite it once real
+    // pulse data has arrived and cleared the loading state.
     const lr=document.getElementById("live-running");
-    if(lr && lr.textContent) lr.textContent=t("liveRunning");
+    if(lr && lr.textContent && !lr.hasAttribute("data-i18n")) lr.textContent=t("liveRunning");
     if(!series.length){ showBuilding(); return; }
     renderAll();
   }
@@ -707,7 +698,7 @@
   function ofSlots(n, s){
     if(n==null) return "–";
     const total=s.computors||s.operators;
-    return total ? fmtInt(n)+' <span class="k-of">'+escapeHtml(t("ofSlots",{total:fmtInt(total)}))+'</span>'
+    return total ? fmtInt(n)+' <span class="s-of">'+escapeHtml(t("ofSlots",{total:fmtInt(total)}))+'</span>'
                  : fmtInt(n);
   }
 
@@ -734,9 +725,9 @@
     // One badge, once, rather than a repeated caveat under every figure.
     if(!attributed) cards[2].note = cards[3].note = t("slotsNotOperators");
     document.getElementById("kpis").innerHTML=cards.map(c=>
-      `<div class="kpi ${c.cls}"><div class="k-label">${c.label}</div><div class="k-val">${c.val}</div>`+
-      `<div class="k-sub">${c.sub}</div>`+
-      (c.note?`<div class="k-note">${escapeHtml(c.note)}</div>`:"")+`</div>`).join("");
+      `<div class="qs-stat glass-card ${c.cls}"><div class="s-label">${c.label}</div><div class="s-val">${c.val}</div>`+
+      `<div class="s-sub">${c.sub}</div>`+
+      (c.note?`<div class="s-note">${escapeHtml(c.note)}</div>`:"")+`</div>`).join("");
   }
 
   /* ---------- treemap (squarified) ---------- */
@@ -1041,13 +1032,14 @@
     const live=document.getElementById("live");
     if(!d || !d.epoch){ live.hidden=true; return; }
     live.hidden=false;
+    live.classList.remove("loading");   // real numbers now; drop the placeholders
     pulseEpoch=d.epoch;
     live.classList.toggle("stale", !!d.stale);
 
     document.getElementById("live-epoch").textContent=t("epochLabel")+" "+d.epoch;
     // say why this number differs from the report's epoch below
     const lr=document.getElementById("live-running");
-    if(lr) lr.textContent=t("liveRunning");
+    if(lr){ lr.removeAttribute("data-i18n"); lr.textContent=t("liveRunning"); }
 
     const tickEl=document.getElementById("live-tick");
     tickEl.textContent=fmtInt(d.tick);
@@ -1141,6 +1133,35 @@
     loadData({}); startUI();
   }
 })();
+
+  /* ─── Navigation (Burger) ─────────────────────────────────────────────────
+     The nav collapses below 860px. Closing on outside click and on Escape is
+     what keeps it from trapping a touch user behind an open panel. */
+  (function initNav() {
+    const toggle = document.getElementById("nav-toggle");
+    const nav = document.getElementById("site-nav");
+    if (!toggle || !nav) return;
+    function setOpen(open) {
+      nav.classList.toggle("open", open);
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    toggle.addEventListener("click", e => {
+      e.stopPropagation();
+      setOpen(!nav.classList.contains("open"));
+    });
+    document.addEventListener("click", e => {
+      if (nav.classList.contains("open") && !nav.contains(e.target)) setOpen(false);
+    });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") setOpen(false);
+    });
+    /* Reaching the desktop breakpoint must drop the .open state, or the panel
+       stays stuck open as an odd floating box next to the bar. */
+    window.addEventListener("resize", () => {
+      if (window.innerWidth > 860) setOpen(false);
+    }, { passive: true });
+  })();
+
 </script>
 </body>
 </html>

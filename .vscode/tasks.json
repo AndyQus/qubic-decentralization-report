@@ -7,14 +7,26 @@
       // Reuse an API that is already up (a leftover from a previous session, or the
       // other half of the compound launch) instead of failing to bind port 8000 and
       // taking the browser launch down with it.
-      "command": "python -c \"import urllib.request,sys;urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=2);print('Uvicorn running on (reusing existing API)');sys.exit(0)\" 2>$null; if (-not $?) { python -m uvicorn api.server:app --port 8000 }",
+      //
+      // The logic lives in a script rather than inline: an inline Python one-liner
+      // here carried quotes, commas and `timeout=2` through a JSON string into a
+      // PowerShell -Command argument, VS Code re-quoted it on the way, and
+      // PowerShell ended up parsing `timeout=2` as its own expression — F5 failed
+      // with "Ausdruck nach "," fehlt" before the API was ever started. One file
+      // path has nothing left to re-quote.
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass",
+               "-File", "${workspaceFolder}/scripts/start_api.ps1"],
       "isBackground": true,
-      "options": { "cwd": "${workspaceFolder}", "shell": { "executable": "powershell.exe", "args": ["-NoProfile", "-Command"] } },
+      "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": {
         "pattern": { "regexp": "^\\s*$", "file": 1, "location": 2, "message": 3 },
         "background": {
           "activeOnStart": true,
-          "beginsPattern": ".*(Started server process|Will watch).*",
+          // "Starting API" is the script's own first line, so the reuse path
+          // (which prints only the "Uvicorn running on ..." end line) and the
+          // cold-start path both produce a begin/end pair.
+          "beginsPattern": ".*(Starting API|Started server process|Will watch).*",
           "endsPattern": ".*(Application startup complete|Uvicorn running on).*"
         }
       },

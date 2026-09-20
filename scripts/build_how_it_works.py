@@ -257,9 +257,40 @@ PAGE = """<!doctype html>
 <div class="wrap">
 {body}
   <footer>
-    <span>&copy; <span id="foot-year">2026</span> Qubic &ndash; Sponsored by AndyQus</span>
-    <span>&bull;</span>
-    <a href="https://github.com/AndyQus/qubic-decentralization-report" target="_blank" rel="noreferrer">GitHub</a>
+    <!-- Same footer as the dashboard pages: the legal links belong on every
+         public page. The disclaimer follows this page's existing bilingual
+         mechanism (data-lang-block) rather than inventing a second one. -->
+    <div class="fdisc" data-lang-block="en">
+      <b>Disclaimer:</b>
+      <span>This page is currently in beta status.</span>
+      <span>It is generated from the concept documents in the repository; the figures it describes are produced by the report itself.</span>
+      <span>We do not guarantee the completeness, accuracy, or availability of the data.</span>
+      <b>Use it for analysis purposes only &mdash; not as a basis for investment decisions.</b>
+    </div>
+    <div class="fdisc" data-lang-block="de">
+      <b>Hinweis:</b>
+      <span>Diese Seite befindet sich im Beta-Status.</span>
+      <span>Sie wird aus den Konzeptdokumenten im Repository generiert; die beschriebenen Zahlen stammen aus dem Report selbst.</span>
+      <span>Wir &uuml;bernehmen keine Gew&auml;hr f&uuml;r Vollst&auml;ndigkeit, Richtigkeit oder Verf&uuml;gbarkeit der Daten.</span>
+      <b>Nutzung nur zu Analysezwecken &mdash; keine Grundlage f&uuml;r Investitionsentscheidungen.</b>
+    </div>
+
+    <div class="fbar">
+      <div class="fleft">
+        <span class="flogo" aria-hidden="true"></span>
+        <span>&copy; <span id="foot-year">2026</span> Qubic &ndash; Sponsored by AndyQus</span>
+      </div>
+      <div class="flinks">
+        <a href="https://qubic.org" target="_blank" rel="noreferrer">Qubic.org</a>
+        <span class="fsep">&#x2022;</span>
+        <a href="https://github.com/AndyQus/qubic-decentralization-report" target="_blank" rel="noreferrer">GitHub</a>
+        <span class="fsep">&#x2022;</span>
+        <a href="https://qubic.org/terms-of-service" target="_blank" rel="noreferrer" id="foot-tos">Terms of Service</a>
+        <span class="fsep">&#x2022;</span>
+        <a href="https://qubic.org/privacy-policy" target="_blank" rel="noreferrer" id="foot-privacy">Privacy Policy</a>
+      </div>
+      <div class="fright"><a href="./">Report</a></div>
+    </div>
   </footer>
 </div>
 
@@ -271,7 +302,8 @@ PAGE = """<!doctype html>
   function get(k){{ try{{ return localStorage.getItem(k); }}catch(e){{ return null; }} }}
   function set(k,v){{ try{{ localStorage.setItem(k,v); }}catch(e){{}} }}
 
-  var NAV={{en:{{sub:"How it works",back:"Dashboard"}},de:{{sub:"Wie es funktioniert",back:"Dashboard"}}}};
+  var NAV={{en:{{sub:"How it works",back:"Dashboard",tos:"Terms of Service",privacy:"Privacy Policy"}},
+            de:{{sub:"Wie es funktioniert",back:"Dashboard",tos:"Nutzungsbedingungen",privacy:"Datenschutz"}}}};
   var lang = get(LS_LANG)==="de" ? "de" : "en";
   var theme = get(LS_THEME)==="light" ? "light" : "dark";
 
@@ -287,6 +319,8 @@ PAGE = """<!doctype html>
     }}
     document.getElementById("nav-sub").textContent = NAV[lang].sub;
     document.querySelector("#back-link .lbl").textContent = NAV[lang].back;
+    document.getElementById("foot-tos").textContent = NAV[lang].tos;
+    document.getElementById("foot-privacy").textContent = NAV[lang].privacy;
     var btns=document.querySelectorAll("#lang-seg button");
     for(var j=0;j<btns.length;j++){{
       btns[j].classList.toggle("active", btns[j].dataset.lang===lang);
@@ -410,8 +444,26 @@ STYLE = """
   .gennote code{font-family:var(--mono);color:var(--text)}
   .doc a.xref{color:var(--accent);font-weight:600;white-space:nowrap}
 
-  footer{margin-top:30px;padding-top:16px;border-top:1px solid var(--border);
-    font-size:12px;color:var(--faint);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  /* Footer: same construction as the dashboard pages. This page carries its
+     own palette rather than theme.css, so the rules are restated with the
+     same tokens. */
+  footer{margin-top:34px;font-size:12px;color:var(--faint)}
+  footer .fdisc{display:flex;flex-wrap:wrap;justify-content:center;align-items:baseline;
+    gap:4px;text-align:center;padding:8px 10px;border-radius:6px;line-height:1.55;
+    background:rgba(245,166,35,.09);color:#c8993f}
+  :root[data-theme="light"] footer .fdisc{background:rgba(180,83,9,.10);color:#8a5c07}
+  footer .fdisc a{color:var(--accent2)}
+  footer .fbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;
+    border-top:1px solid var(--border);padding-top:16px;margin-top:12px}
+  footer .fleft{display:flex;align-items:center;gap:6px}
+  footer .flogo{width:22px;height:22px;border-radius:6px;background:var(--accent);flex:0 0 auto}
+  footer .flinks{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+  footer .fsep{color:var(--faint)}
+  footer .fright{text-align:right}
+  @media (max-width:720px){
+    footer .fbar{grid-template-columns:1fr;justify-items:center;text-align:center;gap:8px}
+    footer .fright{text-align:center}
+  }
 
   @media (max-width:640px){
     .wrap{padding:0 15px 56px}

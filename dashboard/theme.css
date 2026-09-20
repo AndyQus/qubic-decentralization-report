@@ -1,0 +1,525 @@
+/* Qubic tools design system — shared by every page in this dashboard.
+ *
+ * Adopted from spotlight.qubic.tools / dividends.qubic.tools so this report
+ * looks like part of the same family rather than a third design. Those sites
+ * are Blazor + MudBlazor; the values below were read off their served CSS
+ * (site.css, 2026-09-20), not guessed:
+ *
+ *   surface #1a2332 · lines #243246 · text #f2f5fa / #b9c2cf
+ *   accent  #4EE0FC (cyan) · #7e6fff (violet) · gradient 135deg between them
+ *   bg      #0d1117 (their theme-color meta) · Space Grotesk for headings
+ *
+ * One file, three pages: index.html, burn.html and mining.html all link this,
+ * so a colour only ever changes in one place. Page-specific rules stay in the
+ * page — this file is the vocabulary, not the layout.
+ *
+ * Light mode is a deliberate second palette, not an inversion: dividends'
+ * light theme keeps the violet glass but drops the neon accent to #0369a1,
+ * because #4EE0FC on white fails contrast outright.
+ */
+
+:root {
+  /* ── Surfaces ─────────────────────────────────────────────────────────── */
+  --bg:        #f2f4f9;
+  --bg2:       #ffffff;
+  --surface:   rgba(255, 255, 255, 0.65);
+  --surface2:  #eef1f8;
+  --border:    rgba(126, 111, 255, 0.18);
+  --border-strong: rgba(126, 111, 255, 0.35);
+
+  /* ── Text ─────────────────────────────────────────────────────────────── */
+  --text:      #111827;
+  --muted:     #374151;
+  --faint:     #6b7280;
+
+  /* ── Accents ──────────────────────────────────────────────────────────── */
+  /* The neon cyan is a dark-mode colour; on white it drops to ~1.4:1 against
+     body text, so light mode uses the deeper blue dividends' theme-light does. */
+  --accent:    #0369a1;
+  --accent2:   #7e6fff;
+  --warn:      #b45309;
+  --danger:    #ef4444;
+  --success:   #16a34a;
+
+  /* Disclaimer banner. .fdisc lives in this file, so its tokens do too —
+     they were defined per page before, which left burn.html linking a rule
+     whose colours did not exist. */
+  --warn-bg:   rgba(180, 83, 9, .10);
+  --warn-fg:   #8a5c07;
+  --warn-link: #0369a1;
+
+  --gradient:  linear-gradient(135deg, #7e6fff, #4ee0fc);
+
+  /* ── Shape & depth ────────────────────────────────────────────────────── */
+  --radius:    16px;
+  --radius-sm: 12px;
+  --radius-pill: 999px;
+  --shadow:
+      0 2px 0 rgba(255, 255, 255, 0.9),
+      0 4px 16px rgba(126, 111, 255, 0.07),
+      0 8px 32px rgba(0, 0, 0, 0.07),
+      inset 0 1px 0 rgba(255, 255, 255, 1);
+  --shadow-hover:
+      0 2px 0 rgba(255, 255, 255, 0.9),
+      0 8px 28px rgba(126, 111, 255, 0.16),
+      0 16px 48px rgba(0, 0, 0, 0.09),
+      inset 0 1px 0 rgba(255, 255, 255, 1);
+  --card-blur: blur(20px) saturate(200%) brightness(1.02);
+
+  /* ── Type ─────────────────────────────────────────────────────────────────
+     spotlight/dividends load Roboto and Space Grotesk from Google Fonts. This
+     dashboard deliberately does NOT: it is built to be embedded by explorers
+     and to work with no third party in the loop, so a webfont request would
+     both break offline use and hand every visitor's IP to Google. The families
+     are still named first — anyone who has them installed gets them — and the
+     fallback chain lands on the same geometric-grotesque shapes the reference
+     uses, rather than on a serif. */
+  --sans:    'Roboto', system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --display: 'Space Grotesk', 'Futura', 'Century Gothic', 'Roboto',
+             system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:    ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ── Layout ───────────────────────────────────────────────────────────── */
+  /* Same content width as mining.html, so the pages line up as one site. */
+  --content-width: 1440px;
+  --gutter: 24px;
+  --gutter-mobile: 14px;
+}
+
+/* Dark is the default these sites ship; it is selected, not inverted. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:        #0d1117;
+    --bg2:       #101820;
+    --surface:   rgba(26, 35, 50, 0.85);
+    --surface2:  #1a2332;
+    --border:    rgba(126, 111, 255, 0.12);
+    --border-strong: rgba(126, 111, 255, 0.28);
+
+    --text:      #f2f5fa;
+    --muted:     #b9c2cf;
+    --faint:     #6b7280;
+
+    --accent:    #4ee0fc;
+    --accent2:   #7e6fff;
+    --warn:      #f59e0b;
+    --danger:    #ef4444;
+    --success:   #22c55e;
+    --warn-bg:   rgba(245, 166, 35, .09);
+    --warn-fg:   #c8993f;
+    --warn-link: #4ee0fc;
+
+    --shadow:       0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-hover: 0 4px 18px rgba(0, 0, 0, 0.42);
+    --card-blur: none;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg:        #0d1117;
+  --bg2:       #101820;
+  --surface:   rgba(26, 35, 50, 0.85);
+  --surface2:  #1a2332;
+  --border:    rgba(126, 111, 255, 0.12);
+  --border-strong: rgba(126, 111, 255, 0.28);
+
+  --text:      #f2f5fa;
+  --muted:     #b9c2cf;
+  --faint:     #6b7280;
+
+  --accent:    #4ee0fc;
+  --accent2:   #7e6fff;
+  --warn:      #f59e0b;
+  --danger:    #ef4444;
+  --success:   #22c55e;
+  --warn-bg:   rgba(245, 166, 35, .09);
+  --warn-fg:   #c8993f;
+  --warn-link: #4ee0fc;
+
+  --shadow:       0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-hover: 0 4px 18px rgba(0, 0, 0, 0.42);
+  --card-blur: none;
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Light mode gets the violet-tinted wash dividends uses behind its glass. */
+:root[data-theme="light"] body,
+:root:not([data-theme="dark"]) body {
+  background: linear-gradient(160deg, #f5f4fe 0%, #f9f8ff 40%, #f0f4ff 100%);
+  background-attachment: fixed;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body { background: var(--bg); }
+}
+:root[data-theme="dark"] body { background: var(--bg); }
+
+h1, h2, h3, .display {
+  font-family: var(--display);
+  letter-spacing: -0.01em;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Glass card ─────────────────────────────────────────────────────────── */
+/* The signature element of these sites. Light mode is real glassmorphism
+   (blur + saturate over a gradient ground); dark mode is a flat translucent
+   panel, because a blur over a near-black ground costs GPU and shows nothing. */
+.glass-card {
+  background: var(--surface);
+  backdrop-filter: var(--card-blur);
+  -webkit-backdrop-filter: var(--card-blur);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+.glass-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-hover);
+}
+
+/* ── Layout helpers ─────────────────────────────────────────────────────── */
+.qs-wrap {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.qs-header {
+  position: sticky; top: 0; z-index: 30;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.qs-header-inner {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 10px var(--gutter);
+  display: flex; align-items: center; gap: 12px;
+}
+.qs-logo {
+  width: 30px; height: 30px; border-radius: 9px; flex: none;
+  background: var(--gradient);
+}
+/* .qs-title / .qs-subtitle are sized in the header block below, together with
+   .brand h1 / .brand .sub, so both spellings resolve to the same metrics.
+   Declaring them here as well left the two at 11px vs 12px, which is what made
+   the header one pixel taller on some pages than others. */
+
+/* The header is brand · spacer · controls, with ONE geometry for every page.
+   Each page used to re-declare .top-inner, .brand h1, .logo and .how-link with
+   slightly different padding and sizes, which is why the three headers never
+   lined up. Those declarations are gone from the pages; this is the only place
+   the header is described. */
+.qs-header-inner .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.qs-header-inner .spacer { flex: 1; }
+.qs-header-inner .controls { display: flex; align-items: center; gap: 8px; }
+.qs-header-inner .brand h1,
+.qs-header-inner .qs-title {
+  font-size: 16px; margin: 0; font-weight: 650;
+  letter-spacing: .2px; white-space: nowrap;
+  font-family: var(--display);
+}
+.qs-header-inner .brand .sub,
+.qs-header-inner .qs-subtitle {
+  font-size: 12px; color: var(--muted); margin-top: 1px;
+}
+.qs-header-inner .logo,
+.qs-header-inner .qs-logo {
+  width: 32px; height: 32px; border-radius: 9px; flex: 0 0 auto;
+  background: var(--gradient);
+}
+.qs-link, .how-link {
+  display: inline-flex; align-items: center; height: 32px;
+  padding: 0 12px; white-space: nowrap;
+  font-size: 12.5px; font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  transition: color .15s ease, border-color .15s ease, background-color .15s ease;
+}
+.qs-link:hover, .how-link:hover {
+  color: var(--text); border-color: var(--border-strong); text-decoration: none;
+}
+@media (max-width: 560px) {
+  /* Wrapped onto a second line, the spacer would push the controls off the
+     right edge; collapsing it lets them sit under the brand instead. */
+  .qs-header-inner .spacer { flex-basis: 100%; height: 0; }
+  .qs-header-inner .controls { flex-wrap: wrap; }
+}
+
+/* ── Controls ───────────────────────────────────────────────────────────── */
+/* ── Site navigation ────────────────────────────────────────────────────────
+   The same four destinations on every page, in the same order, with the
+   current one marked. Before this each page carried its own ad-hoc set of
+   links ("← Report" here, three links there), so you could not tell where you
+   were or reach a sibling page from everywhere.
+
+   The active item is marked by a tinted background AND aria-current, not by
+   colour alone — the pill and the inactive links otherwise differ only in hue,
+   which is exactly the distinction a colour-blind reader loses. */
+.qs-nav { display: flex; align-items: center; gap: 6px; }
+.qs-nav a[aria-current="page"] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent2) 18%, transparent);
+  border-color: var(--border-strong);
+  font-weight: 600;
+}
+
+/* Burger: hidden on desktop, shown when the bar no longer fits.
+   `.qs-icon-btn` also sets display:inline-flex and is declared later in this
+   file, so a bare `.qs-burger { display:none }` loses on source order and the
+   burger showed on desktop beside the full nav. Matching both classes raises
+   specificity above it. */
+.qs-icon-btn.qs-burger { display: none; }
+
+@media (max-width: 860px) {
+  .qs-icon-btn.qs-burger { display: inline-flex; }
+  /* Collapsed by default; .open is toggled by the page's script. */
+  .qs-nav {
+    display: none;
+    position: absolute; top: 100%; right: var(--gutter-mobile);
+    flex-direction: column; align-items: stretch; gap: 4px;
+    min-width: 190px; padding: 8px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .28);
+    /* The panel hangs below the header and over the page content. Content sits
+       on z-index 1 (above the background canvas), so the dropdown needs to beat
+       that — without this it opened BEHIND the first card, which looks like the
+       menu is broken rather than layered. Opaque too: a translucent panel over
+       a moving canvas makes the links unreadable. */
+    z-index: 40;
+  }
+  .qs-nav.open { display: flex; }
+  .qs-nav a {
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;       /* >= 44px touch target with the font metrics */
+    text-align: left;
+  }
+  .qs-header-inner { position: relative; }
+}
+
+.qs-seg {
+  display: inline-flex; border: 1px solid var(--border);
+  border-radius: var(--radius-pill); overflow: hidden;
+  background: var(--surface2);
+}
+.qs-seg button {
+  background: transparent; border: 0; color: var(--muted);
+  padding: 6px 12px; font-size: 12px; font-weight: 600;
+  font-family: var(--sans); cursor: pointer; min-height: 32px;
+}
+/* The gradient is the active state across these sites; white text sits on it
+   in both themes, so it needs no per-theme override. */
+.qs-seg button.active { background: var(--gradient); color: #0b1020; }
+.qs-icon-btn {
+  width: 36px; height: 32px; flex: none;
+  border: 1px solid var(--border); border-radius: var(--radius-pill);
+  background: var(--surface2); color: var(--text);
+  cursor: pointer; font-size: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.qs-icon-btn:hover { border-color: var(--border-strong); }
+
+@media (max-width: 560px) {
+  .qs-wrap, .qs-header-inner { padding-left: var(--gutter-mobile); padding-right: var(--gutter-mobile); }
+  .qs-header-inner { flex-wrap: wrap; gap: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+
+/* ── Page shell ─────────────────────────────────────────────────────────────
+   The three structural pieces every page has, so a new page needs markup and
+   nothing else: a main column, cards inside it, and a footer. */
+.qs-main {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 22px var(--gutter) 64px;
+}
+
+/* A card. `.qs-card` is the plain one; add `.glass-card` for the glass
+   treatment, or `.qs-card--translucent` on pages with a moving background. */
+.qs-card { padding: 18px; margin-bottom: 18px; border-radius: var(--radius); }
+.qs-card h2 { margin: 0 0 4px; font-size: 15px; font-weight: 650; }
+.qs-card .desc { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); }
+
+/* Translucent panels, for pages that run an animated canvas behind the
+   content (mining's colony, burn's embers). The blur is not decoration: small
+   type over moving particles is unreadable without it. */
+.qs-card--translucent,
+.qs-panel--translucent {
+  background: color-mix(in srgb, var(--surface2) 62%, transparent);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
+/* A full-viewport canvas behind everything. Pages that use one put their
+   content above it with .qs-above. */
+.qs-canvas {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: .9;
+}
+:root[data-theme="light"] .qs-canvas { opacity: .55; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .qs-canvas { opacity: .55; }
+}
+/* Content sits above the background canvas. The header is deliberately NOT in
+   this list: it is sticky with z-index 30, and including it here reset that to
+   1 — which put it level with the cards, so the open mobile menu rendered
+   behind the first card. */
+.qs-above, .qs-main, .qs-footer { position: relative; z-index: 1; }
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.qs-footer {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 0 var(--gutter) 40px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.qs-footer a { color: var(--muted); }
+.qs-footer a:hover { color: var(--text); }
+.qs-footer code {
+  font-family: var(--mono);
+  background: color-mix(in srgb, var(--surface2) 70%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+/* ── Small shared pieces ────────────────────────────────────────────────── */
+.qs-legend {
+  display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px;
+  font-size: 12px; color: var(--muted);
+}
+.qs-legend i {
+  width: 11px; height: 11px; border-radius: 3px;
+  display: inline-block; vertical-align: -1px; margin-right: 5px;
+}
+
+/* ── Site footer ────────────────────────────────────────────────────────────
+   index and mining shipped identical copies of this; it is one rule now. */
+.qs-footer { margin-top: 34px; font-size: 12px; }
+.fbar {
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; gap: 10px;
+  border-top: 1px solid var(--border); padding-top: 16px;
+}
+.fbar .fsep { color: var(--faint); }
+.fbar .fright { text-align: right; }
+.fbar .fleft { display: flex; align-items: center; gap: 6px; }
+.fbar .flogo {
+  width: 22px; height: 22px; border-radius: 6px;
+  background: var(--accent); flex: 0 0 auto;
+}
+.flinks { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.fdisc {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
+  gap: 4px; text-align: center; padding: 8px 10px;
+  border-radius: 6px; line-height: 1.55;
+  background: var(--warn-bg); color: var(--warn-fg);
+}
+.fdisc a { color: var(--warn-link); }
+.fdisc a:hover { color: var(--text); }
+@media (max-width: 720px) {
+  .fbar { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: 8px; }
+  .fbar .fright { text-align: center; }
+}
+
+/* ── Stat tile ──────────────────────────────────────────────────────────────
+   ONE tile for every figure on every page. Before this each page had invented
+   its own: index had `.kpi` (glass, 29px figure, accent rail), burn had `.fact`
+   (bordered box, 16px mono figure), mining had `.rev-kpi` and `.node-cell`
+   (flat --surface2, 22px / 18px figures, uppercase labels). Same job, three
+   looks — which is what made the pages read as three sites.
+
+   The index treatment wins because it is the one that carries a rail to mark a
+   figure as accented or cautionary, and because a glass card on a glass page is
+   the house style these sites already use. Pages keep their own GRID (how many
+   tiles, how wide); this file describes the tile itself.
+
+   Put `.glass-card` alongside `.qs-stat` in the markup for the glass surface;
+   without it the tile is a plain bordered panel. */
+.qs-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+  gap: 14px;
+}
+.qs-stat {
+  padding: 15px 16px;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+}
+.qs-stat .s-label {
+  font-size: 12px; color: var(--muted); font-weight: 600;
+  display: flex; align-items: center; gap: 6px;
+}
+.qs-stat .s-val {
+  font-size: 29px; font-weight: 720; margin-top: 8px;
+  letter-spacing: -.5px; font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+/* A denominator ("of 676", "/ 676") rides with the figure but must not compete
+   with it, and a long identifier needs to shrink rather than overflow. */
+.qs-stat .s-of { font-size: 15px; font-weight: 500; color: var(--faint); letter-spacing: 0; }
+.qs-stat .s-val.code {
+  font-family: var(--mono); font-size: 13.5px;
+  font-weight: 600; letter-spacing: 0; word-break: break-all;
+}
+.qs-stat .s-val.small { font-size: 18px; letter-spacing: -.02em; word-break: break-all; }
+.qs-stat .s-sub { font-size: 11.5px; color: var(--faint); margin-top: 3px; }
+/* A caveat that belongs to one figure, e.g. "slots, not operators". */
+.qs-stat .s-note {
+  display: inline-block; margin-top: 6px; padding: 2px 7px; border-radius: 5px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .02em;
+  color: var(--muted); background: color-mix(in srgb, var(--surface2) 70%, transparent);
+}
+
+/* The rail is the tile's state, and it is never the only carrier of it: an
+   accented figure is also coloured, a cautionary one also reads as a warning in
+   its own words. Colour alone would be lost on a colour-blind reader. */
+.qs-stat::after {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; background: var(--accent); opacity: 0;
+}
+.qs-stat.accent::after { opacity: .9; }
+.qs-stat.accent .s-val { color: var(--accent); }
+.qs-stat.warn::after { background: var(--warn); opacity: .9; }
+.qs-stat.warn .s-val { color: var(--warn); }
+/* Pages with their own subject colour (burn's ember) set --stat-accent. */
+.qs-stat.themed::after { background: var(--stat-accent, var(--accent)); opacity: .9; }
+.qs-stat.themed .s-val { color: var(--stat-accent, var(--accent)); }
+
+.qs-stat--full { grid-column: 1 / -1; }
+
+@media (max-width: 560px) {
+  .qs-stat .s-val { font-size: 24px; }
+}
+
+/* Ein Nenner auf eigener Zeile, wo die Zahl darüber per textContent gesetzt
+   wird und ein Span in ihr mitgelöscht würde. */
+.qs-stat .s-of--own-line { display: block; margin-top: 1px; line-height: 1.2; }

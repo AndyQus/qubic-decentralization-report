@@ -97,12 +97,22 @@ def test_the_page_states_that_finer_than_epoch_figures_are_self_measured():
 def test_no_external_resources():
     """Same rule as the other pages: no CDN, no external font, no library.
 
-    Checks what the browser would actually FETCH — src/href/url()/import — rather
-    than any occurrence of "http", since the page legitimately prints a localhost
-    URL inside a help string telling the reader how to serve it.
+    Checks what the browser would actually FETCH — src/url()/import and a
+    stylesheet-ish <link> — rather than any occurrence of "http", since the page
+    legitimately prints a localhost URL inside a help string telling the reader
+    how to serve it.
+
+    An <a href> is deliberately NOT a fetch: the footer links to qubic.org, to
+    the RPC this report reads and to the repo, and a reader clicking a link is
+    not the page loading a third-party asset. The guarantee this test exists to
+    protect — the page renders with no outbound request — is untouched by them.
     """
     src = page_text()
-    fetched = re.findall(r"""(?:src|href)\s*=\s*["']([^"']+)["']""", src)
+    # href only counts where it names a resource the browser pulls in, i.e. on
+    # <link>. Anchors are navigation and are excluded by construction.
+    fetched = re.findall(r"""<(?:script|img|iframe|source|embed)[^>]*?src\s*=\s*["']([^"']+)["']""",
+                         src, re.I)
+    fetched += re.findall(r"""<link[^>]*?href\s*=\s*["']([^"']+)["']""", src, re.I)
     fetched += re.findall(r"""url\(\s*['"]?([^)'"]+)""", src)
     fetched += re.findall(r"""@import\s+["']([^"']+)["']""", src)
     external = [u for u in fetched if u.startswith(("http://", "https://", "//"))]

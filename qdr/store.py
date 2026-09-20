@@ -732,6 +732,39 @@ class Store:
             r["key"] = str(r["key"])
         return list(reversed(out))
 
+    def burn_contract_window(self, epoch: Optional[int] = None) -> dict:
+        """The span the contract-attributed sum actually covers.
+
+        Without this the panel's total invites the one misreading it must not
+        invite: that it is a lifetime figure comparable to the header's
+        cumulative counter. It is not — it covers the days this project has been
+        scanning, which is a handful against the chain's whole history. Reported
+        from the buckets themselves rather than a constant, so it stays true as
+        the scan grows.
+
+        Only buckets that actually carry a contract burn count: a day scanned
+        with no BURNING event in it says nothing about contract burns, and
+        stretching the window over it would overstate the coverage.
+        """
+        sql = ("SELECT MIN(day) AS first_day, MAX(day) AS last_day, "
+               "MIN(epoch) AS first_epoch, MAX(epoch) AS last_epoch, "
+               "MIN(from_tick) AS first_tick, MAX(to_tick) AS last_tick, "
+               "COUNT(*) AS days "
+               "FROM burn_buckets WHERE contract_burned > 0")
+        params: tuple = ()
+        if epoch is not None:
+            sql += " AND epoch = ?"
+            params = (int(epoch),)
+        with self._lock:
+            row = self._conn.execute(sql, params).fetchone()
+        if not row or row["first_day"] is None:
+            return {"first_day": None, "last_day": None, "first_epoch": None,
+                    "last_epoch": None, "first_tick": None, "last_tick": None,
+                    "days": 0}
+        return {k: row[k] for k in ("first_day", "last_day", "first_epoch",
+                                    "last_epoch", "first_tick", "last_tick",
+                                    "days")}
+
     def burn_by_contract(self, epoch: Optional[int] = None) -> dict[str, int]:
         """Contract-attributed burns, summed per contract index.
 
