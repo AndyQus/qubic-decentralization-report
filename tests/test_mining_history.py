@@ -19,6 +19,7 @@ No test here touches the network.
 from __future__ import annotations
 
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -223,6 +224,7 @@ def test_the_sampler_subtracts_the_fetch_from_its_wait(monkeypatch):
 
     slept: list[float] = []
     clock = {"t": 1000.0}
+    stop = threading.Event()
 
     def fake_sample(store):
         clock["t"] += 4.0       # the fetch itself costs four seconds
@@ -232,14 +234,18 @@ def test_the_sampler_subtracts_the_fetch_from_its_wait(monkeypatch):
         slept.append(sec)
         clock["t"] += sec
         if len(slept) >= 3:
-            raise KeyboardInterrupt      # stop the loop after three passes
+            stop.set()
+            # Park the daemon thread here instead of raising: an exception out of
+            # a thread is reported by pytest as an unhandled one, and this stop
+            # is deliberate.
+            threading.Event().wait()
 
     monkeypatch.setattr(ingest.pipeline, "sample_mining", fake_sample)
     monkeypatch.setattr(ingest.time, "sleep", fake_sleep)
     monkeypatch.setattr(ingest.time, "time", lambda: clock["t"])
 
-    thread = ingest.start_mining_sampler(object(), interval=30)
-    thread.join(timeout=5)
+    ingest.start_mining_sampler(object(), interval=30)
+    assert stop.wait(timeout=5), "the sampler never completed three passes"
 
     assert slept and all(s == pytest.approx(26.0) for s in slept), (
         f"cadence drifts: waited {slept} on top of a 4s fetch"
@@ -256,6 +262,7 @@ def test_a_pass_slower_than_the_interval_does_not_spin(monkeypatch):
 
     slept: list[float] = []
     clock = {"t": 1000.0}
+    stop = threading.Event()
 
     def slow_sample(store):
         clock["t"] += 90.0      # three times the interval
@@ -264,13 +271,15 @@ def test_a_pass_slower_than_the_interval_does_not_spin(monkeypatch):
     def fake_sleep(sec):
         slept.append(sec)
         clock["t"] += sec
-        raise KeyboardInterrupt
+        stop.set()
+        threading.Event().wait()        # park; see the note above
 
     monkeypatch.setattr(ingest.pipeline, "sample_mining", slow_sample)
     monkeypatch.setattr(ingest.time, "sleep", fake_sleep)
     monkeypatch.setattr(ingest.time, "time", lambda: clock["t"])
 
-    ingest.start_mining_sampler(object(), interval=30).join(timeout=5)
+    ingest.start_mining_sampler(object(), interval=30)
+    assert stop.wait(timeout=5), "the sampler never slept"
 
     assert slept == [1.0], f"a slow pass must still pause, got {slept}"
 

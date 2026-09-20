@@ -269,6 +269,33 @@ range returned 0 entries, while a current-epoch range returned 805 in 200 ticks.
 linkage can only be built for the running epoch, as it happens — another reason the ingest
 worker has to keep running rather than being reconstructable after the fact.
 
+## 7.2b A transfer to the null address is not automatically a burn (2026-09-20)
+
+The burn scan counted every `QU_TRANSFER` whose destination was the null address.
+On chain, most of those come straight back. The actual shape, one transaction:
+
+```
+QU_TRANSFER     1,000,000   payer      -> AAAA…FXIB
+CUSTOM_MESSAGE
+QU_TRANSFER     1,000,000   AAAA…FXIB  -> payer
+```
+
+Measured over 1,000 ticks: **1,696 transactions, 1,696,000,000 QU in,
+1,696,000,000 QU out, net zero — every one refunded inside its own transaction.**
+Counting only the inbound leg produced a published figure of 17.6 Mrd QU burned in
+about an hour, while the protocol's own `burnedQus` stayed at 53,662,829,138,067
+across the following 66,666 ticks. The counter was right; the scan was wrong.
+
+So the legs are netted per transaction: a transaction burns what it paid in minus
+what it got back, floored at zero (a payout leg alone is protocol emission, not a
+negative burn). After the fix the same 1,000 ticks yield 0 QU, which is what the
+official counter says. A real, unrefunded burn still counts — a later scan of
+1,305 ticks measured 10 QU of transfer burn plus 33,402 QU of contract burn.
+
+Note that genuine contract burns use a different mechanism entirely: `qpi.burn()`
+in the core emits a `BURNING` log, which is why those are counted separately and
+were never affected by this.
+
 ## 7.3 Smart-contract names (2026-09-20)
 
 `contractIndexBurnedFor` carries an index, not a name, and the burn panel used to

@@ -130,14 +130,39 @@ def burn_events(logs: Iterable[dict]) -> list[dict]:
     """Extract burn events from a log range.
 
     Returns entries of {kind, amount, day, tick, contract}, where `kind` is
-    'transfer' (QU sent to a burn sink) or 'contract' (a BURNING event).
+    'transfer' (QU that actually left the supply via a burn sink) or 'contract'
+    (a BURNING event).
 
     A QU_TRANSFER only counts when its DESTINATION is a burn sink. Testing the
     source instead would count the protocol's emission — every computor payout is
     credited *from* the null address — and report the network's entire revenue as
     burned.
+
+    **A transfer to the sink is only a burn if it stays there.** Measured
+    2026-09-20 over 1,000 ticks: 1,696 transactions each sent exactly 1,000,000
+    QU to the null address and had the identical amount sent straight back to the
+    payer *within the same transaction* —
+
+        QU_TRANSFER  1,000,000  payer -> AAAA…FXIB
+        CUSTOM_MESSAGE
+        QU_TRANSFER  1,000,000  AAAA…FXIB -> payer
+
+    1,696,000,000 QU in, 1,696,000,000 QU out, net zero, every single one
+    refunded. Counting only the inbound leg reported 17.6 Mrd QU burned in an
+    hour while the protocol's own burnedQus counter did not move at all — which
+    is exactly what it should do, because nothing was burned.
+
+    So the legs are netted per transaction: what a transaction actually removed
+    from the supply is (paid in) − (paid back out), floored at zero. A refunded
+    round trip contributes nothing and is not an event.
     """
     out: list[dict] = []
+    # Per transaction: how much reached the sink, how much came back, and where
+    # to attribute the remainder. A transaction is the right unit because that is
+    # the scope the refund happens in.
+    flows: dict[str, dict] = {}
+    order: list[str] = []
+
     for entry in logs:
         if not isinstance(entry, dict):
             continue
@@ -147,11 +172,25 @@ def burn_events(logs: Iterable[dict]) -> list[dict]:
         day = event_day(entry)
         if kind == QU_TRANSFER:
             dest = body.get("to") or body.get("destination")
+            src = body.get("from") or body.get("source")
             amount = _int(body.get("amount") or body.get("value"))
-            if amount <= 0 or not is_burn_sink(dest):
+            if amount <= 0:
                 continue
-            out.append({"kind": "transfer", "amount": amount, "day": day,
-                        "tick": tick, "contract": None})
+            to_sink = is_burn_sink(dest)
+            from_sink = is_burn_sink(src)
+            if not to_sink and not from_sink:
+                continue
+            # A transfer with no transaction hash cannot be paired with its
+            # refund, so it is keyed on its own identity and nets against
+            # nothing — the conservative reading for an unpairable leg.
+            key = entry.get("transactionHash") or f"__{tick}:{len(order)}"
+            if key not in flows:
+                flows[key] = {"in": 0, "out": 0, "day": day, "tick": tick}
+                order.append(key)
+            if to_sink:
+                flows[key]["in"] += amount
+            if from_sink:
+                flows[key]["out"] += amount
         elif kind == BURNING:
             amount = _int(body.get("amount"))
             if amount <= 0:
@@ -159,6 +198,18 @@ def burn_events(logs: Iterable[dict]) -> list[dict]:
             out.append({"kind": "contract", "amount": amount, "day": day,
                         "tick": tick,
                         "contract": body.get("contractIndexBurnedFor")})
+
+    # Emit only what a transaction did NOT get back. A refund larger than the
+    # payment is a protocol emission that happens to share the transaction (a
+    # computor payout is credited from this same address), not a negative burn,
+    # so the figure is floored at zero rather than allowed to subtract.
+    for key in order:
+        f = flows[key]
+        net = f["in"] - f["out"]
+        if net <= 0:
+            continue
+        out.append({"kind": "transfer", "amount": net, "day": f["day"],
+                    "tick": f["tick"], "contract": None})
     return out
 
 

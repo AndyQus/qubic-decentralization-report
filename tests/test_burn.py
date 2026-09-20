@@ -558,3 +558,114 @@ def test_the_burn_page_shows_the_caveat_in_both_languages():
     assert "burn-warn" in html and "drawWarning" in html
     for key in ("warnDiverging:", "warnUnreconciled:", "warnPartial:"):
         assert html.count(key) == 2, f"{key} missing from one language"
+
+
+# --- refunded round trips are not burns -------------------------------------
+# Measured 2026-09-20 over 1,000 ticks: 1,696 transactions each sent exactly
+# 1,000,000 QU to the null address and had the identical amount returned to the
+# payer WITHIN THE SAME TRANSACTION. 1,696,000,000 QU in, 1,696,000,000 out, net
+# zero. Counting only the inbound leg reported 17.6 Mrd QU burned in an hour
+# while burnedQus did not move at all.
+
+def _tx(hash_: str, *legs) -> list[dict]:
+    """Log entries for one transaction; each leg is (source, destination, amount)."""
+    return [{"logTypeName": "QU_TRANSFER", "tick": 80_820_402,
+             "transactionHash": hash_, "source": src,
+             "destination": dst, "amount": amt}
+            for src, dst, amt in legs]
+
+
+PAYER = "CDQVMLIROQKVRCVEZBVZSDEJEQOCALENVYYMBNODOFKKBIUFESUFTTOBKGEM"
+
+
+def test_a_refunded_round_trip_is_not_a_burn():
+    """The exact shape seen on chain, and the whole cause of the 17.6 Mrd figure."""
+    from qdr.burn import burn_events, NULL_ADDRESS
+
+    logs = _tx("abc",
+               (PAYER, NULL_ADDRESS, 1_000_000),
+               (NULL_ADDRESS, PAYER, 1_000_000))
+
+    assert burn_events(logs) == [], "a round trip that nets to zero was counted"
+
+
+def test_only_the_unrefunded_remainder_counts():
+    from qdr.burn import burn_events, NULL_ADDRESS
+
+    logs = _tx("abc",
+               (PAYER, NULL_ADDRESS, 1_000_000),
+               (NULL_ADDRESS, PAYER, 600_000))
+
+    events = burn_events(logs)
+    assert len(events) == 1
+    assert events[0]["amount"] == 400_000
+
+
+def test_a_transfer_that_stays_in_the_sink_is_still_a_burn():
+    """The fix must not silence real burns — only refunded ones."""
+    from qdr.burn import burn_events, NULL_ADDRESS
+
+    events = burn_events(_tx("abc", (PAYER, NULL_ADDRESS, 250_000)))
+
+    assert len(events) == 1 and events[0]["amount"] == 250_000
+
+
+def test_a_refund_in_a_different_transaction_does_not_cancel_a_burn():
+    """Netting is per transaction. A payout that merely shares a tick with someone
+    else's burn must not erase it."""
+    from qdr.burn import burn_events, NULL_ADDRESS
+
+    logs = (_tx("burn-tx", (PAYER, NULL_ADDRESS, 500_000))
+            + _tx("payout-tx", (NULL_ADDRESS, "SOMEONE" + "A" * 53, 9_000_000)))
+
+    events = burn_events(logs)
+    assert len(events) == 1 and events[0]["amount"] == 500_000
+
+
+def test_a_payout_alone_never_becomes_a_negative_burn():
+    """Computor payouts are credited FROM the null address. Netting must floor at
+    zero rather than subtract the network's emission from the burn total."""
+    from qdr.burn import burn_events, NULL_ADDRESS
+
+    logs = _tx("payout", (NULL_ADDRESS, PAYER, 178_477_462_349))
+
+    assert burn_events(logs) == []
+
+
+def test_many_round_trips_sum_to_nothing():
+    """1,696 of these produced a 17.6 Mrd/hour headline. They must produce zero."""
+    from qdr.burn import burn_events, NULL_ADDRESS
+
+    logs = []
+    for i in range(200):
+        logs += _tx(f"tx{i}",
+                    (PAYER, NULL_ADDRESS, 1_000_000),
+                    (NULL_ADDRESS, PAYER, 1_000_000))
+
+    events = burn_events(logs)
+    assert sum(e["amount"] for e in events) == 0
+    assert events == []
+
+
+def test_a_leg_without_a_transaction_hash_still_counts():
+    """An unpairable leg cannot be shown to be refunded, so it is kept — the
+    conservative reading, and it keeps older log shapes working."""
+    from qdr.burn import burn_events, NULL_ADDRESS
+
+    logs = [{"logTypeName": "QU_TRANSFER", "tick": 1,
+             "source": PAYER, "destination": NULL_ADDRESS, "amount": 700_000}]
+
+    events = burn_events(logs)
+    assert len(events) == 1 and events[0]["amount"] == 700_000
+
+
+def test_contract_burns_are_untouched_by_the_netting():
+    """BURNING events are a different mechanism (qpi.burn) and have no refund leg."""
+    from qdr.burn import burn_events
+
+    logs = [{"logTypeName": "BURNING", "tick": 80_820_893, "amount": 50_801,
+             "contractIndexBurnedFor": 13, "transactionHash": "zzz"}]
+
+    events = burn_events(logs)
+    assert len(events) == 1
+    assert events[0]["kind"] == "contract" and events[0]["contract"] == 13
