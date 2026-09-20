@@ -446,3 +446,115 @@ def test_coverage_is_null_when_the_anchor_has_not_stepped_yet():
     that coverage is perfect."""
     out = reconcile(measured_delta=5_000, official_delta=0)
     assert out["ratio"] is None
+
+
+# --- reconciliation against the protocol's own counter ----------------------
+# Added 2026-09-20 after the page published 17.6 Mrd QU for "19.09." while the
+# official burnedQus counter moved by exactly 0 over the following 66,666 ticks.
+# Every counted transfer was EXACTLY 1,000,000 QU at ~2 per tick: a fixed
+# protocol fee, which the official counter does not treat as burned supply.
+# The measurement was also an hour of ticks labelled as a day.
+
+def test_an_unchecked_figure_is_labelled_unreconciled(tmp_path):
+    """Without two epoch anchors nothing has been verified, and the payload must
+    say so rather than presenting the count as confirmed."""
+    from qdr.store import Store
+    from qdr import pipeline
+
+    store = Store(str(tmp_path / "q.db"))
+    store.put_burn_bucket(from_tick=1000, to_tick=11000, epoch=231,
+                          day="2026-09-19", burned=17_636_000_020, burn_events=17_638)
+    store.put_burn_total(231, 53_662_829_138_067)
+
+    rec = pipeline.build_burn_series(store, by="day")["reconciliation"]
+
+    assert rec["status"] == "unreconciled"
+    assert rec["official_total"] == 53_662_829_138_067
+    assert rec["steps"] == []
+
+
+def test_a_count_the_official_counter_contradicts_is_flagged(tmp_path):
+    """The real failure: we count billions while the counter's step says otherwise."""
+    from qdr.store import Store
+    from qdr import pipeline
+
+    store = Store(str(tmp_path / "q.db"))
+    store.put_burn_total(230, 53_000_000_000_000)
+    store.put_burn_total(231, 53_000_000_050_000)      # the epoch really burned 50,000
+    store.put_burn_bucket(from_tick=1, to_tick=100_000, epoch=231,
+                          day="2026-09-19", burned=17_636_000_020, burn_events=17_638)
+
+    rec = pipeline.build_burn_series(store, by="day")["reconciliation"]
+
+    assert rec["status"] == "diverging", "a 350,000x overstatement passed as consistent"
+    assert rec["reason"]
+
+
+def test_a_measurement_matching_the_counter_is_consistent(tmp_path):
+    from qdr.store import Store
+    from qdr import pipeline
+
+    store = Store(str(tmp_path / "q.db"))
+    store.put_burn_total(230, 53_000_000_000_000)
+    store.put_burn_total(231, 53_000_000_100_000)
+    store.put_burn_bucket(from_tick=1, to_tick=100_000, epoch=231,
+                          day="2026-09-19", burned=98_000, burn_events=98)
+
+    rec = pipeline.build_burn_series(store, by="day")["reconciliation"]
+    assert rec["status"] == "consistent"
+    assert abs(rec["steps"][0]["ratio"] - 0.98) < 0.01
+
+
+def test_an_hour_of_ticks_is_not_labelled_a_whole_day(tmp_path):
+    """10,000 ticks is ~1 hour. Presented as a day's bar it reads as 24x what was
+    measured, which is exactly how the 17.6 Mrd figure reached the page."""
+    from qdr.store import Store
+    from qdr import pipeline
+
+    store = Store(str(tmp_path / "q.db"))
+    store.put_burn_bucket(from_tick=80_820_402, to_tick=80_830_402, epoch=231,
+                          day="2026-09-19", burned=17_636_000_020, burn_events=17_638)
+
+    point = pipeline.build_burn_series(store, by="day")["series"][0]
+
+    assert point["partial"] is True
+    assert point["coverage"] < 0.05, "an hour must not look like a full day"
+    assert point["scanned_ticks"] == 10_001
+
+
+def test_a_full_day_of_ticks_is_not_flagged_partial(tmp_path):
+    from qdr.store import Store
+    from qdr import pipeline
+
+    store = Store(str(tmp_path / "q.db"))
+    store.put_burn_bucket(from_tick=1, to_tick=pipeline.TICKS_PER_DAY, epoch=231,
+                          day="2026-09-19", burned=5_000, burn_events=5)
+
+    point = pipeline.build_burn_series(store, by="day")["series"][0]
+    assert point["partial"] is False
+    assert point["coverage"] == 1.0
+
+
+def test_the_headline_endpoint_carries_the_same_verdict(tmp_path):
+    """The KPI tiles are the largest numbers on the page; the caveat has to reach
+    them, not only the chart below."""
+    from qdr.store import Store
+    from qdr import pipeline
+
+    store = Store(str(tmp_path / "q.db"))
+    store.put_burn_total(231, 53_662_829_138_067)
+    store.put_burn_bucket(from_tick=1, to_tick=10_000, epoch=231,
+                          day="2026-09-19", burned=17_636_000_020, burn_events=17_638)
+
+    latest = pipeline.build_burn_latest(store)
+    assert latest["reconciliation"]["status"] == "unreconciled"
+
+
+def test_the_burn_page_shows_the_caveat_in_both_languages():
+    import pathlib
+    html = (pathlib.Path(__file__).resolve().parents[1]
+            / "dashboard" / "burn.html").read_text(encoding="utf-8")
+
+    assert "burn-warn" in html and "drawWarning" in html
+    for key in ("warnDiverging:", "warnUnreconciled:", "warnPartial:"):
+        assert html.count(key) == 2, f"{key} missing from one language"

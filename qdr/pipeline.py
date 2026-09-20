@@ -708,7 +708,9 @@ def build_burn_series(store: Store, by: str = "day",
     for r in rows:
         burned = int(r["burned"] or 0)
         cumulative += burned
-        series.append({
+        scanned = (int(r["to_tick"]) - int(r["from_tick"]) + 1) if (
+            r["to_tick"] is not None and r["from_tick"] is not None) else 0
+        point = {
             "key": r["key"],
             "burned": burned,
             "events": int(r["events"] or 0),
@@ -717,8 +719,18 @@ def build_burn_series(store: Store, by: str = "day",
             "from_tick": r["from_tick"], "to_tick": r["to_tick"],
             "cumulative": cumulative,
             "measured": True,
-        })
-    return {
+        }
+        # How much of the period the scan actually covered. A day is ~233,280
+        # ticks; a bucket holding 10,000 of them is one hour, and labelling that
+        # "19.09." invites the reader to take an hour for a day. Measured
+        # 2026-09-19: exactly that happened, and the bar read 17.6 Mrd/day.
+        if by == "day" and scanned:
+            point["scanned_ticks"] = scanned
+            point["period_ticks"] = TICKS_PER_DAY
+            point["coverage"] = round(min(1.0, scanned / TICKS_PER_DAY), 4)
+            point["partial"] = scanned < TICKS_PER_DAY * 0.95
+        series.append(point)
+    out = {
         "by": by,
         "series": series,
         "first_measured_tick": state["first_tick"] if state else None,
@@ -726,6 +738,67 @@ def build_burn_series(store: Store, by: str = "day",
         "last_scanned_tick": state["last_tick"] if state else None,
         "generated_at": int(time.time()),
         "code_version": __version__,
+    }
+    out["reconciliation"] = burn_reconciliation(store)
+    return out
+
+
+# A day at the measured 2.7 ticks/s. Used to say how much of a day a bucket
+# actually covers, never to project a partial bucket up to a full one.
+TICKS_PER_DAY = int(86400 * 2.7)
+
+
+def burn_reconciliation(store: Store) -> dict:
+    """How the counted burns compare to the protocol's own burned counter.
+
+    This is the check that stops the series from publishing a figure nobody can
+    corroborate. Measured 2026-09-20: the scan counted 17.6 Mrd QU over ~10,000
+    ticks while `burnedQus` moved by 0 over the following 66,666 ticks. Every
+    counted transfer was EXACTLY 1,000,000 QU, ~2 per tick, from a rotating set
+    of senders — the shape of a fixed protocol fee, not of discretionary supply
+    burning, and the official counter excludes it.
+
+    So the measurement is reported with its disagreement attached rather than as
+    a bare number: `status` is `unreconciled` until an epoch boundary has been
+    observed on both sides, and `consistent` / `diverging` once it has.
+    """
+    totals = store.burn_totals()
+    measured = {int(r["key"]): r for r in store.burn_series(by="epoch")}
+
+    steps = []
+    for prev, cur in zip(totals, totals[1:]):
+        epoch = cur["epoch"]
+        if epoch not in measured:
+            continue
+        official = int(cur["burned_total"]) - int(prev["burned_total"])
+        counted = (int(measured[epoch]["burned"] or 0)
+                   + int(measured[epoch]["contract_burned"] or 0))
+        steps.append({"epoch": epoch, "official_step": official,
+                      "counted": counted,
+                      "ratio": round(counted / official, 4) if official else None})
+
+    latest = store.latest_burn_total()
+    if not steps:
+        return {
+            "status": "unreconciled",
+            "reason": ("no epoch boundary observed on both sides yet, so the counted "
+                       "figure has not been checked against the protocol's own "
+                       "burned counter"),
+            "official_total": int(latest["burned_total"]) if latest else None,
+            "official_epoch": int(latest["epoch"]) if latest else None,
+            "steps": [],
+        }
+
+    worst = max(steps, key=lambda s: abs((s["ratio"] or 1) - 1))
+    diverging = worst["ratio"] is None or not (0.5 <= worst["ratio"] <= 2.0)
+    return {
+        "status": "diverging" if diverging else "consistent",
+        "reason": ("the counted burns disagree with the official counter's step; "
+                   "the counted event stream includes flows the protocol does not "
+                   "treat as burned supply") if diverging else None,
+        "official_total": int(latest["burned_total"]) if latest else None,
+        "official_epoch": int(latest["epoch"]) if latest else None,
+        "steps": steps,
     }
 
 
@@ -807,6 +880,10 @@ def build_burn_latest(store: Store) -> Optional[dict]:
             **_measured_rate(store),
         },
         "coverage": cov["epochs"][-1] if cov["epochs"] else None,
+        # Carried here too, not only on the series: these are the figures the
+        # page shows LARGEST, and a headline number that disagrees with the
+        # protocol's own counter must say so where it is read.
+        "reconciliation": burn_reconciliation(store),
         "source": "rpc:latest-stats (total) + bob:getLogs (per-day measurement)",
         "code_version": __version__,
     }

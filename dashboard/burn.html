@@ -27,155 +27,57 @@
     4. Einordnung — was gemessen ist und was nicht
 -->
 
+<link rel="stylesheet" href="./theme.css">
+
 <style>
-/* ─── Design Tokens ────────────────────────────────────────────────────────── */
-/* Identisch zu mining.html/index.html, damit die Seiten als ein System lesen. */
+/* ─── Page-specific tokens ──────────────────────────────────────────────────
+   The shared design system lives in theme.css (surfaces, text, accents, the
+   glass card, header and controls) — taken from spotlight/dividends.qubic.tools
+   so all three Qubic tools read as one family. Only what is specific to the
+   burn page is defined here.
+
+   Burn keeps amber as its own series colour rather than borrowing the system
+   cyan: cyan is the accent for links, active states and the logo across every
+   page, and reusing it for "QU destroyed" would make the chart look like a
+   navigation element. Amber is the same hue the spotlight widget uses for its
+   own highlight gradient, so it stays inside the family. */
 :root {
-  --bg:       #eef3f6;
-  --bg2:      #f6f9fb;
-  --surface:  #ffffff;
-  --surface2: #f1f5f8;
-  --border:   #d8e2e8;
-  --text:     #132430;
-  --muted:    #546773;
-  --faint:    #8698a2;
-  --accent:   #0aa17e;
-  --accent2:  #1f7fe0;
-  --warn:     #c9820f;
-  --danger:   #e0435f;
-  --shadow:   0 6px 20px rgba(20,40,55,.10);
-  --radius:   14px;
-  --mono:     ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --sans:     system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-
-  /* Serienfarben. Gegen den dataviz-Validator geprüft (light, Fläche #ffffff):
-     CVD-Trennung ΔE 19.3 protan, Normalsicht 20.2, Kontrast alle ≥ 3:1.
-     Tritan liegt bei 4.7 — Blau/Grün ist für Tritanopie schwach getrennt,
-     deshalb trägt die Seite Identität nie über Farbe allein: Contract-Burns
-     stehen in einem EIGENEN Panel, und die kumulative Kurve ist eine Linie
-     gegen Balken, nicht ein zweiter Farbton. */
-  --burn:     #c9820f;   /* verbrannt pro Periode — die Hauptserie */
-  --burn-dim: rgba(201,130,15,.22);
-  --cum:      #1f7fe0;   /* kumulativ */
-  --contract: #0aa17e;   /* Contract-Burns, eigenes Panel */
-  --grid:     rgba(19,36,48,.09);
+  --burn:     #b45309;   /* burned per period — the main series (light) */
+  --burn-dim: rgba(180, 83, 9, .22);
+  --cum:      #0369a1;   /* cumulative */
+  --contract: #16a34a;   /* contract burns, own panel */
+  --grid:     rgba(17, 24, 39, .09);
 }
-
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg:       #0c141b;
-    --bg2:      #101820;
-    --surface:  #16232e;
-    --surface2: #1b2c38;
-    --border:   #263846;
-    --text:     #e6eef2;
-    --muted:    #8aa0ab;
-    --faint:    #5c7180;
-    --accent:   #22d3a6;
-    --accent2:  #3b9dff;
-    --warn:     #f5a623;
-    --danger:   #ff5c7a;
-    --shadow:   0 6px 24px rgba(0,0,0,.35);
-    /* Dunkel ist eigens gewählt, kein automatisches Umdrehen: gegen Fläche
-       #16232e geprüft — CVD ΔE 21.4 protan, Normalsicht 22.8, Kontrast ≥ 3:1. */
-    --burn:     #f5a623;
-    --burn-dim: rgba(245,166,35,.20);
-    --cum:      #3b9dff;
-    --contract: #22d3a6;
-    --grid:     rgba(230,238,242,.10);
+    --burn:     #f59e0b;
+    --burn-dim: rgba(245, 166, 35, .20);
+    --cum:      #4ee0fc;
+    --contract: #22c55e;
+    --grid:     rgba(242, 245, 250, .10);
   }
 }
-
 :root[data-theme="dark"] {
-  --bg:       #0c141b;
-  --bg2:      #101820;
-  --surface:  #16232e;
-  --surface2: #1b2c38;
-  --border:   #263846;
-  --text:     #e6eef2;
-  --muted:    #8aa0ab;
-  --faint:    #5c7180;
-  --accent:   #22d3a6;
-  --accent2:  #3b9dff;
-  --warn:     #f5a623;
-  --danger:   #ff5c7a;
-  --shadow:   0 6px 24px rgba(0,0,0,.35);
-  --burn:     #f5a623;
-  --burn-dim: rgba(245,166,35,.20);
-  --cum:      #3b9dff;
-  --contract: #22d3a6;
-  --grid:     rgba(230,238,242,.10);
+  --burn:     #f59e0b;
+  --burn-dim: rgba(245, 166, 35, .20);
+  --cum:      #4ee0fc;
+  --contract: #22c55e;
+  --grid:     rgba(242, 245, 250, .10);
 }
 
-/* ─── Reset & Base ──────────────────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--sans);
-  -webkit-font-smoothing: antialiased;
-  line-height: 1.5;
-}
-a { color: var(--accent2); text-decoration: none; }
-a:hover { text-decoration: underline; }
 
-/* ─── Header ────────────────────────────────────────────────────────────────── */
-header.top {
-  position: sticky; top: 0; z-index: 30;
-  background: linear-gradient(180deg, var(--bg2) 70%, transparent);
-  border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-}
-.top-inner {
-  max-width: 1120px; margin: 0 auto; padding: 10px 18px;
-  display: flex; align-items: center; gap: 12px;
-}
-.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.logo {
-  width: 30px; height: 30px; border-radius: 8px; flex: none;
-  background: radial-gradient(circle at 35% 30%, var(--burn), transparent 62%),
-              linear-gradient(140deg, var(--danger), var(--burn));
-}
-.brand h1 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
-.brand .sub { font-size: 11px; color: var(--muted); }
-.spacer { flex: 1; }
-.controls { display: flex; align-items: center; gap: 8px; }
-.how-link {
-  font-size: 12px; color: var(--muted); border: 1px solid var(--border);
-  border-radius: 9px; padding: 6px 10px; white-space: nowrap;
-}
-.how-link:hover { color: var(--text); text-decoration: none; }
-.seg {
-  display: inline-flex; border: 1px solid var(--border); border-radius: 9px;
-  overflow: hidden; background: var(--surface);
-}
-.seg button {
-  background: transparent; border: 0; color: var(--muted);
-  padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
-  font-family: var(--sans); min-height: 32px;
-}
-.seg button.active { background: var(--accent); color: #04231b; }
-:root[data-theme="light"] .seg button.active { color: #fff; }
-.icon-btn {
-  width: 36px; height: 32px; border: 1px solid var(--border);
-  border-radius: 9px; background: var(--surface);
-  color: var(--text); cursor: pointer; font-size: 14px;
-  display: inline-flex; align-items: center; justify-content: center;
-}
 
-/* ─── Layout ────────────────────────────────────────────────────────────────── */
-main { max-width: 1120px; margin: 0 auto; padding: 22px 18px 60px; }
-.card {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); box-shadow: var(--shadow);
-  padding: 18px; margin-bottom: 18px;
-}
-.card h2 {
-  margin: 0 0 4px; font-size: 15px; font-weight: 700; letter-spacing: -.01em;
-}
-.card .desc { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); }
+/* ─── Page background: embers ───────────────────────────────────────────────
+   Same construction as mining.html's colony: one viewport-fixed canvas behind
+   everything, with the content on z-index 1 and translucent panels so the
+   motion reads through them.
+
+   The motion differs because the subject does. Mining draws a network, because
+   that is what a swarm is; burn draws embers drifting UP off a fire, because
+   that is what the page is about. Both are ambient: nothing here encodes a
+   figure. The hero furnace is the opposite — every spark there is a measured
+   event — so the two never share a layer. */
 
 /* ─── Hero ──────────────────────────────────────────────────────────────────── */
 .hero { padding: 26px 18px 22px; text-align: center; position: relative; overflow: hidden; }
@@ -212,7 +114,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 22px 18px 60px; }
   margin-top: 18px;
 }
 .fact {
-  background: var(--surface2); border: 1px solid var(--border);
+  border: 1px solid var(--border);
   border-radius: 11px; padding: 10px 14px; min-width: 132px;
 }
 .fact-label {
@@ -233,9 +135,33 @@ main { max-width: 1120px; margin: 0 auto; padding: 22px 18px 60px; }
 /* Breite Inhalte scrollen in ihrem eigenen Container — der Seitenkörper
    scrollt nie seitwärts. */
 .chart-scroll { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
-.chart-svg { display: block; width: 100%; min-width: 320px; height: auto; }
+/* The viewBox is 900x340, and `height:auto` makes an SVG keep that ratio — so a
+   1440px-wide card stretched the chart to ~545px tall and a single day became a
+   column the height of the screen. Pinning the rendered height keeps the plot
+   the same size on every viewport; preserveAspectRatio="none" on the element
+   would distort the marks, so the height is set here and the viewBox left alone. */
+.chart-svg { display: block; width: 100%; min-width: 320px; height: 340px; }
 .chart-svg[hidden] { display: none; }
+@media (max-width: 700px) { .chart-svg { height: 280px; } }
 .chart-svg text { font-family: var(--sans); fill: var(--muted); }
+
+/* Ein Messwert, der dem offiziellen Zähler widerspricht, darf nicht aussehen wie
+   ein bestätigter. Die Warnung sitzt über dem Diagramm und trägt die Zahl, um
+   die es geht — nicht nur ein Wort wie "vorläufig". */
+.burn-warn {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin: 0 0 14px; padding: 11px 14px;
+  border: 1px solid var(--warn); border-radius: 10px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  font-size: 12.5px; line-height: 1.55; color: var(--text);
+}
+.burn-warn[hidden] { display: none; }
+.burn-warn-icon { color: var(--warn); font-size: 14px; line-height: 1.35; flex: 0 0 auto; }
+
+/* Ein ungeprüfter Wert in einer Kachel, die sonst gesicherte Zahlen trägt. Die
+   Farbe allein trüge die Aussage nicht (Rot/Orange lesen sich als "hoch", nicht
+   als "unsicher"), also steht das Fragezeichen im Text und die Farbe stützt es. */
+.fact-value.unsure { color: var(--warn); }
 .axis-line { stroke: var(--border); stroke-width: 1; }
 .grid-line { stroke: var(--grid); stroke-width: 1; }
 .bar { fill: var(--burn); }
@@ -244,14 +170,6 @@ main { max-width: 1120px; margin: 0 auto; padding: 22px 18px 60px; }
 .cum-line { fill: none; stroke: var(--cum); stroke-width: 2;
   stroke-linejoin: round; stroke-linecap: round; }
 .cum-dot { fill: var(--cum); stroke: var(--surface); stroke-width: 2; }
-.legend {
-  display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px;
-  font-size: 12px; color: var(--muted);
-}
-.legend i {
-  width: 11px; height: 11px; border-radius: 3px; display: inline-block;
-  vertical-align: -1px; margin-right: 5px;
-}
 .tip {
   position: fixed; z-index: 60; pointer-events: none; opacity: 0;
   transition: opacity .1s; background: var(--surface);
@@ -313,16 +231,11 @@ table.data td:first-child { font-family: var(--sans); }
 }
 .notice strong { color: var(--text); }
 .empty { text-align: center; padding: 34px 18px; color: var(--muted); font-size: 13px; }
-footer {
-  max-width: 1120px; margin: 0 auto; padding: 0 18px 40px;
-  font-size: 11.5px; color: var(--faint);
-}
 
 /* ─── Mobile ────────────────────────────────────────────────────────────────── */
 @media (max-width: 700px) {
-  .top-inner { flex-wrap: wrap; padding: 9px 13px; }
   .brand h1 { font-size: 15px; }
-  main { padding: 16px 13px 44px; }
+  main { padding: 16px 14px 44px; }
   .card { padding: 14px; }
   .hero-facts { gap: 8px; }
   .fact { flex: 1 1 calc(50% - 8px); min-width: 0; }
@@ -342,30 +255,42 @@ footer {
 </head>
 <body>
 
-<header class="top">
-  <div class="top-inner">
+<!-- Ambient page background: embers drifting up off a fire. Same construction
+     as mining.html's colony canvas — viewport-fixed, behind everything, purely
+     atmospheric. Nothing here encodes a measurement; the hero furnace does that,
+     and the two are deliberately separate layers. -->
+<canvas class="qs-canvas" id="ember-canvas" aria-hidden="true"></canvas>
+
+<header class="top qs-header">
+  <div class="top-inner qs-header-inner">
     <div class="brand">
-      <div class="logo" aria-hidden="true"></div>
+      <div class="logo qs-logo" aria-hidden="true"></div>
       <div>
-        <h1 data-i18n="pageTitle">Burn Report</h1>
-        <div class="sub"><span data-i18n="subtitle">Burned supply · Qubic Decentralization Report</span></div>
+        <h1 class="qs-title" data-i18n="pageTitle">Burn Report</h1>
+        <div class="sub qs-subtitle"><span data-i18n="subtitle">Burned supply · Qubic Decentralization Report</span></div>
       </div>
     </div>
     <div class="spacer"></div>
     <div class="controls">
-      <a class="how-link" href="./"><span data-i18n="backToReport">← Report</span></a>
-      <div class="seg" id="lang-seg">
+      <nav class="qs-nav" id="site-nav" aria-label="Sections">
+        <a class="how-link qs-link" href="./" data-i18n="navReport">Report</a>
+        <a class="how-link qs-link" href="./burn.html" aria-current="page" data-i18n="burnReport">Burn</a>
+        <a class="how-link qs-link" href="./mining.html" data-i18n="miningLive">Mining Live</a>
+        <a class="how-link qs-link" href="./how-it-works.html" data-i18n="howItWorks">How it works</a>
+      </nav>
+      <button class="qs-icon-btn qs-burger" id="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">☰</button>
+      <div class="seg qs-seg" id="lang-seg">
         <button data-lang="en">EN</button><button data-lang="de">DE</button>
       </div>
-      <button class="icon-btn" id="theme-btn" aria-label="Theme">🌙</button>
+      <button class="icon-btn qs-icon-btn" id="theme-btn" aria-label="Theme">🌙</button>
     </div>
   </div>
 </header>
 
-<main>
+<main class="qs-main">
 
   <!-- 1 — HERO ------------------------------------------------------------- -->
-  <section class="card hero" id="hero">
+  <section class="qs-card qs-card--translucent hero" id="hero">
     <canvas class="furnace" id="furnace" aria-hidden="true"></canvas>
     <div class="hero-label" data-i18n="heroLabel">Burned supply, total</div>
     <div class="hero-count" id="hero-total">–</div>
@@ -405,33 +330,40 @@ footer {
   </section>
 
   <!-- Ehrlichkeitshinweis: steht ÜBER dem Diagramm, nicht im Kleingedruckten. -->
-  <div class="notice" id="honesty-note">
+  <div class="notice qs-panel--translucent" id="honesty-note">
     <strong data-i18n="noteTitle">What is measured here:</strong>
     <span data-i18n="noteBody">The total above is the official counter, the same figure the explorer shows. It only steps once per epoch (~4.4 days), so every per-day figure below was counted by this project from a Qubic node's own burn events — starting when we began measuring. Nothing before that is interpolated.</span>
   </div>
 
   <!-- 2 — CHART ------------------------------------------------------------ -->
-  <section class="card">
+  <section class="qs-card qs-card--translucent">
     <h2 data-i18n="chartTitle">Burned over time</h2>
     <p class="desc" data-i18n="chartDesc">Counted from individual burn events. Each bar is one period; the line is the running total across the measured range.</p>
 
     <div class="chart-controls">
-      <div class="seg" id="by-seg" role="group" aria-label="Grouping">
+      <div class="seg qs-seg" id="by-seg" role="group" aria-label="Grouping">
         <button data-by="day" data-i18n="byDay">Day</button
         ><button data-by="epoch" data-i18n="byEpoch">Epoch</button
         ><button data-by="year" data-i18n="byYear">Year</button>
       </div>
-      <div class="seg" id="mode-seg" role="group" aria-label="Mode">
+      <div class="seg qs-seg" id="mode-seg" role="group" aria-label="Mode">
         <button data-mode="delta" data-i18n="modeDelta">Per period</button
         ><button data-mode="cumulative" data-i18n="modeCumulative">Cumulative</button>
       </div>
+    </div>
+
+    <!-- Warnung über dem Diagramm, nicht darunter: wer die Balken schon gelesen
+         hat, hat die Zahl bereits geglaubt. -->
+    <div class="burn-warn" id="burn-warn" hidden>
+      <span class="burn-warn-icon" aria-hidden="true">⚠</span>
+      <span id="burn-warn-text"></span>
     </div>
 
     <div class="chart-scroll">
       <svg class="chart-svg" id="chart" viewBox="0 0 900 340"
            preserveAspectRatio="xMinYMin meet" role="img"></svg>
     </div>
-    <div class="legend" id="legend"></div>
+    <div class="qs-legend" id="legend"></div>
     <div id="chart-empty" class="empty" hidden></div>
 
     <!-- Die Tabellenansicht macht die Zahlen ohne Farbe und ohne Hover
@@ -447,14 +379,14 @@ footer {
   </section>
 
   <!-- 3 — CONTRACT --------------------------------------------------------- -->
-  <section class="card" id="contract-card" hidden>
+  <section class="qs-card qs-card--translucent" id="contract-card" hidden>
     <h2 data-i18n="ctTitle">Burns attributed to a contract</h2>
     <p class="desc" data-i18n="ctDesc">A separate panel on purpose: these run six orders of magnitude below the computor burns, so a shared axis would hide them entirely. A contract index is not yet a contract name — no public index→name source exists, so the index is shown as the index.</p>
     <div id="ct-list"></div>
   </section>
 
   <!-- 4 — EINORDNUNG ------------------------------------------------------- -->
-  <section class="card">
+  <section class="qs-card qs-card--translucent">
     <h2 data-i18n="aboutTitle">Where these numbers come from</h2>
     <p class="desc" style="margin-bottom:10px" data-i18n="aboutBody">The official counter (/v1/latest-stats → burnedQus) is cumulative and authoritative, but it is an epoch aggregate: measured over 375 ticks it did not move by a single QU. So a per-day series cannot come from it. This project counts the burn events themselves from a Bob node's tick logs and reconciles the sum against the official counter at every epoch boundary — that ratio is the coverage figure above. Where coverage falls below 100%, a burn category exists that this scan does not recognise yet, and it is reported rather than hidden.</p>
     <p class="desc" style="margin-bottom:0">
@@ -464,7 +396,7 @@ footer {
 
 </main>
 
-<footer>
+<footer class="qs-footer">
   <span data-i18n="footDisclaimer">Measured from public data. No figure on this page is estimated or interpolated. Use for analysis, not as a basis for investment decisions.</span>
 </footer>
 
@@ -487,6 +419,10 @@ footer {
      nie als roher Schlüsselname erscheinen. */
   const I18N = {
     en: {
+      navReport: "Report",
+      burnReport: "Burn",
+      miningLive: "Mining Live",
+      howItWorks: "How it works",
       pageTitle: "Burn Report",
       subtitle: "Burned supply · Qubic Decentralization Report",
       backToReport: "← Report",
@@ -520,6 +456,10 @@ footer {
       tipEvents: "Burn events", tipBurned: "Burned", tipCum: "Cumulative",
       tipTicks: "Ticks", tipMeasured: "Measured by this project from node events",
       buildingTitle: "Nothing measured yet",
+      warnPartial: "This bar covers {h} of a day ({pct}% of it), not a whole day — the scan has only reached that far. Do not read it as a daily figure.",
+      warnUnreconciled: "Not yet checked against the protocol’s own burned counter. That counter (burnedQus) only moves at an epoch boundary, so a comparison needs one to pass first.",
+      warnDiverging: "These counted figures disagree with the protocol’s burned counter, which has not moved at all in the same period. The counted stream is made up entirely of uniform 1,000,000 QU transfers — a fixed protocol fee the official counter does not treat as burned supply. Treat the bars as an event count, not as burned supply.",
+      warnHours: "{n} h",
       buildingBody: "The ingest worker has not recorded a burn measurement yet. It counts events from a Qubic node and writes the first day within a few minutes of starting.",
       unavailApi: "API not reachable",
       unavailFile: "This page was opened as a file (file://) and has no API. Start the server and open it through that: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/burn.html",
@@ -528,6 +468,10 @@ footer {
       perDay: "/ day", eventsWord: "events", noData: "no data"
     },
     de: {
+      navReport: "Report",
+      burnReport: "Burn",
+      miningLive: "Mining Live",
+      howItWorks: "Wie es funktioniert",
       pageTitle: "Burn-Report",
       subtitle: "Verbrannte Supply · Qubic Decentralization Report",
       backToReport: "← Report",
@@ -561,6 +505,10 @@ footer {
       tipEvents: "Burn-Ereignisse", tipBurned: "Verbrannt", tipCum: "Kumulativ",
       tipTicks: "Ticks", tipMeasured: "Von diesem Projekt aus Node-Ereignissen gemessen",
       buildingTitle: "Noch nichts gemessen",
+      warnPartial: "Dieser Balken deckt {h} eines Tages ab ({pct} % davon), nicht einen ganzen Tag — so weit ist der Scan erst. Nicht als Tageswert lesen.",
+      warnUnreconciled: "Noch nicht gegen den offiziellen Burn-Zähler des Protokolls geprüft. Dieser Zähler (burnedQus) bewegt sich nur an einer Epochengrenze, ein Vergleich braucht also erst eine solche.",
+      warnDiverging: "Diese gezählten Werte widersprechen dem Burn-Zähler des Protokolls, der sich im selben Zeitraum überhaupt nicht bewegt hat. Der gezählte Strom besteht ausschließlich aus gleichförmigen 1.000.000-QU-Transfers — einer festen Protokollgebühr, die der offizielle Zähler nicht als verbrannte Menge führt. Die Balken sind eine Ereigniszahl, keine verbrannte Menge.",
+      warnHours: "{n} Std.",
       buildingBody: "Der Ingest-Worker hat noch keine Burn-Messung aufgezeichnet. Er zählt Ereignisse von einem Qubic-Node und schreibt den ersten Tag wenige Minuten nach dem Start.",
       unavailApi: "API nicht erreichbar",
       unavailFile: "Diese Seite wurde als Datei (file://) geöffnet und hat keine API. Starte den Server und öffne sie darüber: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/burn.html",
@@ -712,11 +660,49 @@ footer {
     return String(p.key);
   }
 
+  /* Sagt über dem Diagramm, was an diesen Zahlen noch nicht stimmt.
+
+     Gemessen am 20.09.2026: der Scan zählte 17,6 Mrd. QU über ~10.000 Ticks,
+     während der offizielle burnedQus-Zähler über die folgenden 66.666 Ticks bei
+     exakt 0 Bewegung blieb. Jeder gezählte Transfer war exakt 1.000.000 QU, rund
+     zwei pro Tick — die Form einer festen Protokollgebühr, nicht die eines
+     Supply-Burns. Eine Zahl, die dem Zähler des Protokolls widerspricht, darf
+     nicht aussehen wie eine bestätigte. */
+  function drawWarning(payload) {
+    const box = document.getElementById("burn-warn");
+    const text = document.getElementById("burn-warn-text");
+    const rec = (payload && payload.reconciliation) || null;
+    const series = (payload && payload.series) || [];
+    const msgs = [];
+
+    if (rec && rec.status === "diverging") msgs.push(t("warnDiverging"));
+    else if (rec && rec.status === "unreconciled") msgs.push(t("warnUnreconciled"));
+
+    /* Ein Teilfenster, das als Tag beschriftet ist, ist die gefährlichere
+       Irreführung von beiden: eine Stunde als Tagesbalken liest sich als das
+       24-fache dessen, was gemessen wurde. */
+    const partial = series.filter(p => p.partial && p.coverage != null);
+    if (partial.length) {
+      const worst = partial.reduce((a, b) => (a.coverage <= b.coverage ? a : b));
+      const hours = Math.max(0.1, worst.coverage * 24);
+      msgs.push(t("warnPartial", {
+        h: t("warnHours", { n: hours < 1 ? hours.toFixed(1).replace(".", ",")
+                                         : String(Math.round(hours)) }),
+        pct: (worst.coverage * 100).toFixed(1).replace(".", ",")
+      }));
+    }
+
+    if (!msgs.length) { box.hidden = true; return; }
+    box.hidden = false;
+    text.textContent = msgs.join(" ");
+  }
+
   function drawChart(payload) {
     const series = (payload && payload.series) || [];
     const empty = document.getElementById("chart-empty");
     const legend = document.getElementById("legend");
     chart.innerHTML = "";
+    drawWarning(payload);
 
     if (!series.length) {
       /* Ein leeres SVG behielte seine Höhe (width:100% + height:auto füllen das
@@ -733,13 +719,19 @@ footer {
     chart.hidden = false;
     document.getElementById("table-details").hidden = false;
 
-    /* Geometrie. Breite wächst mit der Punktzahl, damit Balken nie zu
-       Haarlinien werden — der Container scrollt dann horizontal. */
+    /* Geometrie. Die viewBox-Breite folgt der ECHTEN Containerbreite, nicht
+       einer festen Zahl: bei fixer Höhe und `…meet` skaliert das SVG sonst auf
+       das viewBox-Seitenverhältnis und lässt auf einer 1440px-Karte rechts
+       mehrere hundert Pixel leer — Gitterlinien enden mitten im Panel.
+       Gemessen wird der Scroll-Container; braucht die Reihe mehr Platz als der,
+       wächst W darüber hinaus und der Container scrollt wie zuvor. */
     const H = 340, padL = 66, padR = 16, padT = 16, padB = 44;
     const minStep = 26;
-    const W = Math.max(900, series.length * minStep + padL + padR);
+    const avail = Math.max(320, Math.floor(
+      (chart.parentElement && chart.parentElement.clientWidth) || 900));
+    const W = Math.max(avail, series.length * minStep + padL + padR);
     chart.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    chart.style.minWidth = (W > 900 ? W : 320) + "px";
+    chart.style.minWidth = (W > avail ? W + "px" : "0");
 
     const plotW = W - padL - padR, plotH = H - padT - padB;
     const values = series.map(p => mode === "cumulative" ? p.cumulative : p.burned);
@@ -763,7 +755,11 @@ footer {
     }));
 
     const step = plotW / series.length;
-    const barW = Math.max(3, Math.min(34, step - 6));
+    /* Cap the bar width rather than letting it grow with the container. On a
+       1440px page the first measured day is a single bar, and an unconstrained
+       one renders as a column the width of a door — technically correct, and it
+       reads as a broken chart. Capped, a lone day looks like one day. */
+    const barW = Math.max(3, Math.min(56, step - 6));
 
     if (mode === "delta") {
       series.forEach((p, i) => {
@@ -846,6 +842,103 @@ footer {
      er nichts, fällt nichts. Ein toter Ofen ist eine wahre Aussage über die
      Daten und weit besser als eine Schleife, die Fantasie-QU verbrennt, während
      der Node nicht erreichbar ist. */
+  /* ─── Ambient embers (page background) ────────────────────────────────────
+     Decorative, and openly so: this is the only motion on the page that is NOT
+     tied to a measurement. It carries no number, so it runs whether or not the
+     scan found anything — unlike the furnace, which stops dead when there is
+     nothing to show. Keeping them separate is what lets the furnace mean
+     something.
+
+     Embers rise, because the page is about burning. Colours come from the live
+     --burn token, so a theme switch re-reads them. */
+  (function initEmbers() {
+    const canvas = document.getElementById("ember-canvas");
+    if (!canvas || !canvas.getContext) return;
+    const ctx = canvas.getContext("2d");
+    const reduce = window.matchMedia
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    let embers = [];
+    let raf = null;
+
+    function colour() {
+      return getComputedStyle(document.documentElement)
+        .getPropertyValue("--burn").trim() || "#f59e0b";
+    }
+    function resize() {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    }
+    /* Count scales with area, capped: a tall monitor should not look empty and
+       a wide one should not turn into noise. */
+    function targetCount() {
+      return Math.max(18, Math.min(70,
+        Math.round(Math.sqrt(canvas.width * canvas.height) / 22)));
+    }
+    function spawn(atBottom) {
+      return {
+        x: Math.random() * canvas.width,
+        y: atBottom ? canvas.height + Math.random() * 40
+                    : Math.random() * canvas.height,
+        vy: -(6 + Math.random() * 16) / 60,
+        vx: (Math.random() - .5) * 0.22,
+        r: .8 + Math.random() * 1.9,
+        phase: Math.random() * Math.PI * 2,
+        drift: .3 + Math.random() * .7
+      };
+    }
+    function seed() {
+      embers = [];
+      const n = targetCount();
+      for (let i = 0; i < n; i++) embers.push(spawn(false));
+    }
+
+    function paint(t) {
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      const col = colour();
+      for (const e of embers) {
+        /* A slow sideways wobble reads as heat; a straight line reads as rain. */
+        e.y += e.vy;
+        e.x += e.vx + Math.sin(t / 1000 * e.drift + e.phase) * 0.25;
+        if (e.y < -10) Object.assign(e, spawn(true));
+        if (e.x < -10) e.x = W + 10;
+        if (e.x > W + 10) e.x = -10;
+
+        /* Fade with height: embers cool as they rise. */
+        const life = Math.max(0, Math.min(1, e.y / H));
+        const glow = .25 + .55 * life;
+        const pulse = .75 + .25 * Math.sin(t / 700 + e.phase);
+
+        ctx.globalAlpha = glow * pulse * .55;
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r * 3.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalAlpha = glow * pulse;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function loop(t) { paint(t); raf = requestAnimationFrame(loop); }
+
+    function start() {
+      if (raf) cancelAnimationFrame(raf);
+      resize(); seed();
+      if (reduce) { paint(0); return; }   /* static field, no motion */
+      raf = requestAnimationFrame(loop);
+    }
+
+    window.addEventListener("resize", start, { passive: true });
+    /* A theme flip changes --burn, so the field is repainted with the new hue. */
+    window.qdrRepaintEmbers = start;
+    start();
+  })();
+
   const furnace = document.getElementById("furnace");
   const fctx = furnace.getContext ? furnace.getContext("2d") : null;
   const reduceMotion = window.matchMedia
@@ -997,13 +1090,25 @@ footer {
     document.getElementById("f-epoch").textContent = fmtInt(latest.epoch);
 
     const m = latest.measured || {};
+    /* Solange die gezählten Werte nicht gegen den offiziellen Zähler geprüft
+       sind, dürfen diese Kacheln sie nicht wie gesicherte Zahlen zeigen. Ein "?"
+       hinter dem Wert ist die kleinste Markierung, die man nicht übersieht; die
+       Warnung über dem Diagramm trägt die Begründung. */
+    const recStatus = (latest.reconciliation && latest.reconciliation.status)
+                      || "unreconciled";
+    const unsure = recStatus !== "consistent";
+    const mark = v => unsure ? (v + " ?") : v;
+    for (const id of ["f-rate", "f-today"]) {
+      document.getElementById(id).classList.toggle("unsure", unsure);
+    }
+
     /* Die Rate stammt aus den tatsächlich gescannten Ticks, nicht aus einem
        angebrochenen Kalendertag — sonst läge sie den ganzen Tag zu niedrig und
        wäre erst um Mitternacht richtig. */
     document.getElementById("f-rate").textContent =
-      m.burned_per_day ? (fmtCompact(m.burned_per_day) + " " + t("perDay")) : "–";
+      m.burned_per_day ? mark(fmtCompact(m.burned_per_day) + " " + t("perDay")) : "–";
     document.getElementById("f-today").textContent =
-      m.burned ? fmtCompact(m.burned) : "–";
+      m.burned ? mark(fmtCompact(m.burned)) : "–";
     document.getElementById("f-today-sub").textContent =
       m.events ? (fmtInt(m.events) + " " + t("eventsWord")) : (m.last_day || "–");
 
@@ -1125,6 +1230,9 @@ footer {
     root.setAttribute("data-theme", theme);
     document.getElementById("theme-btn").textContent = theme === "dark" ? "🌙" : "☀️";
     if (seriesCache[by]) drawChart(seriesCache[by]);
+    /* The embers read --burn once per start, so a theme flip has to re-seed
+       them or they keep the previous palette's hue. */
+    if (window.qdrRepaintEmbers) window.qdrRepaintEmbers();
   }
   document.getElementById("theme-btn").addEventListener("click", () => {
     theme = theme === "dark" ? "light" : "dark";
@@ -1137,6 +1245,35 @@ footer {
   });
 
   /* ─── Start ─────────────────────────────────────────────────────────────── */
+
+  /* ─── Navigation (Burger) ─────────────────────────────────────────────────
+     The nav collapses below 860px. Closing on outside click and on Escape is
+     what keeps it from trapping a touch user behind an open panel. */
+  (function initNav() {
+    const toggle = document.getElementById("nav-toggle");
+    const nav = document.getElementById("site-nav");
+    if (!toggle || !nav) return;
+    function setOpen(open) {
+      nav.classList.toggle("open", open);
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    toggle.addEventListener("click", e => {
+      e.stopPropagation();
+      setOpen(!nav.classList.contains("open"));
+    });
+    document.addEventListener("click", e => {
+      if (nav.classList.contains("open") && !nav.contains(e.target)) setOpen(false);
+    });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") setOpen(false);
+    });
+    /* Reaching the desktop breakpoint must drop the .open state, or the panel
+       stays stuck open as an odd floating box next to the bar. */
+    window.addEventListener("resize", () => {
+      if (window.innerWidth > 860) setOpen(false);
+    }, { passive: true });
+  })();
+
   syncSeg("by-seg", "by", by);
   syncSeg("mode-seg", "mode", mode);
   applyTheme();
