@@ -651,8 +651,12 @@ def burn_contracts(epoch: int | None = Query(None, description="Restrict to one 
     them: measured across epochs 225-228 they run ~0.3-0.5 M QU per epoch against
     trillions from the computor burns, so a shared total would hide them entirely.
 
-    A contract *index* is not yet a contract *name* — mapping the two needs a
-    source this project does not have, so the index is reported as the index.
+    Each row carries the contract's NAME, resolved against the registry Qubic
+    publishes and the official explorer itself renders
+    (`static.qubic.org/v1/general/data/smart_contracts.json`). New contracts
+    therefore appear by name without a change here. An index the registry does
+    not list is returned with `known: false` and no name, so the page shows the
+    bare index rather than a guess.
     """
     # An empty result is an ANSWER here, not a missing service: measured across
     # epochs 225-228, contract burns appear only in the end-epoch logs, so a
@@ -661,13 +665,24 @@ def burn_contracts(epoch: int | None = Query(None, description="Restrict to one 
     # it is, and it puts a red error in the browser console for a normal state.
     # (Contrast /v1/burn/latest, where an empty store genuinely has nothing to
     # say and 503 is the honest answer.)
+    from qdr import contracts
+
     totals = get_store().burn_by_contract(epoch)
     grand = sum(totals.values()) or 1
-    rows = [{"index": int(k) if k.lstrip("-").isdigit() else k,
-             "burned": v, "share": round(v / grand, 6)}
-            for k, v in sorted(totals.items(), key=lambda kv: -kv[1])]
+    rows = []
+    for k, v in sorted(totals.items(), key=lambda kv: -kv[1]):
+        idx = int(k) if k.lstrip("-").isdigit() else k
+        row = {"index": idx, "burned": v, "share": round(v / grand, 6)}
+        # describe() never raises and never invents: an unlisted index comes back
+        # known=false with no name, and the page falls back to the index.
+        row.update({key: val for key, val in contracts.describe(idx).items()
+                    if key in ("name", "label", "address", "known")})
+        rows.append(row)
     return {"epoch": epoch, "total": sum(totals.values()), "by_contract": rows,
-            "note": "contract index is not a contract name; no index->name source yet"}
+            "registry": {
+                "source": contracts.REGISTRY_URL,
+                "contracts_known": len(contracts.registry()),
+            }}
 
 
 @app.get("/v1/burn/coverage", tags=["burn"], summary="Measured burns vs. the official counter")

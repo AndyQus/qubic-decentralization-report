@@ -162,6 +162,10 @@ html { scroll-behavior: smooth; }
    Farbe allein trüge die Aussage nicht (Rot/Orange lesen sich als "hoch", nicht
    als "unsicher"), also steht das Fragezeichen im Text und die Farbe stützt es. */
 .fact-value.unsure { color: var(--warn); }
+
+/* Der Index bleibt sichtbar, auch wenn ein Name da ist: die Rohdaten der Kette
+   tragen den Index, und wer gegen einen Explorer prüft, braucht ihn. */
+.ct-sub { display: block; font-size: 10.5px; color: var(--muted); font-weight: 400; }
 .axis-line { stroke: var(--border); stroke-width: 1; }
 .grid-line { stroke: var(--grid); stroke-width: 1; }
 .bar { fill: var(--burn); }
@@ -381,7 +385,7 @@ table.data td:first-child { font-family: var(--sans); }
   <!-- 3 — CONTRACT --------------------------------------------------------- -->
   <section class="qs-card qs-card--translucent" id="contract-card" hidden>
     <h2 data-i18n="ctTitle">Burns attributed to a contract</h2>
-    <p class="desc" data-i18n="ctDesc">A separate panel on purpose: these run six orders of magnitude below the computor burns, so a shared axis would hide them entirely. A contract index is not yet a contract name — no public index→name source exists, so the index is shown as the index.</p>
+    <p class="desc" data-i18n="ctDesc">A separate panel on purpose: these run six orders of magnitude below the computor burns, so a shared axis would hide them entirely. Names come from the registry Qubic publishes for the official explorer, so a newly deployed contract appears by name on its own; an index that registry does not list stays an index.</p>
     <div id="ct-list"></div>
   </section>
 
@@ -445,7 +449,7 @@ table.data td:first-child { font-family: var(--sans); }
       modeDelta: "Per period", modeCumulative: "Cumulative",
       legendBurned: "Burned per period", legendCum: "Cumulative (measured range)",
       ctTitle: "Burns attributed to a contract",
-      ctDesc: "A separate panel on purpose: these run six orders of magnitude below the computor burns, so a shared axis would hide them entirely. A contract index is not yet a contract name — no public index→name source exists, so the index is shown as the index.",
+      ctDesc: "A separate panel on purpose: these run six orders of magnitude below the computor burns, so a shared axis would hide them entirely. Names come from the registry Qubic publishes for the official explorer, so a newly deployed contract appears by name on its own; an index that registry does not list stays an index.",
       ctIndex: "Contract", ctShare: "share",
       aboutTitle: "Where these numbers come from",
       aboutBody: "The official counter (/v1/latest-stats → burnedQus) is cumulative and authoritative, but it is an epoch aggregate: measured over 375 ticks it did not move by a single QU. So a per-day series cannot come from it. This project counts the burn events themselves from a Bob node's tick logs and reconciles the sum against the official counter at every epoch boundary — that ratio is the coverage figure above. Where coverage falls below 100%, a burn category exists that this scan does not recognise yet, and it is reported rather than hidden.",
@@ -494,7 +498,7 @@ table.data td:first-child { font-family: var(--sans); }
       modeDelta: "Pro Periode", modeCumulative: "Kumulativ",
       legendBurned: "Verbrannt pro Periode", legendCum: "Kumulativ (gemessener Bereich)",
       ctTitle: "Burns mit Contract-Zuordnung",
-      ctDesc: "Bewusst ein eigenes Panel: diese liegen sechs Größenordnungen unter den Computor-Burns, eine gemeinsame Achse würde sie vollständig verschwinden lassen. Ein Contract-Index ist noch kein Contract-Name — es gibt keine öffentliche Index→Name-Quelle, deshalb steht hier der Index.",
+      ctDesc: "Bewusst ein eigenes Panel: diese liegen sechs Größenordnungen unter den Computor-Burns, eine gemeinsame Achse würde sie vollständig verschwinden lassen. Die Namen stammen aus der Registry, die Qubic für den offiziellen Explorer veröffentlicht — ein neu deployter Contract erscheint also von selbst mit Namen; ein Index, den die Registry nicht führt, bleibt ein Index.",
       ctIndex: "Contract", ctShare: "Anteil",
       aboutTitle: "Woher diese Zahlen kommen",
       aboutBody: "Der offizielle Zähler (/v1/latest-stats → burnedQus) ist kumulativ und maßgeblich, aber ein Epochen-Aggregat: über 375 Ticks gemessen bewegte er sich um keinen einzigen QU. Eine Tagesreihe kann also nicht von ihm kommen. Dieses Projekt zählt die Burn-Ereignisse selbst aus den Tick-Logs eines Bob-Nodes und gleicht die Summe an jeder Epochengrenze gegen den offiziellen Zähler ab — dieses Verhältnis ist die Abdeckung oben. Fällt sie unter 100 %, existiert eine Burn-Kategorie, die dieser Scan noch nicht erkennt; sie wird ausgewiesen statt versteckt.",
@@ -1146,12 +1150,24 @@ table.data td:first-child { font-family: var(--sans); }
     }
     card.hidden = false;
     const max = Math.max.apply(null, contracts.by_contract.map(c => c.burned).concat([1]));
-    list.innerHTML = contracts.by_contract.map(c => `
+    /* Name statt Index, wo die offizielle Registry einen kennt. Kennt sie keinen
+       (ein Contract, der neuer ist als die Registry-Datei), bleibt der Index
+       stehen — ein erfundener Name wäre schlimmer als eine nackte Zahl. */
+    list.innerHTML = contracts.by_contract.map(c => {
+      const label = c.label || c.name;
+      const title = label
+        ? escapeHtml(label)
+        : escapeHtml(t("ctIndex") + " " + String(c.index));
+      const sub = label
+        ? `<span class="ct-sub">${escapeHtml(t("ctIndex"))} ${escapeHtml(String(c.index))}</span>`
+        : "";
+      return `
       <div class="ct-row">
-        <div class="ct-idx">${escapeHtml(t("ctIndex"))} ${escapeHtml(String(c.index))}</div>
+        <div class="ct-idx">${title}${sub}</div>
         <div class="ct-bar-track"><div class="ct-bar" style="width:${(c.burned / max * 100).toFixed(1)}%"></div></div>
         <div class="ct-val">${escapeHtml(fmtInt(c.burned))}</div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
   }
 
   /* ─── Laden ─────────────────────────────────────────────────────────────── */

@@ -269,6 +269,31 @@ range returned 0 entries, while a current-epoch range returned 805 in 200 ticks.
 linkage can only be built for the running epoch, as it happens — another reason the ingest
 worker has to keep running rather than being reconstructable after the fact.
 
+## 7.3 Smart-contract names (2026-09-20)
+
+`contractIndexBurnedFor` carries an index, not a name, and the burn panel used to
+print "Contract 13" because this repo had no index→name source. There is one, and
+it is Qubic's own:
+
+```
+GET https://static.qubic.org/v1/general/data/smart_contracts.json
+```
+
+Confirmed by loading `explorer.qubic.org/network/assets/smart-contracts` and
+watching which requests it makes: the official explorer renders exactly this file.
+It carries `contractIndex`, `name` (`QSWAP`) and `label` (`QSwap`) for all 28
+contracts deployed so far — so index 13, the one in our own burn data, is QSwap.
+
+Two properties make it the right source rather than a table in this repo:
+
+* it is maintained by Qubic, so a contract deployed next month resolves by name
+  without a code change here;
+* it is the same file the explorer reads, so the names cannot drift apart.
+
+Cached for 24 h on disk (`$DATA_DIR/raw/smart_contracts.json`). An index the
+registry does not list gets **no** name and the page shows the bare index —
+never a guessed one. Override with `QDR_CONTRACTS_URL`.
+
 ## 8. Update cadence — measured, not assumed
 
 | Quantity | Rate | Poll |
