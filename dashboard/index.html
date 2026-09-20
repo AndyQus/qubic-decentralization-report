@@ -142,6 +142,23 @@
   /* Scope note on a figure whose unit is easy to misread (slots, not operators). */
   .tail-row td{color:var(--muted);font-style:italic}
 
+  /* ---- Page background: the slot net -----------------------------------
+     mining.html runs a colony and burn.html runs embers; this page had no
+     motion at all, which made it the odd one out of the three. The canvas
+     construction is shared (`.qs-canvas` in theme.css: viewport-fixed, behind
+     everything, never interactive), only the motion differs — as on the other
+     two pages, it follows the subject.
+
+     Here the subject is the network of computor slots, so the background is one
+     connected net, centred on the window and turning slowly. It is ambient and
+     carries no figure — nothing here is a measurement, the panels below hold
+     those. The panels are `.glass-card`, which is already translucent with a
+     blur, so the motion reads as depth behind them rather than texture through
+     the type. */
+  :root[data-theme="light"] .slot-canvas{opacity:.62}
+  @media (prefers-color-scheme:light){
+    :root:not([data-theme="dark"]) .slot-canvas{opacity:.62} }
+
   /* panels */
   .panel{margin-top:22px;overflow:hidden}
   .panel-head{padding:16px 18px 4px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
@@ -236,13 +253,20 @@
 </script>
 </head>
 <body>
+
+<!-- Ambient page background: one slot net, centred and slowly turning. Same
+     construction as mining.html's colony and burn.html's embers — viewport-fixed,
+     behind everything, purely atmospheric. Nothing here encodes a measurement;
+     the panels below do that. -->
+<canvas class="qs-canvas slot-canvas" id="slot-canvas" aria-hidden="true"></canvas>
+
 <header class="top qs-header">
   <div class="top-inner qs-header-inner">
     <div class="brand">
       <div class="logo qs-logo" aria-hidden="true"></div>
       <div>
         <h1 data-i18n="title">Qubic Decentralization Report</h1>
-        <div class="sub"><span data-i18n="epochLabel">Epoch</span> <b id="hdr-epoch">–</b> · <span id="hdr-tagline" data-i18n="tagline">how decentralized Qubic really is</span></div>
+        <div class="sub"><span id="hdr-tagline" data-i18n="tagline">how decentralized Qubic really is</span></div>
       </div>
     </div>
     <div class="spacer"></div>
@@ -601,7 +625,11 @@
 
   /* ---------- theme ---------- */
   function applyTheme(th){ root.setAttribute("data-theme",th);
-    document.getElementById("theme-btn").textContent = th==="dark"?"🌙":"☀️"; }
+    document.getElementById("theme-btn").textContent = th==="dark"?"🌙":"☀️";
+    /* The background canvas bakes the palette into its pixels, so CSS variables
+       alone do not reach inside it — it has to be repainted. Guarded because
+       applyTheme() runs during setup, before the field is initialised. */
+    if (window.qdrRepaintSlotField) window.qdrRepaintSlotField(); }
   let theme = safeGet(LS_THEME) || "dark";
   applyTheme(theme);
   document.getElementById("theme-btn").addEventListener("click",()=>{
@@ -947,7 +975,6 @@
   function renderEpoch(){
     const ep=epochs[idx];
     document.getElementById("ep-cur").textContent=ep;
-    document.getElementById("hdr-epoch").textContent=ep;
     renderI18nText();   // interpolated strings depend on the selected epoch's data
     renderCoverageNote();
     renderKpis(); renderTreemap(); renderTable(); drawChart();
@@ -1160,6 +1187,180 @@
     window.addEventListener("resize", () => {
       if (window.innerWidth > 860) setOpen(false);
     }, { passive: true });
+  })();
+
+  /* ─── Ambient page background: the slot net ───────────────────────────────
+     Decorative, and openly so: this is the only motion on the page not tied to
+     a number, so it runs whether or not the report loaded. mining.html draws a
+     colony because a swarm is what that page is about; burn.html draws embers
+     rising off a fire; this page is about the network of computor slots, so it
+     draws one connected net.
+
+     ONE net, not several clusters: every point belongs to the same structure,
+     and any two points close enough are linked. The whole net rotates slowly
+     about the centre of the window while each point also drifts within it, so
+     the shape keeps changing instead of turning like a rigid wheel. It does not
+     scale -- it only moves.
+
+     Nothing here is measured. The point count and the link distance are fixed
+     constants, deliberately, so nobody can read a figure off the wallpaper.
+
+     Colours come from the live --accent / --accent2 tokens, so a theme flip
+     re-reads them; see the applyTheme hook above. */
+  (function initSlotNet() {
+    const canvas = document.getElementById("slot-canvas");
+    if (!canvas || !canvas.getContext) return;
+    const ctx = canvas.getContext("2d");
+    const reduce = window.matchMedia
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    /* One full turn. Slow on purpose: this sits behind body text, and rotation
+       is far more noticeable than drift. */
+    const SPIN_MS = 240000;
+
+    let pts = [], raf = null, accent = "", accent2 = "", boost = 1;
+
+    function readPalette() {
+      /* document.documentElement, not the page's `root` const: this IIFE lives
+         in a later <script> block, and a top-level const does not cross one. */
+      const st = getComputedStyle(document.documentElement);
+      accent  = st.getPropertyValue("--accent").trim()  || "#4ee0fc";
+      accent2 = st.getPropertyValue("--accent2").trim() || accent;
+      /* A pale ground swallows these strokes, so they are drawn harder there.
+         Read from the painted background rather than the theme attribute, which
+         is unset while the theme follows the system. */
+      const m = (st.getPropertyValue("--bg").trim().match(/\d+/g) || []);
+      const light = m.length >= 3
+        && (0.299 * +m[0] + 0.587 * +m[1] + 0.114 * +m[2]) > 140;
+      boost = light ? 1.6 : 1;
+    }
+    function resize() {
+      canvas.width  = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    }
+
+    /* The net is a disc centred on the window with a radius that reaches the
+       corners (half the diagonal). A square field would sweep its corners
+       through the frame as it turned; a disc that covers the corners fills the
+       window at every angle, so the rotation never shows an edge. */
+    function netRadius() {
+      return Math.sqrt(canvas.width * canvas.width
+                     + canvas.height * canvas.height) / 2;
+    }
+
+    /* Count scales with the area covered, so density on screen is the same on a
+       laptop and on a large monitor. Capped at both ends: never bare, never
+       noise. Linking is quadratic in this number, so it stays modest. */
+    function targetCount() {
+      const R = netRadius();
+      return Math.max(70, Math.min(190, Math.round(Math.PI * R * R / 5200)));
+    }
+
+    function seed() {
+      const R = netRadius();
+      pts = [];
+      const n = targetCount();
+      for (let i = 0; i < n; i++) {
+        /* sqrt() on the radius, otherwise uniform random r crowds the middle:
+           a disc's area grows with r^2, so even coverage needs r = R*sqrt(u).
+           Without it the net is a dense knot in the centre and bare at the rim,
+           which is exactly what a net should not look like. */
+        const a = Math.random() * Math.PI * 2;
+        const r = R * Math.sqrt(Math.random());
+        pts.push({
+          /* Polar, because the net rotates: the spin is one addition to `a`
+             rather than a matrix per point. */
+          a: a,
+          /* Each point also lives: its own slow orbit, a slow radial drift and
+             a gentle breathing about that. Signs are random, so neighbours
+             separate and re-join as the net turns and the mesh keeps changing
+             instead of holding one fixed shape. */
+          da: (Math.random() - .5) * 0.00022,
+          dr: (Math.random() - .5) * 0.10,
+          rBase: r,
+          rAmp: 8 + Math.random() * 26,
+          rPhase: Math.random() * Math.PI * 2,
+          rRate: 0.00018 + Math.random() * 0.00030,
+          size: 1.1 + Math.random() * 1.5,
+          phase: Math.random() * Math.PI * 2,
+          sx: 0, sy: 0
+        });
+      }
+    }
+
+    function paint(t) {
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      const cx = W / 2, cy = H / 2;
+      const R = netRadius();
+      const spin = (t / SPIN_MS) * Math.PI * 2;
+
+      /* Resolve every point to screen coordinates once, then work on those --
+         doing this trig inside the link loop would repeat it n times per point. */
+      for (const p of pts) {
+        p.a += p.da;
+        p.rBase += p.dr;
+        if (p.rBase > R)      { p.rBase = R; p.dr = -Math.abs(p.dr); }
+        else if (p.rBase < 0) { p.rBase = 0; p.dr =  Math.abs(p.dr); }
+        const rr = p.rBase + Math.sin(t * p.rRate + p.rPhase) * p.rAmp;
+        const ang = p.a + spin;
+        p.sx = cx + Math.cos(ang) * rr;
+        p.sy = cy + Math.sin(ang) * rr;
+      }
+
+      /* Links: one net, so any two points close enough are connected, with no
+         group test at all. A fixed screen-pixel distance is what makes it read
+         as a single mesh rather than as separate clumps. */
+      const LINK = 132;
+      const LINK2 = LINK * LINK;
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = accent2;
+      for (let i = 0; i < pts.length; i++) {
+        const pi = pts[i];
+        for (let j = i + 1; j < pts.length; j++) {
+          const pj = pts[j];
+          const dx = pj.sx - pi.sx, dy = pj.sy - pi.sy;
+          /* Compare squared distances first: a sqrt for every pair is the most
+             expensive thing this loop could do, and most pairs fail here. */
+          const d2 = dx * dx + dy * dy;
+          if (d2 >= LINK2) continue;
+          const d = Math.sqrt(d2);
+          ctx.globalAlpha = Math.min(1, (1 - d / LINK) * .5 * boost);
+          ctx.beginPath();
+          ctx.moveTo(pi.sx, pi.sy);
+          ctx.lineTo(pj.sx, pj.sy);
+          ctx.stroke();
+        }
+      }
+
+      /* A soft halo behind each point makes it read as a lit slot rather than a
+         flat dot; that, more than raw opacity, lifts the net off the ground. */
+      ctx.fillStyle = accent;
+      for (const p of pts) {
+        const pulse = .5 + .5 * Math.sin(t / 2400 + p.phase);
+        const r = p.size * (1 + pulse * .3);
+        ctx.globalAlpha = Math.min(1, (.10 + pulse * .10) * boost);
+        ctx.beginPath(); ctx.arc(p.sx, p.sy, r * 3.4, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = Math.min(1, (.55 + pulse * .28) * boost);
+        ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function loop(t) { paint(t); raf = requestAnimationFrame(loop); }
+
+    function start() {
+      if (raf) { cancelAnimationFrame(raf); raf = null; }
+      readPalette(); resize(); seed();
+      if (reduce) { paint(0); return; }   /* a static net, no motion */
+      raf = requestAnimationFrame(loop);
+    }
+
+    window.addEventListener("resize", start, { passive: true });
+    /* A theme flip changes --accent/--accent2, and the canvas bakes them into
+       pixels, so the net has to be repainted with the new hues. */
+    window.qdrRepaintSlotField = start;
+    start();
   })();
 
 </script>

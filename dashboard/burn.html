@@ -268,7 +268,7 @@ table.data td:first-child { font-family: var(--sans); }
 /* ─── Mobile ────────────────────────────────────────────────────────────────── */
 @media (max-width: 700px) {
   .brand h1 { font-size: 15px; }
-  main { padding: 16px 14px 44px; }
+  main { padding: 16px 14px 22px; }
   .card { padding: 14px; }
   .hero-facts { gap: 10px; }
   .hero-facts .qs-stat { flex: 1 1 calc(50% - 10px); min-width: 0; }
@@ -433,10 +433,7 @@ table.data td:first-child { font-family: var(--sans); }
   <!-- 4 — EINORDNUNG ------------------------------------------------------- -->
   <section class="qs-card qs-card--translucent">
     <h2 data-i18n="aboutTitle">Where these numbers come from</h2>
-    <p class="desc" style="margin-bottom:10px" data-i18n="aboutBody">The official counter (/v1/latest-stats → burnedQus) is cumulative and authoritative, but it is an epoch aggregate: measured over 375 ticks it did not move by a single QU. So a per-day series cannot come from it. This project counts the burn events themselves from a Bob node's tick logs and reconciles the sum against the official counter at every epoch boundary — that ratio is the coverage figure above. Where coverage falls below 100%, a burn category exists that this scan does not recognise yet, and it is reported rather than hidden.</p>
-    <p class="desc" style="margin-bottom:0">
-      <a href="./how-it-works.html" data-i18n="aboutLink">How this report works →</a>
-    </p>
+    <p class="desc" style="margin-bottom:0" data-i18n="aboutBody">The official counter (/v1/latest-stats → burnedQus) is cumulative and authoritative, but it is an epoch aggregate: measured over 375 ticks it did not move by a single QU. So a per-day series cannot come from it. This project counts the burn events themselves from a Bob node's tick logs and reconciles the sum against the official counter at every epoch boundary — that ratio is the coverage figure above. Where coverage falls below 100%, a burn category exists that this scan does not recognise yet, and it is reported rather than hidden.</p>
   </section>
 
 </main>
@@ -528,7 +525,6 @@ table.data td:first-child { font-family: var(--sans); }
       ctWinRatio: "That is {pct} of the {total} QU the protocol's own counter reports burned since genesis; everything burned before this scan began is not in this table.",
       aboutTitle: "Where these numbers come from",
       aboutBody: "The official counter (/v1/latest-stats → burnedQus) is cumulative and authoritative, but it is an epoch aggregate: measured over 375 ticks it did not move by a single QU. So a per-day series cannot come from it. This project counts the burn events themselves from a Bob node's tick logs and reconciles the sum against the official counter at every epoch boundary — that ratio is the coverage figure above. Where coverage falls below 100%, a burn category exists that this scan does not recognise yet, and it is reported rather than hidden.",
-      aboutLink: "How this report works →",
       footDisclaimer: "Measured from public data. No figure on this page is estimated or interpolated.",
       discLabel: "Disclaimer:", discBeta: "This page is currently in beta status.",
       discData: "Burn events are counted by this project from a Qubic node's tick logs and reconciled against the official counter in",
@@ -588,7 +584,6 @@ table.data td:first-child { font-family: var(--sans); }
       ctWinRatio: "Das sind {pct} der {total} QU, die der protokolleigene Zähler seit Genesis als verbrannt meldet; alles, was vor dem Start dieses Scans verbrannt wurde, steht nicht in dieser Tabelle.",
       aboutTitle: "Woher diese Zahlen kommen",
       aboutBody: "Der offizielle Zähler (/v1/latest-stats → burnedQus) ist kumulativ und maßgeblich, aber ein Epochen-Aggregat: über 375 Ticks gemessen bewegte er sich um keinen einzigen QU. Eine Tagesreihe kann also nicht von ihm kommen. Dieses Projekt zählt die Burn-Ereignisse selbst aus den Tick-Logs eines Bob-Nodes und gleicht die Summe an jeder Epochengrenze gegen den offiziellen Zähler ab — dieses Verhältnis ist die Abdeckung oben. Fällt sie unter 100 %, existiert eine Burn-Kategorie, die dieser Scan noch nicht erkennt; sie wird ausgewiesen statt versteckt.",
-      aboutLink: "Wie dieser Report funktioniert →",
       footDisclaimer: "Aus öffentlichen Daten gemessen. Keine Zahl auf dieser Seite ist geschätzt oder interpoliert.",
       discLabel: "Hinweis:", discBeta: "Diese Seite befindet sich im Beta-Status.",
       discData: "Burn-Ereignisse werden von diesem Projekt aus den Tick-Logs eines Qubic-Nodes gezählt und gegen den offiziellen Zähler abgeglichen in",
