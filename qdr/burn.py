@@ -22,12 +22,25 @@ an interpolation.
 
 Two event shapes carry burns, and they are not the same thing:
 
-  * `QU_TRANSFER` to a burn sink — the uniform 1,000,000 QU computor outflow.
-    Trillions of QU per epoch.
+  * `QU_TRANSFER` to a burn sink — a transfer whose value does not come back.
+    Most 1,000,000 QU transfers to the null address are refunded inside the same
+    transaction and are NOT burns (see `burn_events`); what survives netting is
+    small and sporadic — tens to low millions of QU per day, measured.
   * `BURNING` — a distinct log type carrying `contractIndexBurnedFor`, i.e. the
-    only source that says *what* a burn was for. Hundreds of thousands of QU per
-    epoch: six orders of magnitude smaller, which is why the two are counted and
-    reported separately rather than summed into one number.
+    only source that says *what* a burn was for.
+
+This docstring used to call the second kind "hundreds of thousands of QU per
+epoch: six orders of magnitude smaller". Backfilling four days of epoch 231
+(2026-09-20) disproved that: contract burns ran to ~690 million QU over partial
+coverage of those days, dominated by a single contract —
+
+    QEarn    492,712,412 QU        QSwap      1,525,405 QU
+    CCF        1,000,000 QU        QUtil/Random    <400 QU
+
+The live scan had only ever seen QSwap's 33,402 QU, because it could not count
+anything older than the day it was running. The two shapes are still counted and
+reported separately, but not because one is negligible — they answer different
+questions, and only `BURNING` says what a burn was for.
 """
 from __future__ import annotations
 
