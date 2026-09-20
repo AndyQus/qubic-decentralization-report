@@ -255,6 +255,16 @@ table.data td:first-child { font-family: var(--sans); }
 }
 .ct-window strong { color: var(--text); }
 
+/* Gesperrte Aggregat-Ansichten. Ausgegraut statt versteckt: ein Button, der
+   verschwindet und später wieder auftaucht, sieht nach einem Fehler aus — einer,
+   der sichtbar deaktiviert ist und einen Grund darunter trägt, nach Absicht. */
+.chart-controls .seg button:disabled {
+  opacity: .42; cursor: not-allowed;
+}
+.agg-locked {
+  margin: 8px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--muted);
+}
+
 /* ─── Notices ───────────────────────────────────────────────────────────────── */
 .notice {
   border: 1px solid var(--border); border-left: 3px solid var(--warn);
@@ -394,6 +404,10 @@ table.data td:first-child { font-family: var(--sans); }
         ><button data-mode="cumulative" data-i18n="modeCumulative">Cumulative</button>
       </div>
     </div>
+
+    <!-- Sagt, WARUM zwei Buttons ausgegraut sind. Ein deaktivierter Schalter
+         ohne Begründung liest sich als Defekt der Seite. -->
+    <p class="agg-locked" id="agg-locked" data-i18n="aggLockedNote" hidden>Epoch and year are unavailable until one whole day has been measured.</p>
 
     <!-- Warnung über dem Diagramm, nicht darunter: wer die Balken schon gelesen
          hat, hat die Zahl bereits geglaubt. -->
@@ -540,6 +554,8 @@ table.data td:first-child { font-family: var(--sans); }
       warnUnreconciled: "Not yet checked against the protocol’s own burned counter. That counter (burnedQus) only moves at an epoch boundary, so a comparison needs one to pass first.",
       warnDiverging: "These counted figures disagree with the protocol’s own burned counter over the same period. Where the two disagree the counter is the authority, not this page — so read these bars as provisional until the difference is explained.",
       warnHours: "{n} h",
+      aggLockedHint: "Needs at least one fully measured day — the scan has not covered one yet.",
+      aggLockedNote: "Epoch and year are unavailable until one whole day has been measured: aggregating a partial day would draw it as if it were a full period.",
       buildingBody: "The ingest worker has not recorded a burn measurement yet. It counts events from a Qubic node and writes the first day within a few minutes of starting.",
       unavailApi: "API not reachable",
       unavailFile: "This page was opened as a file (file://) and has no API. Start the server and open it through that: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/burn.html",
@@ -599,6 +615,8 @@ table.data td:first-child { font-family: var(--sans); }
       warnUnreconciled: "Noch nicht gegen den offiziellen Burn-Zähler des Protokolls geprüft. Dieser Zähler (burnedQus) bewegt sich nur an einer Epochengrenze, ein Vergleich braucht also erst eine solche.",
       warnDiverging: "Diese gezählten Werte widersprechen dem Burn-Zähler des Protokolls im selben Zeitraum. Wo beide sich widersprechen, hat der Zähler recht und nicht diese Seite — die Balken sind also vorläufig, bis die Differenz erklärt ist.",
       warnHours: "{n} Std.",
+      aggLockedHint: "Braucht mindestens einen vollständig gemessenen Tag — so weit ist der Scan noch nicht.",
+      aggLockedNote: "Epoche und Jahr sind gesperrt, bis ein ganzer Tag gemessen ist: ein Teiltag würde als vollständige Periode gezeichnet.",
       buildingBody: "Der Ingest-Worker hat noch keine Burn-Messung aufgezeichnet. Er zählt Ereignisse von einem Qubic-Node und schreibt den ersten Tag wenige Minuten nach dem Start.",
       unavailApi: "API nicht erreichbar",
       unavailFile: "Diese Seite wurde als Datei (file://) geöffnet und hat keine API. Starte den Server und öffne sie darüber: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/burn.html",
@@ -1339,7 +1357,7 @@ table.data td:first-child { font-family: var(--sans); }
   }
 
   async function loadSeries() {
-    if (seriesCache[by]) { drawChart(seriesCache[by]); return; }
+    if (seriesCache[by]) { drawChart(seriesCache[by]); syncAggregateLock(); return; }
     try {
       const data = await getJSON(`/v1/burn/series?by=${encodeURIComponent(by)}`);
       seriesCache[by] = data;
@@ -1348,6 +1366,15 @@ table.data td:first-child { font-family: var(--sans); }
       drawChart({ series: [] });
       if (e && e.status === 503) showBuilding();
     }
+    /* Die Sperre hängt an der TAGESserie, auch wenn gerade eine andere Ansicht
+       geladen wurde: nur sie weiß, ob ein ganzer Tag gemessen ist. Fehlt sie
+       noch, wird sie einmal nachgeholt. */
+    if (!seriesCache["day"]) {
+      try {
+        seriesCache["day"] = await getJSON("/v1/burn/series?by=day");
+      } catch (e) { /* dann bleibt es bei "nicht sperren" */ }
+    }
+    syncAggregateLock();
   }
 
   async function loadAll() {
@@ -1371,6 +1398,36 @@ table.data td:first-child { font-family: var(--sans); }
   }
 
   /* ─── Controls ──────────────────────────────────────────────────────────── */
+
+  /* Aggregat-Ansichten sperren, solange kein einziger ganzer Tag gemessen ist.
+     Nach einem Kaltstart hat der Scan eine knappe Stunde im Kasten (er beginnt
+     10.000 Ticks vor dem Chain-Kopf, nicht am Epochenanfang), und "Jahr" zeichnet
+     daraus einen einzelnen Balken "2026". Die Fußnote nennt den echten Zeitraum,
+     aber der Balken behauptet visuell ein Jahr — und ein Balken wird schneller
+     geglaubt als eine Fußnote unter ihm gelesen wird.
+
+     Die Sperre gilt bewusst nur für die Aggregate: die Tagesansicht darf einen
+     Teiltag zeigen, weil sie ihn korrekt als Tag beschriftet und der Warnhinweis
+     darüber die Abdeckung nennt. Sobald ein vollständiger Tag vorliegt — durch
+     den Backfill oder schlicht durch Mitternacht — fallen die Buttons von selbst
+     wieder auf. */
+  function hasWholeDay() {
+    const day = seriesCache["day"];
+    if (!day || !Array.isArray(day.series)) return true;  // nichts geladen: nicht sperren
+    return day.series.some(p => !p.partial);
+  }
+
+  function syncAggregateLock() {
+    const locked = !hasWholeDay();
+    document.querySelectorAll("#by-seg button").forEach(b => {
+      if (b.dataset.by === "day") return;
+      b.disabled = locked;
+      b.title = locked ? t("aggLockedHint") : "";
+    });
+    const note = document.getElementById("agg-locked");
+    if (note) note.hidden = !locked;
+  }
+
   function syncSeg(id, attr, value) {
     document.querySelectorAll(`#${id} button`).forEach(b => {
       b.classList.toggle("active", b.dataset[attr] === value);
@@ -1379,6 +1436,7 @@ table.data td:first-child { font-family: var(--sans); }
 
   document.getElementById("by-seg").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
+    if (b.disabled) return;
     by = b.dataset.by; syncSeg("by-seg", "by", by); loadSeries();
   });
   document.getElementById("mode-seg").addEventListener("click", e => {
@@ -1396,6 +1454,8 @@ table.data td:first-child { font-family: var(--sans); }
     renderHero();
     renderContracts();
     if (seriesCache[by]) drawChart(seriesCache[by]);
+    /* Der title der gesperrten Buttons ist kein data-i18n-Knoten. */
+    syncAggregateLock();
   }
   document.getElementById("lang-seg").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
