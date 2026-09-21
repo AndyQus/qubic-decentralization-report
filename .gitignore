@@ -41,3 +41,9 @@ scripts/shot_*.png
 # against whatever store is running - often a preview store with invented
 # figures, so they must never be committed as though they showed measurements.
 scripts/burn_*.png
+
+# Price-page verification screenshots, same reasoning as the burn ones above:
+# scripts/verify_price_page.py renders against whatever store is running, which
+# in development holds simulated prices. They must never be committed as though
+# they showed a real market.
+scripts/price_*.png

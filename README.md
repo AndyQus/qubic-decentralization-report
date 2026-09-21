@@ -28,6 +28,7 @@ publish at the resolution they need, and each with its own page:
 | **Report** (`/`) | How concentrated is the network, per epoch and over time? | The original request. |
 | **Burn** (`/dashboard/burn.html`) | How much QU is burned per day, and by which contract? | The RPC's `burnedQus` is a cumulative epoch aggregate — it does not move between boundaries, so it cannot answer "today". This counts the burn events themselves. |
 | **Mining Live** (`/dashboard/mining.html`) | What does the ant colony look like right now? | Live mining state is served from a node's peer port, not the RPC, and a node only answers for *now* — a reading not taken is gone. |
+| **Price** (`/dashboard/price.html`) | What does the price do around the computor payouts? | The payouts are protocol emission, so the public RPC carries no trace of them — this project derives them from a Bob node's end-epoch log, and is therefore the only place they can be lined up against a measured price series. |
 | **How it works** (`/how-it-works`) | What is measured, and how? | Generated from `docs/CONCEPT*.md` at build time, so the page cannot disagree with the concept it was built from. |
 
 **Run it** (details under [Docker](#docker--publishing)). Two services share one volume:
