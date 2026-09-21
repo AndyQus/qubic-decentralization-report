@@ -82,6 +82,67 @@ def start_mining_sampler(store: Store, interval: int) -> threading.Thread:
     return t
 
 
+def start_price_sampler(client, store: Store, interval: int) -> threading.Thread:
+    """Sample the market on its own timer, in the background.
+
+    Its own thread for the same reason mining has one: the cadences have nothing
+    in common. The report changes at an epoch boundary (~4.4 days), the price
+    moves in minutes. Sharing one interval would mean either recomputing the
+    report 1440 times a day or drawing the price at 5-minute resolution.
+
+    There is no backfill, and cannot be: the RPC serves only the price now. A
+    missed pass is therefore a permanent gap, not something a later pass heals —
+    which is exactly why `polls` is stored per interval and coverage is
+    published, so the gap shows as one instead of being drawn through.
+
+    Failures are swallowed on purpose: an unreachable RPC is a transient state
+    upstream and must never take the worker down.
+    """
+    def loop() -> None:
+        last_rollup = 0.0
+        last_prune = 0.0
+        while True:
+            started = time.time()
+            try:
+                row = pipeline.sample_price(client, store)
+                if row is None:
+                    # Absence, not an exception: the RPC was unreachable or
+                    # carried no usable price. Reported so a silent stall in the
+                    # series has a matching line in the log.
+                    print("[price] no reading stored — RPC unreachable or "
+                          "no price in the response", file=sys.stderr)
+            except Exception as e:
+                print(f"[price] sample failed: {e}", file=sys.stderr)
+            try:
+                # Fold finished intervals into hours every 10 min. The rollup
+                # only touches hours that are over, so running it often costs
+                # little and keeps the permanent record close behind the live one.
+                if time.time() - last_rollup > 600:
+                    n = store.rollup_price_hours(since=int(time.time()) - 86400 * 2)
+                    last_rollup = time.time()
+                    if n:
+                        print(f"[price] rolled up {n} hour(s) from measured readings")
+            except Exception as e:
+                print(f"[price] rollup failed: {e}", file=sys.stderr)
+            try:
+                if time.time() - last_prune > 3600:
+                    dropped = store.prune_price()
+                    last_prune = time.time()
+                    if dropped:
+                        print(f"[price] pruned {dropped} row(s) outside the "
+                              f"{store.PRICE_KEEP_DAYS}-day window")
+            except Exception as e:
+                print(f"[price] prune failed: {e}", file=sys.stderr)
+            # Sleep what REMAINS of the interval: a pass takes a second or two,
+            # and sleeping the whole interval after it would drift the cadence
+            # off the minute boundary the readings sit on.
+            time.sleep(max(1.0, interval - (time.time() - started)))
+
+    t = threading.Thread(target=loop, name="price-sampler", daemon=True)
+    t.start()
+    return t
+
+
 def export_snapshots(store: Store) -> None:
     """Write the static snapshots the dashboard/API use for cold start.
 
@@ -169,6 +230,16 @@ def main() -> int:
                          f"(default {pipeline.MINING_SAMPLE_INTERVAL_S})")
     ap.add_argument("--no-mining", action="store_true",
                     help="with --watch: do not sample mining state")
+    ap.add_argument("--price-sample", action="store_true",
+                    help="take one market sample into the store and exit")
+    ap.add_argument("--price-status", action="store_true",
+                    help="what the price sampler has stored")
+    ap.add_argument("--price-interval", type=int,
+                    default=pipeline.PRICE_SAMPLE_INTERVAL_S,
+                    help="with --watch: seconds between market samples "
+                         f"(default {pipeline.PRICE_SAMPLE_INTERVAL_S})")
+    ap.add_argument("--no-price", action="store_true",
+                    help="with --watch: do not sample market price")
     ap.add_argument("--export", action="store_true", help="write static snapshots from the store")
     ap.add_argument("--export-each", action="store_true",
                     help="with --watch: re-export the static snapshots after every pass, "
@@ -214,6 +285,54 @@ def main() -> int:
         for row in store.mining_epochs(limit=10):
             print(f"  epoch {row['epoch']:>5}  final {row['final_count'] or 0:>12,}  "
                   f"peak {row['peak_count'] or 0:>12,}  {row['samples']:>6} samples")
+        return 0
+
+    if args.price_sample:
+        row = pipeline.sample_price(client, store)
+        if row is None:
+            print("nothing sampled — RPC unreachable or no price in the response",
+                  file=sys.stderr)
+            return 1
+        # "held" vs. "new" is the distinction the interval store exists to make,
+        # so the CLI reports which one this reading was rather than implying
+        # every pass moved the price.
+        held = int(row["until"]) - int(row["at"])
+        if row.get("changed"):
+            print(f"new price {row['price']:.4e} USD/QU")
+        else:
+            print(f"held at {row['price']:.4e} USD/QU "
+                  f"({held}s over {row['polls']} poll(s))")
+        if row.get("market_cap"):
+            print(f"market cap {row['market_cap']:,} USD")
+        return 0
+
+    if args.price_status:
+        summary = pipeline.price_summary(store)
+        if summary.get("status") == "no data":
+            print("price sampler has not run yet")
+            return 0
+        stats = store.stats()
+        print(f"{summary['price']:.4e} USD/QU  "
+              f"({summary['age_s']}s ago, {summary['status']})")
+        print(f"held {summary['held_for_s']}s over {summary['polls']} poll(s)")
+        if summary.get("market_cap"):
+            print(f"market cap {summary['market_cap']:,} USD")
+        for label, ch in (summary.get("change") or {}).items():
+            print(f"{label:>4}: {ch['pct']:+.2f}%  "
+                  f"({ch['from']:.4e} → {ch['to']:.4e}, "
+                  f"{ch['moves']} move(s), coverage {ch['coverage_pct']}%)")
+        cov = summary["coverage"]
+        pt = cov["point"]
+        print(f"held: {stats['price_points']:,} point(s) over {pt['polls']:,} poll(s) "
+              f"(window: {store.PRICE_KEEP_DAYS} days), "
+              f"{stats['price_hours']:,} hourly (permanent)")
+        if pt.get("poll_ratio") is not None:
+            print(f"poll ratio: {pt['poll_ratio']} "
+                  f"(1.0 = a reading every minute of the observed span)")
+        if cov.get("detail_from"):
+            since = time.strftime("%Y-%m-%d %H:%M",
+                                  time.gmtime(cov["detail_from"]))
+            print(f"detail begins {since} UTC")
         return 0
 
     if args.burn_status:
@@ -407,6 +526,10 @@ def main() -> int:
         if not args.no_mining:
             start_mining_sampler(store, args.mining_interval)
             print(f"           mining state sampled every {args.mining_interval}s")
+        if not args.no_price:
+            start_price_sampler(client, store, args.price_interval)
+            print(f"           market price polled every {args.price_interval}s "
+                  f"(stored on change)")
         while True:
             try:
                 # snapshot first: revenue for an epoch can only be derived if its

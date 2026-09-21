@@ -73,6 +73,17 @@ app = FastAPI(
         {"name": "metrics", "description": "Concentration indices over time, for charts."},
         {"name": "burn", "description": "Burned supply: the official total, and a per-day "
                                         "measurement counted from a Bob node's logs."},
+        {"name": "price", "description": "Market price, read once a minute from Qubic's own "
+                                         "RPC. Stored as intervals — one row per price "
+                                         "*change*, carrying how long it held and how many "
+                                         "readings confirm it — so a series must be drawn as "
+                                         "steps. No trading volume: the RPC publishes none, "
+                                         "and sourcing it from an exchange would breach "
+                                         "their terms."},
+        {"name": "price", "description": "Market price, polled from Qubic's own RPC. "
+                                       "One row per price change, each carrying how "
+                                       "long it held. No trading volume: the RPC "
+                                       "publishes none."},
         {"name": "service", "description": "Index, health and store status."},
     ],
 )
@@ -171,6 +182,11 @@ def api_index():
             # it is not secret, so the endpoint is indexed like any other.
             "/v1/mining",
             "/v1/mining/series",
+            "/v1/price/latest",
+            "/v1/price/series",
+            "/v1/price/change",
+            "/v1/price/at",
+            "/v1/price/coverage",
             "/health",
         ],
         "dashboard": "/dashboard/",
@@ -585,6 +601,235 @@ def mining_series(
     _mining_series_cache.clear()      # one shape of this query is enough to hold
     _mining_series_cache[key] = {"at": now, "data": data}
     return data
+
+
+# -- market price ----------------------------------------------------------
+# Cached like the pulse: the upstream refreshes once a minute, so a request
+# arriving between two worker passes can be served the same answer.
+_price_cache: dict = {"at": 0.0, "data": None}
+PRICE_TTL_S = float(os.environ.get("QDR_PRICE_TTL", "15"))
+
+_price_series_cache: dict = {}
+PRICE_SERIES_TTL_S = float(os.environ.get("QDR_PRICE_SERIES_TTL", "20"))
+
+# Ceiling on points returned. Rows are written per price CHANGE rather than per
+# poll, so a day is typically a few hundred -- but a volatile stretch can be
+# denser, and a chart a thousand pixels wide cannot use more than this.
+PRICE_MAX_POINTS = 1500
+
+
+@app.get("/v1/price/latest", tags=["price"],
+         summary="Market price, and how long it has stood")
+def price_latest():
+    """Headline market figures, as measured.
+
+    Read from Qubic's own `/v1/latest-stats` once a minute. Exchange APIs are
+    deliberately not used: MEXC's terms prohibit republishing their market data
+    without written consent, and Qubic's RPC carries a price it is licensed to
+    publish. `source` names that chain, so a reader can see where the number
+    comes from.
+
+    There is no trading volume here, because the RPC publishes none.
+
+    `held_for_s` and `polls` are what make a flat price readable: "unchanged for
+    12 minutes across 12 readings" is a measurement, whereas "unchanged" alone
+    could equally mean nobody looked.
+    """
+    import time as _t
+
+    now = _t.time()
+    if _price_cache["data"] and now - _price_cache["at"] < PRICE_TTL_S:
+        return _price_cache["data"]
+
+    store = get_store()
+    data = pipeline.price_summary(store)
+    if data.get("status") == "no data":
+        raise _no_data("market price")
+    data["measured"] = True
+    _price_cache.update({"at": now, "data": data})
+    return data
+
+
+@app.get("/v1/price/series", tags=["price"], summary="Price over time")
+def price_series(
+    resolution: str = Query("point", pattern="^(point|hour)$",
+                            description="'point' is one row per price change, "
+                                        "each carrying the interval it held for. "
+                                        "'hour' is the permanent hourly summary."),
+    window: int | None = Query(None, ge=60,
+                               description="Only the last N seconds."),
+    points: int = Query(PRICE_MAX_POINTS, ge=2, le=PRICE_MAX_POINTS,
+                        description="Maximum points; the series is thinned "
+                                    "evenly to fit."),
+):
+    """Stored price history, oldest first.
+
+    **Each point is an interval, not a sample.** `at` is when the price was
+    first seen, `until` when it was last confirmed, `polls` how many readings
+    stand behind it. A chart draws these as STEPS: the price held that value
+    throughout, so interpolating between two points would invent motion that did
+    not happen.
+
+    A window returns intervals that overlap it, including one that began before
+    it and still stands -- otherwise the chart would have no value at its left
+    edge.
+
+    Nothing is interpolated and nothing is backfilled: this data has no history
+    before the worker's first run, because the RPC serves only "now".
+    """
+    import time as _t
+
+    store = get_store()
+    key = (resolution, window, points)
+    hit = _price_series_cache.get(key)
+    now = _t.time()
+    if hit and now - hit["at"] < PRICE_SERIES_TTL_S:
+        return hit["data"]
+
+    since = int(now) - window if window else None
+    rows = store.price_series(resolution=resolution, since=since)
+    if not rows:
+        raise _no_data("price history")
+
+    total = len(rows)
+    # Even thinning, with the last row always kept: the newest interval is the
+    # one still being extended, and dropping it would show as a stalled chart.
+    if total > points:
+        step = total / float(points)
+        picked = [rows[int(i * step)] for i in range(points)]
+        if picked[-1]["at"] != rows[-1]["at"]:
+            picked[-1] = rows[-1]
+        rows = picked
+
+    if resolution == "hour":
+        series = [{"at": r["at"], "o": r["open"], "h": r["high"], "l": r["low"],
+                   "c": r["close"], "avg": r["avg_price"],
+                   "cap": r["market_cap"], "moves": r["moves"],
+                   "polls": r["polls"]}
+                  for r in rows]
+    else:
+        series = [{"at": r["at"], "until": r["until"], "price": r["price"],
+                   "cap": r["market_cap"], "polls": r["polls"]}
+                  for r in rows]
+
+    data = {
+        "resolution": resolution,
+        "series": series,
+        "points": len(series),
+        "stored_total": total,
+        "coverage": store.price_coverage(),
+        "interval_s": pipeline.PRICE_SAMPLE_INTERVAL_S,
+        "source": {
+            "endpoint": "/v1/latest-stats",
+            "provider": "Qubic RPC",
+            "upstream": "CoinGecko, via Qubic's stats service",
+        },
+        # Says outright how this must be drawn, so a consumer cannot reasonably
+        # smooth a step series into a curve and call it our data.
+        "draw": "step",
+        "measured": True,
+    }
+    _price_series_cache.clear()
+    _price_series_cache[key] = {"at": now, "data": data}
+    return data
+
+
+# Windows offered by /v1/price/change. A fixed set rather than a free-form
+# number so the answer is cacheable, and so every caller quoting "24h" means the
+# same 24 hours.
+_PRICE_WINDOWS = {"1h": 3600, "24h": 86400, "7d": 604800, "30d": 2592000}
+
+
+@app.get("/v1/price/change", tags=["price"], summary="Movement over a window")
+def price_change(
+    window: str = Query("24h", pattern="^(1h|24h|7d|30d)$",
+                        description="Which window to measure over."),
+):
+    """How far the price moved over one window, from stored readings only.
+
+    The cheap endpoint: a bot or a widget wanting "-3.2% today" gets it without
+    pulling the series.
+
+    `coverage_pct` travels with the figure deliberately. It is how continuously
+    the window was actually watched, and a change measured across a window we
+    sampled a third of is a weaker claim than one we watched throughout — so the
+    number that tells them apart is not optional here.
+
+    A window holding fewer than two prices answers 503 rather than 0%: a single
+    standing price cannot evidence a change, and reporting none would claim a
+    stability nobody measured.
+    """
+    ch = pipeline.price_change(get_store(), window_s=_PRICE_WINDOWS[window])
+    if not ch:
+        raise _no_data(f"price change over {window}")
+    return {"window": window, "change": ch,
+            "source": pipeline.price_source(), "measured": True}
+
+
+@app.get("/v1/price/at", tags=["price"], summary="The price at a point in time")
+def price_at(
+    t: int = Query(..., description="Unix seconds. The interval covering this "
+                                    "moment is returned."),
+):
+    """What the price was at one moment — "what was QU worth when this epoch closed?"
+
+    This falls out of the interval shape for free: exactly one row can satisfy
+    `at <= t <= until`, so the answer is a lookup rather than a hunt for the
+    nearest sample.
+
+    A moment we did not observe answers 503, never the closest reading. The
+    honest answer for an unwatched stretch is that we do not know; handing back
+    a figure measured an hour either side would dress a guess as a measurement.
+    """
+    store = get_store()
+    row = store.price_at(int(t))
+    if not row:
+        # Distinguished from an empty store on purpose: "we never sampled that
+        # moment" and "the worker has not started" are different facts, and
+        # _no_data's "still being filled" would be a false explanation for a
+        # store that holds plenty of history either side of `t`.
+        cov = store.price_coverage()["point"]
+        if cov["points"]:
+            raise HTTPException(
+                status_code=503,
+                detail=(f"the price at {t} was not observed. Readings cover "
+                        f"{cov['first_at']}..{cov['last_at']}; a moment inside "
+                        "that range fell in a gap between polls. No nearby "
+                        "reading is substituted, because that would report a "
+                        "price nobody measured."),
+            )
+        raise _no_data(f"price at {t}")
+    return {
+        "asked_at": int(t),
+        "price": row["price"],
+        "market_cap": row["market_cap"],
+        "circulating": row["circulating"],
+        "epoch": row["epoch"],
+        # The interval behind the answer, so a caller can see how close the
+        # reading actually sits to the moment they asked about.
+        "interval": {"at": row["at"], "until": row["until"],
+                     "polls": row["polls"],
+                     "held_for_s": int(row["until"]) - int(row["at"])},
+        "source": pipeline.price_source(),
+        "measured": True,
+    }
+
+
+@app.get("/v1/price/coverage", tags=["price"],
+         summary="How continuously the price was observed")
+def price_coverage():
+    """What the price store holds, and how well it was watched.
+
+    Its own endpoint because with step data this is not a footnote: a flat line
+    means "steady" only if somebody was looking, and `point.poll_ratio` (polls
+    against elapsed minutes, so below 1.0 means gaps) is the only thing that
+    separates that from a sampler which stopped. Anyone drawing this data needs
+    it, and anyone republishing a figure from it should quote it.
+    """
+    cov = get_store().price_coverage()
+    if not cov["point"]["points"] and not cov["hour"]["hours"]:
+        raise _no_data("price coverage")
+    return {**cov, "source": pipeline.price_source(), "measured": True}
 
 
 # The burn figures move on the epoch clock (the official counter) and on the

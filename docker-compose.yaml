@@ -75,6 +75,16 @@ services:
       # colony changes every tick. Only the last two epochs of samples are kept
       # (~2 MB); the per-epoch summary is permanent.
       - QDR_MINING_SAMPLE_INTERVAL=${QDR_MINING_SAMPLE_INTERVAL:-30}
+      # How often the market price is polled from Qubic's own RPC. One minute
+      # matches the upstream: qubic-stats-service scrapes every 60s, so a faster
+      # poll only re-reads the same figure. A row is written when the price
+      # CHANGES; a poll that finds it unchanged extends the current row instead,
+      # which is why a day costs a few hundred rows rather than 1440.
+      #
+      # Exchange APIs are deliberately not used: MEXC's terms prohibit
+      # republishing their market data without written consent. The cost is that
+      # there is no trading volume — the RPC publishes none.
+      - QDR_PRICE_SAMPLE_INTERVAL=${QDR_PRICE_SAMPLE_INTERVAL:-60}
     volumes:
       - /root/qdr/data:/data
     depends_on:

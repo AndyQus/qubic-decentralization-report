@@ -514,6 +514,169 @@ def mining_growth(store: Store, epoch: int, window_s: int = 900) -> Optional[flo
     return round((last["solution_count"] - first["solution_count"]) / elapsed_min, 1)
 
 
+# -- market price ----------------------------------------------------------
+# Read from Qubic's own RPC, not from an exchange.
+#
+# Exchange APIs were built against first and then removed on purpose. MEXC's
+# terms (clause 17d) prohibit "data feeding or streaming services that make use
+# of any market data of MEXC" without written consent, and storing their bars to
+# republish them on a public page is precisely that. Gate.io publishes no clear
+# permission either. `/v1/latest-stats` is an endpoint this project already
+# reads, served by Qubic itself, and its stats service holds the licence for the
+# price it publishes (it is configured with a CoinGecko token). One source, one
+# set of terms, and those the ones we already operate under.
+#
+# The cost is stated rather than worked around: the RPC carries NO trading
+# volume, so neither does this. A volume figure sourced elsewhere would be the
+# same licensing problem under another name.
+#
+# Cadence: qubic-stats-service scrapes every 60s (SERVICE_DATA_SCRAPE_INTERVAL
+# defaults to "1m") and its API caches 10s. Measured 2026-09-21 the published
+# figure held still for 2.5 minutes while the response `timestamp` advanced on
+# every request -- so one read per minute is the right rate, and whether a
+# reading is NEW has to be decided by comparison, not by trusting that field.
+PRICE_SAMPLE_INTERVAL_S = int(os.environ.get("QDR_PRICE_SAMPLE_INTERVAL", "60"))
+
+
+def sample_price(client: CachedClient, store: Store) -> Optional[dict]:
+    """Take one reading of the market and store it.
+
+    Returns the stored row (carrying `changed`), or None when the RPC could not
+    be read -- a transient upstream failure is reported by absence rather than
+    raised, so the worker loop survives it.
+
+    The reading is minute-aligned so the series lands on a regular grid: two
+    passes inside one minute are the same minute observed twice, and the later
+    one wins rather than producing a second point a chart would draw as motion.
+    """
+    # Narrow on purpose: CachedClient already wraps every network, status and
+    # JSON failure in QubicRPCError, so that one class covers "the RPC was
+    # unreachable" completely. Catching more would absorb bugs in here -- during
+    # development a blanket `except Exception` hid a renamed method behind a
+    # store that merely looked empty.
+    try:
+        stats = client.network_pulse()
+    except QubicRPCError:
+        return None
+
+    price = float(stats.get("price") or 0.0)
+    if price <= 0:
+        # A zero price is not a market reading. Storing it would put a crash to
+        # the floor of the chart, which is the most alarming thing this page
+        # could invent.
+        return None
+
+    at = (int(time.time()) // 60) * 60
+    return store.put_price_reading(
+        at=at,
+        price=price,
+        market_cap=stats.get("market_cap"),
+        circulating=stats.get("circulating_supply"),
+        epoch=stats.get("epoch"),
+        tick=stats.get("tick"),
+        rpc_timestamp=stats.get("timestamp"),
+    )
+
+
+def price_change(store: Store, window_s: int = 86400) -> Optional[dict]:
+    """How far the price moved over a window, from stored intervals only.
+
+    Returns None when the window holds fewer than two prices: a single standing
+    price cannot show a change, and reporting 0% there would claim a stability
+    nobody measured.
+
+    `coverage_pct` is polls against elapsed minutes -- how continuously the
+    window was actually watched. It is what separates "the price was steady" from
+    "nobody was looking", which a flat line alone cannot say.
+    """
+    now = int(time.time())
+    rows = store.price_series(since=now - window_s)
+    if len(rows) < 2:
+        return None
+    first, last = rows[0], rows[-1]
+    if not first["price"]:
+        return None
+    polls = sum(int(r["polls"] or 0) for r in rows)
+    expected = max(1, window_s // 60)
+    return {
+        "from": first["price"], "to": last["price"],
+        "abs": last["price"] - first["price"],
+        "pct": round((last["price"] - first["price"]) / first["price"] * 100, 2),
+        "high": max(r["price"] for r in rows),
+        "low": min(r["price"] for r in rows),
+        "first_at": int(first["at"]), "last_at": int(last["until"]),
+        # Distinct prices in the window, i.e. how often it actually moved.
+        "moves": len(rows),
+        "polls": polls,
+        "window_s": window_s,
+        "coverage_pct": round(min(polls / expected, 1.0) * 100, 1),
+    }
+
+
+def price_source() -> dict:
+    """Where the price comes from, in one shape every price endpoint returns.
+
+    Travels with the data rather than living only in the docs: a consumer that
+    republishes these figures needs the provenance attached to them, and the
+    missing volume is a property of the source that a caller should not have to
+    discover by finding the field absent.
+    """
+    return {
+        "endpoint": "/v1/latest-stats",
+        "provider": "Qubic RPC",
+        # Named here too: the figure originates with CoinGecko and reaches us
+        # through Qubic's licensed stats service. Saying so is both honest about
+        # provenance and the reason this is allowed.
+        "upstream": "CoinGecko, via Qubic's stats service",
+        "interval_s": PRICE_SAMPLE_INTERVAL_S,
+        "quote": "USD per QU",
+        "note": "Price and market cap only -- the RPC publishes no trading volume.",
+    }
+
+
+def price_summary(store: Store) -> dict:
+    """Headline market figures, assembled from stored intervals.
+
+    Everything here is measured. Nothing is carried forward: a sampler that has
+    not run leaves `status: "no data"` rather than the last price it ever saw.
+    """
+    now = int(time.time())
+    latest = store.latest_price()
+    out: dict = {
+        "at": now,
+        "coverage": store.price_coverage(),
+        "source": price_source(),
+    }
+    if not latest:
+        out["status"] = "no data"
+        return out
+
+    # Age is measured from the last CONFIRMATION, not from when the price was
+    # first seen: a price standing for an hour is current, not an hour stale.
+    age = now - int(latest["until"])
+    out.update({
+        "status": "live" if age <= 300 else "stale",
+        "price": latest["price"],
+        "market_cap": latest["market_cap"],
+        "circulating": latest["circulating"],
+        "epoch": latest["epoch"],
+        "at": int(latest["at"]),
+        "confirmed_at": int(latest["until"]),
+        "age_s": age,
+        # How long this figure has stood, and how many readings confirm it.
+        # "unchanged for 12 minutes over 12 polls" is a statement the page can
+        # make; "unchanged" alone would not distinguish a quiet market from a
+        # stalled worker.
+        "held_for_s": int(latest["until"]) - int(latest["at"]),
+        "polls": int(latest["polls"] or 1),
+    })
+    for label, w in (("24h", 86400), ("7d", 604800), ("30d", 2592000)):
+        ch = price_change(store, window_s=w)
+        if ch:
+            out.setdefault("change", {})[label] = ch
+    return out
+
+
 # -- burn ------------------------------------------------------------------
 # History only grows; the burn series is windowed like the timeseries is.
 DEFAULT_BURN_DAYS = 90

@@ -253,6 +253,79 @@ CREATE TABLE IF NOT EXISTS mining_epochs (
     last_at         INTEGER,
     updated_at      INTEGER NOT NULL
 );
+
+-- Market price, polled every minute from Qubic's own RPC -- one row per PRICE,
+-- not one row per poll.
+--
+-- Source and licensing: `/v1/latest-stats`, the same endpoint this project
+-- already reads for supply and tick quality. Exchange APIs were built against
+-- first and then removed: MEXC's terms (clause 17d) prohibit "data feeding or
+-- streaming services that make use of any market data of MEXC" without written
+-- consent, and storing their bars to republish them here is exactly that.
+-- Qubic's RPC carries a price it is licensed to publish (its stats service is
+-- configured with a CoinGecko token), so reading Qubic's own endpoint keeps
+-- this project inside one set of terms -- the ones it already operates under.
+--
+-- The cost, stated rather than worked around: the RPC publishes NO trading
+-- volume, so neither does this table. A volume column filled from elsewhere
+-- would be the same licensing problem under another name.
+--
+-- Why a row per price instead of a row per minute. The upstream scrapes every
+-- 60s (qubic-stats-service, SERVICE_DATA_SCRAPE_INTERVAL=1m) but the published
+-- figure often holds still across several of those: measured 2026-09-21 it sat
+-- unchanged for 2.5 minutes while the endpoint's own `timestamp` advanced on
+-- every request. Storing each poll would put ~1440 rows a day on disk, most of
+-- them repetitions that a chart would have to collapse again before drawing.
+-- So a row is opened when the price MOVES, and the poll that finds it unchanged
+-- extends the open row instead.
+--
+-- That makes every row an interval: `at` is when this price was first seen,
+-- `until` when it was last confirmed, and `polls` how many readings stand
+-- behind it. `until - at` is how long the price held.
+--
+-- `polls` is what keeps a quiet market distinguishable from a stopped worker.
+-- Without it a flat stretch would be ambiguous -- price steady, or nobody
+-- looking? With it, "held 40 minutes over 40 polls" and "a 40-minute gap with
+-- no polls at all" are different facts, and the page can draw them differently.
+CREATE TABLE IF NOT EXISTS price_points (
+    at            INTEGER PRIMARY KEY,  -- unix second the price was FIRST seen
+    until         INTEGER NOT NULL,     -- unix second it was last confirmed
+    polls         INTEGER NOT NULL DEFAULT 1,  -- readings behind this interval
+    price         REAL NOT NULL,        -- USD per QU
+    market_cap    INTEGER,
+    circulating   INTEGER,              -- supply behind the market cap
+    epoch         INTEGER,
+    tick          INTEGER,
+    rpc_timestamp INTEGER,              -- endpoint's own field: response time, not price time
+    fetched_at    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_price_until ON price_points(until);
+
+-- Hourly summary: the permanent record. Price points are pruned to a rolling
+-- window (PRICE_KEEP_DAYS); these are not, so a chart zoomed out to a year keeps
+-- drawing at the resolution that survives. Same detail/summary split as
+-- burn_buckets vs burn_totals and mining_samples vs mining_epochs.
+--
+-- open/high/low/close summarise the price points falling in the hour. They are
+-- a summary of OUR observations -- not an exchange candle, and the page must not
+-- dress them as one. `moves` counts how often the price actually changed in the
+-- hour and `polls` how many readings stand behind it, so a quiet hour and a
+-- busy one are told apart rather than both drawn as implied activity.
+--
+-- `avg_price` is time-weighted, not a mean of the points: a price held for 50
+-- minutes and one held for 2 are not equal contributions to "the hour's price".
+CREATE TABLE IF NOT EXISTS price_hours (
+    at          INTEGER PRIMARY KEY,  -- unix second, hour-aligned
+    open        REAL NOT NULL,
+    high        REAL NOT NULL,
+    low         REAL NOT NULL,
+    close       REAL NOT NULL,
+    avg_price   REAL,                 -- time-weighted over the hour
+    market_cap  INTEGER,              -- last reading in the hour
+    moves       INTEGER NOT NULL DEFAULT 0,  -- price changes within the hour
+    polls       INTEGER NOT NULL DEFAULT 0,  -- readings behind those changes
+    updated_at  INTEGER NOT NULL
+);
 """
 
 
@@ -1065,6 +1138,324 @@ class Store:
             cur = c.execute("DELETE FROM mining_samples WHERE epoch < ?", (int(row[0]),))
             return cur.rowcount or 0
 
+    # -- market price ------------------------------------------------------
+    # How long price points are kept. Hourly rows are permanent, so this costs
+    # resolution and never history. A row is written per price CHANGE, not per
+    # poll, so 90 days is a few thousand rows rather than 130k.
+    PRICE_KEEP_DAYS = 90
+
+    # Prices are compared as exact floats. Both sides come from the same JSON
+    # field through the same parser, so an unchanged figure round-trips bit for
+    # bit; an epsilon here would silently swallow a real move of the last digit
+    # (the price is ~4e-7, and its smallest published step is 1e-10).
+    def put_price_reading(self, at: int, price: float,
+                          market_cap: Optional[int] = None,
+                          circulating: Optional[int] = None,
+                          epoch: Optional[int] = None,
+                          tick: Optional[int] = None,
+                          rpc_timestamp: Optional[int] = None) -> dict:
+        """Record one reading. Opens a new interval, or extends the open one.
+
+        This is the shape the price data actually has: the upstream refreshes
+        every 60s but the published figure often holds across several of those,
+        so a row per poll would be mostly repetition. A row is opened when the
+        price moves and extended while it does not.
+
+        Returns the stored row plus `changed`: True when this reading opened a
+        new interval, False when it extended the current one. Callers use that
+        to log "held at X" rather than claiming a fresh measurement.
+
+        A reading older than the open interval's start is ignored -- clocks and
+        retries can deliver one out of order, and rewriting history backwards
+        would corrupt an interval that was correct when it was written.
+        """
+        at = int(at)
+        price = float(price)
+        cap = int(market_cap) if market_cap is not None else None
+        now = int(time.time())
+
+        def _i(v):
+            return int(v) if v is not None else None
+
+        with self._tx() as c:
+            cur = c.execute(
+                "SELECT * FROM price_points ORDER BY at DESC LIMIT 1").fetchone()
+
+            if cur is not None and at < int(cur["at"]):
+                return {**dict(cur), "changed": False, "ignored": "out of order"}
+
+            same = (cur is not None
+                    and float(cur["price"]) == price
+                    and (cur["market_cap"] or 0) == (cap or 0))
+            if same:
+                # Extend: the price is still this one, and one more reading
+                # stands behind it. `until` never moves backwards.
+                c.execute(
+                    "UPDATE price_points SET until=?, polls=polls+1, "
+                    "epoch=COALESCE(?,epoch), tick=COALESCE(?,tick), "
+                    "rpc_timestamp=COALESCE(?,rpc_timestamp), fetched_at=? "
+                    "WHERE at=?",
+                    (max(at, int(cur["until"])), _i(epoch), _i(tick),
+                     _i(rpc_timestamp), now, int(cur["at"])),
+                )
+                row = dict(c.execute("SELECT * FROM price_points WHERE at=?",
+                                     (int(cur["at"]),)).fetchone())
+                return {**row, "changed": False}
+
+            # A new price: close nothing (the previous row's `until` already
+            # says when it was last confirmed) and open an interval here.
+            c.execute(
+                "INSERT INTO price_points (at,until,polls,price,market_cap,"
+                "circulating,epoch,tick,rpc_timestamp,fetched_at) "
+                "VALUES (?,?,1,?,?,?,?,?,?,?) "
+                "ON CONFLICT(at) DO UPDATE SET "
+                "until=excluded.until, price=excluded.price, "
+                "market_cap=excluded.market_cap, circulating=excluded.circulating, "
+                "epoch=excluded.epoch, tick=excluded.tick, "
+                "rpc_timestamp=excluded.rpc_timestamp, fetched_at=excluded.fetched_at",
+                (at, at, price, cap, _i(circulating), _i(epoch), _i(tick),
+                 _i(rpc_timestamp), now),
+            )
+            row = dict(c.execute("SELECT * FROM price_points WHERE at=?",
+                                 (at,)).fetchone())
+            return {**row, "changed": True}
+
+    def price_series(self, resolution: str = "point",
+                     since: Optional[int] = None, until: Optional[int] = None,
+                     limit: Optional[int] = None) -> list[dict]:
+        """Stored price history, oldest first so a chart can draw it directly.
+
+        Each point row is an interval: `at` when the price was first seen,
+        `until` when it was last confirmed, `polls` how many readings back it.
+        A chart draws these as steps -- the price held that value throughout, so
+        interpolating between two points would invent motion that did not occur.
+
+        `since` selects intervals that OVERLAP the window, not only those
+        starting in it: a price set an hour before the window and still standing
+        is part of what the window shows, and dropping it would leave the chart
+        with no value at its left edge.
+
+        `limit` keeps the most RECENT rows (then reverses), matching burn_series
+        and mining_series: a windowed read shows now, not the start of history.
+        """
+        table = "price_hours" if resolution in ("hour", "hourly") else "price_points"
+        where, args = [], []
+        if since is not None:
+            if table == "price_points":
+                where.append("until>=?")
+            else:
+                where.append("at>=?")
+            args.append(int(since))
+        if until is not None:
+            where.append("at<=?")
+            args.append(int(until))
+        sql = f"SELECT * FROM {table}"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY at DESC"
+        if limit is not None:
+            sql += f" LIMIT {int(limit)}"
+        with self._lock:
+            rows = self._conn.execute(sql, args).fetchall()
+        return [dict(r) for r in reversed(rows)]
+
+    def latest_price(self) -> Optional[dict]:
+        """The open interval: the price standing right now."""
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM price_points ORDER BY at DESC LIMIT 1").fetchone()
+        return dict(r) if r else None
+
+    # How far past an interval's `until` a reading is still taken to describe a
+    # moment. One sampling interval: the price held at `until`, and the next
+    # poll a minute later is what would have revealed a change. Beyond that we
+    # genuinely were not looking, and saying so is the point.
+    PRICE_AT_SLACK_S = 90
+
+    def price_at(self, t: int) -> Optional[dict]:
+        """The price standing at moment `t`, or None if we were not watching.
+
+        The interval shape makes this a lookup rather than a nearest-neighbour
+        search: exactly one row can satisfy `at <= t <= until`.
+
+        None is returned for an unobserved moment rather than the closest
+        reading. Answering "what was the price then?" with a figure measured an
+        hour either side would dress a guess as a measurement, which is the one
+        thing this store exists not to do.
+        """
+        t = int(t)
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM price_points WHERE at<=? AND until>=? "
+                "ORDER BY at DESC LIMIT 1", (t, t)).fetchone()
+            if r is None:
+                # Between two intervals, or just past the newest one: accept the
+                # preceding interval if `t` falls inside one sampling slack of
+                # where it was last confirmed.
+                r = self._conn.execute(
+                    "SELECT * FROM price_points WHERE until<=? AND until>=? "
+                    "ORDER BY until DESC LIMIT 1",
+                    (t, t - self.PRICE_AT_SLACK_S)).fetchone()
+        return dict(r) if r else None
+
+    def price_coverage(self) -> dict:
+        """What the price store holds, and how continuously it was observed.
+
+        `polls` vs. elapsed time is what separates a quiet market from a stopped
+        worker: intervals covering 6 hours with 360 polls were watched the whole
+        time, the same span with 12 polls was not. The page needs that to draw a
+        flat stretch as "steady" rather than "unknown".
+
+        `detail_from` is where point resolution begins. It is not a constant:
+        this data has no backfill (the RPC serves only "now"), so detail starts
+        when the worker first ran and the boundary moves as history accumulates.
+        """
+        with self._lock:
+            pt = self._conn.execute(
+                "SELECT COUNT(*) n, MIN(at) lo, MAX(until) hi, SUM(polls) p "
+                "FROM price_points").fetchone()
+            hr = self._conn.execute(
+                "SELECT COUNT(*) n, MIN(at) lo, MAX(at) hi FROM price_hours").fetchone()
+        points = int(pt["n"] or 0)
+        polls = int(pt["p"] or 0)
+        lo = int(pt["lo"]) if pt["lo"] is not None else None
+        hi = int(pt["hi"]) if pt["hi"] is not None else None
+        span = (hi - lo) if (lo is not None and hi is not None) else 0
+        return {
+            "keep_days": self.PRICE_KEEP_DAYS,
+            "point": {
+                "points": points, "polls": polls,
+                "first_at": lo, "last_at": hi, "span_s": span,
+                # Share of the observed span actually covered by a poll, at the
+                # nominal one-per-minute rate. Below 1.0 means gaps.
+                #
+                # The expected count is span/60 + 1, not span/60: n readings a
+                # minute apart span (n-1) minutes, because the span measures the
+                # gaps between them and the count measures their endpoints.
+                # Without the +1 a perfectly continuous watch reports 1.5 at
+                # three readings and only approaches 1.0 after hours -- so a
+                # fresh, healthy sampler would look over-polled and the page
+                # could not use this to tell steady from unobserved.
+                "poll_ratio": round(polls / (span / 60 + 1), 3) if span >= 60 else None,
+            },
+            "hour": {"hours": int(hr["n"] or 0),
+                     "first_at": int(hr["lo"]) if hr["lo"] is not None else None,
+                     "last_at": int(hr["hi"]) if hr["hi"] is not None else None},
+            "detail_from": lo,
+        }
+
+    def rollup_price_hours(self, since: Optional[int] = None) -> int:
+        """Fold price intervals into hourly rows. Returns hours written.
+
+        Only hours that are OVER are folded: an hour still running would be
+        stored as if it were whole, the same error the burn page refuses for
+        partial days.
+
+        An interval spanning an hour boundary contributes to BOTH hours -- the
+        price really did stand in each of them. That is why this is computed in
+        Python rather than one GROUP BY: a row does not belong to a single hour.
+        """
+        hour_now = (int(time.time()) // 3600) * 3600
+        where = ["at < ?"]
+        args: list = [hour_now]
+        if since is not None:
+            where.append("until >= ?")
+            args.append(int(since))
+        sql = ("SELECT * FROM price_points WHERE " + " AND ".join(where)
+               + " ORDER BY at ASC")
+        with self._lock:
+            rows = [dict(r) for r in self._conn.execute(sql, args).fetchall()]
+        if not rows:
+            return 0
+
+        # Each hour collects the intervals overlapping it, clipped to the hour.
+        #
+        # An interval's true end is where the NEXT one begins, not its own last
+        # confirmation: a price confirmed once at 14:50 and replaced at 15:00
+        # stood for those ten minutes, and weighting it by `until - at` (zero
+        # seconds) would let a long-held price be outweighed by a briefly-held
+        # one. The final interval has no successor, so it ends at its own
+        # `until` -- we cannot claim it stood past the last time we looked.
+        hours: dict[int, dict] = {}
+        for i, r in enumerate(rows):
+            start = int(r["at"])
+            nxt = int(rows[i + 1]["at"]) if i + 1 < len(rows) else None
+            if nxt is not None:
+                # Superseded: it demonstrably stood until the next price began.
+                effective_end = max(int(r["until"]), nxt - 1)
+            else:
+                # The last interval in the batch has no successor. It stood at
+                # least until its final confirmation; beyond that nobody looked,
+                # so it is credited one poll interval past it and no further.
+                # Claiming it held to the end of the hour would assert a stretch
+                # we never observed -- the same error as drawing a partial day
+                # as a whole one.
+                effective_end = int(r["until"]) + 60
+            stop = min(effective_end, hour_now - 1)
+            if stop < start:
+                continue
+            h = (start // 3600) * 3600
+            while h <= (stop // 3600) * 3600 and h < hour_now:
+                lo = max(start, h)
+                hi = min(stop, h + 3599)
+                held = max(1, hi - lo)      # a point seen once still occupies a moment
+                e = hours.setdefault(h, {
+                    "open": r["price"], "close": r["price"],
+                    "high": r["price"], "low": r["price"],
+                    "weighted": 0.0, "seconds": 0, "moves": 0, "polls": 0,
+                    "market_cap": r["market_cap"], "first": start, "last": start,
+                })
+                if start <= e["first"]:
+                    e["first"], e["open"] = start, r["price"]
+                if start >= e["last"]:
+                    e["last"], e["close"] = start, r["price"]
+                    e["market_cap"] = r["market_cap"]
+                e["high"] = max(e["high"], r["price"])
+                e["low"] = min(e["low"], r["price"])
+                e["weighted"] += r["price"] * held
+                e["seconds"] += held
+                e["moves"] += 1
+                # Polls are attributed to the hour that holds most of the
+                # interval rather than split: they are a count of readings, and
+                # half a reading is not a thing.
+                if lo == start:
+                    e["polls"] += int(r["polls"] or 1)
+                h += 3600
+
+        now = int(time.time())
+        with self._tx() as c:
+            for h, e in hours.items():
+                avg = (e["weighted"] / e["seconds"]) if e["seconds"] else e["close"]
+                c.execute(
+                    "INSERT INTO price_hours (at,open,high,low,close,avg_price,"
+                    "market_cap,moves,polls,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?) "
+                    "ON CONFLICT(at) DO UPDATE SET "
+                    "open=excluded.open, high=excluded.high, low=excluded.low, "
+                    "close=excluded.close, avg_price=excluded.avg_price, "
+                    "market_cap=excluded.market_cap, moves=excluded.moves, "
+                    "polls=excluded.polls, updated_at=excluded.updated_at",
+                    (h, e["open"], e["high"], e["low"], e["close"], avg,
+                     e["market_cap"], e["moves"], e["polls"], now),
+                )
+        return len(hours)
+
+    def prune_price(self, keep_days: Optional[int] = None) -> int:
+        """Drop price points older than the window. Returns rows deleted.
+
+        An interval is dropped only once it ENDED before the cutoff: one that
+        began earlier but still stands is the current price, and deleting it
+        would leave the chart with no value at all.
+
+        Hourly rows are never pruned, so this costs resolution and never reach.
+        """
+        keep = int(keep_days if keep_days is not None else self.PRICE_KEEP_DAYS)
+        if keep < 1:
+            raise ValueError("keep_days must be at least 1")
+        cutoff = int(time.time()) - keep * 86400
+        with self._tx() as c:
+            return c.execute("DELETE FROM price_points WHERE until < ?",
+                             (cutoff,)).rowcount or 0
+
     def stats(self) -> dict:
         with self._lock:
             def one(q: str, *a) -> int:
@@ -1082,4 +1473,6 @@ class Store:
                 "burn_totals": one("SELECT COUNT(*) FROM burn_totals"),
                 "mining_samples": one("SELECT COUNT(*) FROM mining_samples"),
                 "mining_epochs": one("SELECT COUNT(*) FROM mining_epochs"),
+                "price_points": one("SELECT COUNT(*) FROM price_points"),
+                "price_hours": one("SELECT COUNT(*) FROM price_hours"),
             }
