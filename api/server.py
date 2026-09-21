@@ -80,10 +80,6 @@ app = FastAPI(
                                          "steps. No trading volume: the RPC publishes none, "
                                          "and sourcing it from an exchange would breach "
                                          "their terms."},
-        {"name": "price", "description": "Market price, polled from Qubic's own RPC. "
-                                       "One row per price change, each carrying how "
-                                       "long it held. No trading volume: the RPC "
-                                       "publishes none."},
         {"name": "service", "description": "Index, health and store status."},
     ],
 )
@@ -187,6 +183,7 @@ def api_index():
             "/v1/price/change",
             "/v1/price/at",
             "/v1/price/coverage",
+            "/v1/price/epochs",
             "/health",
         ],
         "dashboard": "/dashboard/",
@@ -830,6 +827,59 @@ def price_coverage():
     if not cov["point"]["points"] and not cov["hour"]["hours"]:
         raise _no_data("price coverage")
     return {**cov, "source": pipeline.price_source(), "measured": True}
+
+
+_payout_study_cache: dict = {"at": 0.0, "key": None, "data": None}
+PAYOUT_STUDY_TTL_S = float(os.environ.get("QDR_PAYOUT_STUDY_TTL", "60"))
+
+
+@app.get("/v1/price/epochs", tags=["price"],
+         summary="What the price did around each epoch payout")
+def price_epochs(
+    window: int = Query(pipeline.PAYOUT_STUDY_WINDOW_S, ge=600, le=172_800,
+                        description="Seconds either side of the boundary to "
+                                    "compare. Default 12h."),
+    limit: int = Query(12, ge=1, le=60,
+                       description="How many recent boundaries to return."),
+):
+    """The question only this project can ask.
+
+    Every ~4.4 days the protocol pays 676 computors at once — measured from our
+    own sealed reports, ~180 billion QU per epoch since the epoch-227 halving.
+    Those payouts are protocol emission: they are **not transfers**, and the
+    public RPC does not carry them at all. Deriving them from a Bob node's
+    end-epoch log is what lets this endpoint line a payout up against a price
+    series nobody else has at this resolution either.
+
+    **It reports; it does not conclude.** Each case carries the change measured
+    across the window *and* how much of that window was actually sampled. A
+    boundary observed on only one side returns `change_pct: null` with a reason
+    rather than a figure derived from the nearest reading. Until
+    `conclusive` is true the answer is "not enough boundaries yet", and
+    `epochs_needed` says how many more.
+
+    Boundaries come from our own readings — the minute the epoch number changed
+    — so `boundary_within_s` states how precisely that moment was pinned.
+    """
+    import time as _t
+
+    store = get_store()
+    key = (window, limit)
+    now = _t.time()
+    if (_payout_study_cache["data"] and _payout_study_cache["key"] == key
+            and now - _payout_study_cache["at"] < PAYOUT_STUDY_TTL_S):
+        return _payout_study_cache["data"]
+
+    study = pipeline.epoch_payout_study(store, window_s=window, limit=limit)
+    if not study["boundaries_seen"]:
+        # No boundary observed yet is the normal state of a young deployment,
+        # not an error — but it is also not a result, so it answers like every
+        # other unfilled read here.
+        raise _no_data("observed epoch boundaries (the worker has not yet "
+                       "watched an epoch change)")
+    data = {**study, "source": pipeline.price_source(), "measured": True}
+    _payout_study_cache.update({"at": now, "key": key, "data": data})
+    return data
 
 
 # The burn figures move on the epoch clock (the official counter) and on the

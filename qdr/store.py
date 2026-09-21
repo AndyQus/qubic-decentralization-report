@@ -1298,6 +1298,62 @@ class Store:
                     (t, t - self.PRICE_AT_SLACK_S)).fetchone()
         return dict(r) if r else None
 
+    def price_epoch_boundaries(self, since: Optional[int] = None) -> list[dict]:
+        """When the epoch number changed, as OUR readings observed it.
+
+        Derived from the price samples themselves rather than from a tick
+        timestamp, for two reasons. It is a measurement we took -- the minute we
+        first saw the new epoch -- rather than a figure fetched from elsewhere.
+        And it still works for the running epoch, whose start tick a node may no
+        longer be able to date (Bob's log retention is finite; measured
+        2026-09-21, the current epoch's first tick already answered "unknown").
+
+        The boundary carries a `within_s`: we know it fell between the last
+        reading of the old epoch and the first of the new one, and that window
+        is as precise as our sampling was. A gap in sampling widens it, and the
+        page shows the window rather than a false exact minute.
+        """
+        where, args = [], []
+        if since is not None:
+            where.append("until>=?")
+            args.append(int(since))
+        sql = "SELECT at, until, epoch FROM price_points"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY at ASC"
+        with self._lock:
+            rows = self._conn.execute(sql, args).fetchall()
+
+        out: list[dict] = []
+        prev = None
+        for r in rows:
+            e = r["epoch"]
+            if e is None:
+                continue
+            if prev is not None and e != prev["epoch"]:
+                out.append({
+                    "epoch": int(e),
+                    "from_epoch": int(prev["epoch"]),
+                    # First moment the new epoch was seen, and the last the old
+                    # one was: the change happened somewhere in between.
+                    "at": int(r["at"]),
+                    "after": int(prev["until"]),
+                    "within_s": int(r["at"]) - int(prev["until"]),
+                })
+            prev = {"epoch": e, "until": r["until"]}
+        return out
+
+    def price_around(self, t: int, before_s: int = 43200,
+                     after_s: int = 43200) -> list[dict]:
+        """Price intervals overlapping a window centred on `t`.
+
+        Used for the epoch-payout study: what the price did either side of a
+        boundary. Returns the raw intervals, so the caller can see the gaps
+        rather than receiving a smoothed series that hides them.
+        """
+        t = int(t)
+        return self.price_series(since=t - int(before_s), until=t + int(after_s))
+
     def price_coverage(self) -> dict:
         """What the price store holds, and how continuously it was observed.
 

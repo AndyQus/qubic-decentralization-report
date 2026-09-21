@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from qdr import pipeline  # noqa: E402
 from qdr.store import Store  # noqa: E402
 
 
@@ -262,3 +263,143 @@ def test_the_price_endpoints_are_indexed_and_tagged():
         assert route in paths, route
         assert paths[route]["get"]["tags"] == ["price"], route
     assert any(t["name"] == "price" for t in server.app.openapi()["tags"])
+
+
+# -- the epoch payout study --------------------------------------------------
+#
+# This is the page's reason to exist: every ~4.4 days the protocol pays 676
+# computors at once, those payouts are emission rather than transfers (so the
+# public RPC does not carry them), and this project derives them anyway. Lining
+# them up against a measured price series is a question nobody else can ask.
+#
+# Which makes the honesty rules here sharper than elsewhere: an endpoint that
+# invites a causal reading must not hand out a number it did not measure.
+
+def _boundary_store(before_gap: bool = False, after_gap: bool = False,
+                    epochs: int = 1) -> Store:
+    """A store holding minute readings across `epochs` epoch boundaries."""
+    d = Path(tempfile.mkdtemp(prefix="qdr-epoch-"))
+    s = Store(d / "t.db", allow_fallback=False)
+    now = (int(time.time()) // 60) * 60
+    # Enough history for a 12h window either side of every boundary.
+    span_min = (epochs + 1) * 26 * 60
+    start = now - span_min * 60
+    for i in range(span_min):
+        t = start + i * 60
+        # Boundaries evenly spaced; each epoch gets its own price level so a
+        # change across the boundary is unambiguous.
+        idx = i // (26 * 60)
+        if before_gap and (i % (26 * 60)) < 13 * 60 - 30:
+            continue        # nothing observed before the boundary
+        if after_gap and (i % (26 * 60)) > 13 * 60 + 30:
+            continue        # nothing observed after it
+        s.put_price_reading(at=t, price=4.0e-7 + idx * 1e-8, epoch=230 + idx)
+    return s
+
+
+def test_boundaries_come_from_our_own_readings():
+    """Not from a tick timestamp: a node's log retention is finite, and measured
+    2026-09-21 the running epoch's first tick already answered "unknown"."""
+    s = _boundary_store()
+    b = s.price_epoch_boundaries()
+    assert len(b) >= 1
+    first = b[0]
+    assert first["epoch"] == first["from_epoch"] + 1
+    # The change is pinned to the gap between the last old and first new
+    # reading -- at minute sampling that is 60s, and the page shows the window
+    # rather than a false exact moment.
+    assert first["within_s"] == 60
+    assert first["after"] < first["at"]
+
+
+def test_study_reports_change_and_how_well_it_was_watched():
+    s = _boundary_store()
+    out = pipeline.epoch_payout_study(s)
+    case = out["cases"][0]
+    assert case["change_pct"] is not None
+    assert case["coverage_pct"] == 100.0, "a fully sampled window must say so"
+    assert case["polls"] > 0
+
+
+def test_study_refuses_a_figure_when_one_side_was_not_observed():
+    """The whole point. Substituting the nearest reading would dress a guess as
+    a measurement -- and here that guess would be read as evidence about a
+    payout."""
+    for kwargs in ({"before_gap": True}, {"after_gap": True}):
+        s = _boundary_store(**kwargs)
+        out = pipeline.epoch_payout_study(s)
+        case = out["cases"][0]
+        assert case["change_pct"] is None, f"invented a change for {kwargs}"
+        assert "not observed" in case["note"]
+        assert out["observed"] == 0
+
+
+def test_study_says_when_it_has_seen_too_few_boundaries():
+    """One epoch is an anecdote. The endpoint must not invite a reading from it."""
+    s = _boundary_store(epochs=1)
+    out = pipeline.epoch_payout_study(s)
+    assert out["conclusive"] is False
+    assert out["epochs_needed"] == pipeline.PAYOUT_STUDY_MIN_EPOCHS - out["observed"]
+
+    s3 = _boundary_store(epochs=3)
+    out3 = pipeline.epoch_payout_study(s3)
+    assert out3["observed"] >= pipeline.PAYOUT_STUDY_MIN_EPOCHS
+    assert out3["conclusive"] is True
+    assert out3["epochs_needed"] == 0
+
+
+def test_study_publishes_spread_not_just_an_average():
+    """A mean across scattered cases says nothing; the page needs to be able to
+    show that rather than print one reassuring number."""
+    s = _boundary_store(epochs=3)
+    summary = pipeline.epoch_payout_study(s)["summary"]
+    for key in ("median_change_pct", "mean_change_pct", "min_change_pct",
+                "max_change_pct", "up", "down"):
+        assert key in summary, key
+
+
+def test_study_never_claims_causation():
+    """It reports what happened around the boundary. The wording is part of the
+    contract, because the framing is what a reader takes away."""
+    s = _boundary_store()
+    text = pipeline.epoch_payout_study(s)["measures"].lower()
+    assert "does not claim" in text or "not claim" in text
+
+
+def test_study_endpoint_503s_before_any_boundary_was_seen():
+    """A young deployment has watched no epoch change. That is a normal state,
+    and it is not a result."""
+    d = Path(tempfile.mkdtemp(prefix="qdr-epoch-api-"))
+    s = Store(d / "qdr.db")
+    now = (int(time.time()) // 60) * 60
+    for i in range(10):                     # readings, but all one epoch
+        s.put_price_reading(at=now - i * 60, price=4.0e-7, epoch=231)
+    s.close()
+
+    r = _client(d / "qdr.db").get("/v1/price/epochs")
+    assert r.status_code == 503
+    assert "boundar" in r.json()["detail"].lower()
+
+
+def test_study_endpoint_is_indexed_and_tagged():
+    import api.server as server
+    from fastapi.testclient import TestClient as _TC
+
+    index = _TC(server.app).get("/api").json()["endpoints"]
+    assert "/v1/price/epochs" in index
+    paths = server.app.openapi()["paths"]
+    assert paths["/v1/price/epochs"]["get"]["tags"] == ["price"]
+
+
+def test_study_endpoint_carries_source_and_no_volume():
+    d = Path(tempfile.mkdtemp(prefix="qdr-epoch-api-"))
+    s = _boundary_store()
+    # move the populated store where the client expects it
+    import shutil
+    shutil.copy(s.path, d / "qdr.db")
+    s.close()
+
+    body = _client(d / "qdr.db").get("/v1/price/epochs").json()
+    assert body["source"]["provider"] == "Qubic RPC"
+    names = _field_names(body)
+    assert not [n for n in names if "volume" in n.lower()]

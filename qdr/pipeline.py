@@ -677,6 +677,141 @@ def price_summary(store: Store) -> dict:
     return out
 
 
+# -- the epoch payout study ------------------------------------------------
+# The one question this page can ask that no market site can.
+#
+# Every ~4.4 days the protocol pays 676 computors. Measured from our own sealed
+# reports, epochs 227-228 each emitted ~180 billion QU (the epoch-227 halving is
+# visible in that series: 226 emitted ~360 billion). At 4.07e-7 USD that is
+# roughly 73,000 USD per epoch arriving in 676 wallets at once -- against a
+# reported daily volume near 1.28 million USD, so on the order of 6% of a day's
+# turnover, delivered in a moment.
+#
+# Whether any of it is sold, and whether the price moves when it lands, is not
+# something anyone can currently answer: the payouts are protocol emission and
+# do not appear on the public RPC as transfers at all. This project derives them
+# from a Bob node's end-epoch log, which is why it alone can line the boundary
+# up against a measured price series.
+#
+# This function does NOT claim causation. It reports what the price did around
+# each boundary and how well that window was observed, and leaves the reading to
+# whoever looks. A single epoch proves nothing; the value is in the column of
+# them accumulating, which is why `epochs_needed` is published too.
+PAYOUT_STUDY_WINDOW_S = int(os.environ.get("QDR_PAYOUT_WINDOW", str(12 * 3600)))
+
+# Below this many observed boundaries the study says so rather than inviting a
+# reading. Three is not a statistical threshold -- it is the point at which a
+# column of numbers stops looking like a single anecdote.
+PAYOUT_STUDY_MIN_EPOCHS = 3
+
+
+def epoch_payout_study(store: Store, window_s: int = PAYOUT_STUDY_WINDOW_S,
+                       limit: int = 12) -> dict:
+    """How the price behaved around each observed epoch boundary.
+
+    For every boundary our own readings witnessed, this compares the price one
+    window before against the price one window after, and reports how much of
+    each window was actually sampled. A boundary whose surroundings were barely
+    observed is reported WITH that fact rather than dropped -- and never with a
+    percentage that pretends to more than it measured.
+    """
+    boundaries = store.price_epoch_boundaries()
+    if limit and len(boundaries) > limit:
+        boundaries = boundaries[-limit:]
+
+    cases: list[dict] = []
+    for b in boundaries:
+        at = int(b["at"])
+        before = store.price_at(at - window_s)
+        after = store.price_at(at + window_s)
+        rows = store.price_around(at, window_s, window_s)
+        # Coverage is polls against the minutes the window contains: a window
+        # watched throughout scores 1.0, one sampled twice scores near zero.
+        polls = sum(int(r["polls"] or 0) for r in rows)
+        expected = max(1, (2 * window_s) // 60)
+
+        case = {
+            "epoch": b["epoch"],
+            "at": at,
+            "boundary_within_s": b["within_s"],
+            "window_s": window_s,
+            "polls": polls,
+            "coverage_pct": round(min(polls / expected, 1.0) * 100, 1),
+            "prices": len(rows),
+        }
+        if rows:
+            case["high"] = max(r["price"] for r in rows)
+            case["low"] = min(r["price"] for r in rows)
+        # Before/after only when BOTH edges were actually observed. One edge
+        # alone cannot make a change, and substituting the nearest reading would
+        # dress a guess as a measurement.
+        if before and after and before["price"]:
+            case["before"] = before["price"]
+            case["after"] = after["price"]
+            case["change_pct"] = round(
+                (after["price"] - before["price"]) / before["price"] * 100, 2)
+        else:
+            case["change_pct"] = None
+            case["note"] = "not observed on both sides of the window"
+        cases.append(case)
+
+    measured = [c for c in cases if c["change_pct"] is not None]
+    out: dict = {
+        "window_s": window_s,
+        "window_label": f"{window_s // 3600}h either side",
+        "cases": cases,
+        "observed": len(measured),
+        "boundaries_seen": len(boundaries),
+        "epochs_needed": max(0, PAYOUT_STUDY_MIN_EPOCHS - len(measured)),
+        "conclusive": len(measured) >= PAYOUT_STUDY_MIN_EPOCHS,
+        # Context for the reader, from our own sealed reports rather than a
+        # claim: what actually gets paid out at one of these boundaries.
+        "payout": _last_epoch_payout(store),
+        "measures": (
+            "Price before vs. after each epoch boundary, from readings taken "
+            "either side. It reports what happened; it does not claim the "
+            "payout caused it."
+        ),
+    }
+    if measured:
+        changes = [c["change_pct"] for c in measured]
+        ups = len([c for c in changes if c > 0])
+        out["summary"] = {
+            "median_change_pct": round(sorted(changes)[len(changes) // 2], 2),
+            "mean_change_pct": round(sum(changes) / len(changes), 2),
+            "up": ups, "down": len(changes) - ups,
+            # The spread matters more than the average here: a mean of +0.1%
+            # across wildly scattered cases says nothing, and the page should be
+            # able to show that rather than print one reassuring number.
+            "min_change_pct": min(changes), "max_change_pct": max(changes),
+        }
+    return out
+
+
+def _last_epoch_payout(store: Store) -> Optional[dict]:
+    """What the most recent sealed epoch actually paid, from our own report.
+
+    Returned beside the study so the reader can size the event themselves:
+    this many QU, to this many computors, at the price standing then.
+    """
+    for epoch in sorted(store.report_epochs(), reverse=True):
+        rep = store.get_report(epoch)
+        if not rep or rep.get("status") != STATUS_SEALED:
+            continue
+        totals = rep.get("totals") or {}
+        total = totals.get("total_revenue")
+        if not total:
+            continue
+        out = {"epoch": epoch, "total_qu": int(total),
+               "computors": totals.get("computors")}
+        latest = store.latest_price()
+        if latest and latest.get("price"):
+            out["usd_at_current_price"] = round(int(total) * latest["price"], 2)
+            out["priced_at"] = latest["price"]
+        return out
+    return None
+
+
 # -- burn ------------------------------------------------------------------
 # History only grows; the burn series is windowed like the timeseries is.
 DEFAULT_BURN_DAYS = 90
