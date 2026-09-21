@@ -22,4 +22,4 @@ Modules:
 # marker and the recompute trigger; it is paid once per deployment, and the
 # alternative (a second, untriggering version string) is a second thing to keep
 # in sync and get wrong.
-__version__ = "0.7.0"
+__version__ = "0.8.0"

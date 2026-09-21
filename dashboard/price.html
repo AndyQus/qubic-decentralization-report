@@ -92,8 +92,19 @@
   font-size: clamp(30px, 7vw, 56px); line-height: 1.05;
   color: var(--text); letter-spacing: -.02em;
   font-variant-numeric: tabular-nums;
+  /* Die Einheit steht hinter der Zahl statt darunter — so liest sich die Zeile
+     als ein Betrag ("0,0000004100 USD") statt als Wert mit Bildunterschrift.
+     `baseline` statt inline-Fluss, damit die kleine Einheit auf der Grundlinie
+     der großen Ziffern sitzt und nicht in deren Mitte schwebt; der Umbruch
+     bleibt erlaubt, weil beides zusammen auf einem Telefon breit wird. */
+  display: flex; flex-wrap: wrap;
+  align-items: baseline; justify-content: center; gap: .38em;
 }
-.hero-unit { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.hero-unit {
+  font-family: var(--sans); font-weight: 600;
+  font-size: clamp(12px, 1.7vw, 15px); letter-spacing: .08em;
+  color: var(--muted);
+}
 .hero-held {
   display: inline-flex; align-items: center; gap: 8px;
   margin-top: 12px; padding: 6px 12px;
@@ -299,8 +310,7 @@
   <!-- 1 — HERO ------------------------------------------------------------- -->
   <section class="qs-card hero" id="hero">
     <div class="hero-label" data-i18n="heroLabel">Price per QU</div>
-    <div class="hero-price" id="hero-price">–</div>
-    <div class="hero-unit" data-i18n="heroUnit">USD</div>
+    <div class="hero-price"><span id="hero-price">–</span><span class="hero-unit" data-i18n="heroUnit">USD</span></div>
     <div class="hero-held" id="hero-held" hidden>
       <span class="held-dot" aria-hidden="true"></span>
       <span id="held-text">–</span>
@@ -334,12 +344,6 @@
     </div>
   </section>
 
-  <!-- Ehrlichkeitshinweis steht ÜBER dem Diagramm, nicht im Kleingedruckten. -->
-  <div class="notice qs-panel--translucent" id="honesty-note">
-    <strong data-i18n="noteTitle">What is measured here:</strong>
-    <span data-i18n="noteBody">The price is read once a minute from Qubic's own RPC and stored when it changes, together with how long it held. The chart draws steps, never a curve — between two readings the price did not move gradually, it stood still and then jumped. There is no trading volume on this page: the RPC publishes none.</span>
-  </div>
-
   <!-- 2 — CHART ------------------------------------------------------------ -->
   <section class="qs-card qs-card--translucent">
     <h2 data-i18n="chartTitle">Price over time</h2>
@@ -372,6 +376,16 @@
       <span class="leg-item" id="leg-gap" hidden><span class="leg-swatch gap" aria-hidden="true"></span><span data-i18n="legGap">Not observed</span></span>
     </div>
   </section>
+
+  <!-- Ehrlichkeitshinweis: steht direkt UNTER dem Diagramm, als Fußnote zu dem,
+       was der Leser gerade gesehen hat. Die Erklärung der Stufen greift erst,
+       wenn die Stufen im Blick waren — davor war sie eine Behauptung über ein
+       Bild, das noch gar nicht da stand. Er bleibt aber über der Epochenstudie
+       und damit weit vor dem Kleingedruckten. -->
+  <div class="notice qs-panel--translucent" id="honesty-note">
+    <strong data-i18n="noteTitle">What is measured here:</strong>
+    <span data-i18n="noteBody">The price is read once a minute from Qubic's own RPC and stored when it changes, together with how long it held. The chart draws steps, never a curve — between two readings the price did not move gradually, it stood still and then jumped. There is no trading volume on this page: the RPC publishes none.</span>
+  </div>
 
   <!-- 3 — EPOCHENSTUDIE ---------------------------------------------------- -->
   <section class="qs-card qs-card--translucent" id="study-card">
@@ -722,10 +736,19 @@
        mit. Auf einem 390px-Telefon wird aus 11px im viewBox-Raum knapp 5px auf
        dem Schirm — unlesbar. Deshalb wird der viewBox schmaler gewählt, wenn der
        Container schmal ist: dieselbe Schriftgröße belegt dann anteilig mehr
-       Platz und kommt real größer heraus. */
-    const cw = chart.clientWidth || chart.parentElement.clientWidth || 900;
-    const narrow = cw < 620;
-    const W = narrow ? 520 : 900, H = narrow ? 300 : 360;
+       Platz und kommt real größer heraus.
+
+       Umgekehrt darf die viewBox aber auch nicht schmaler bleiben als der
+       Container: bei fester Höhe und `…meet` skaliert das SVG auf das
+       Seitenverhältnis der viewBox und lässt auf einer breiten Karte rechts
+       mehrere hundert Pixel leer — das Gitter endet dann mitten im Panel.
+       Also folgt W der echten Containerbreite (wie in burn.html), und nur die
+       schmale Variante zieht die Bezugsbreite herunter, damit die Schrift dort
+       anteilig größer herauskommt. */
+    const avail = Math.max(320, Math.floor(
+      chart.clientWidth || (chart.parentElement && chart.parentElement.clientWidth) || 900));
+    const narrow = avail < 620;
+    const W = narrow ? Math.min(avail, 520) : avail, H = narrow ? 300 : 360;
     const padL = narrow ? 58 : 78, padR = narrow ? 10 : 18;
     const padT = 18, padB = narrow ? 38 : 44;
     const plotW = W - padL - padR;
@@ -1245,61 +1268,151 @@
     document.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
   })();
 
-  /* ─── Hintergrund-Canvas ────────────────────────────────────────────────── */
-  (function flow() {
+  /* ─── Hintergrund-Canvas ──────────────────────────────────────────────────
+     Das Motiv der Seite als Hintergrund: Stufenbänder, die nach links ziehen.
+     Treibende Punkte standen hier vorher und hätten auf jeder beliebigen Seite
+     stehen können — sie sagten nichts über den Preis. Eine Stufenspur dagegen
+     wiederholt genau die Regel, nach der das Diagramm gezeichnet ist: eine
+     Strecke hält waagerecht, dann springt sie senkrecht. Nie diagonal, auch
+     nicht im Dekor — sonst widerspräche der Hintergrund der Aussage, für die
+     diese Seite existiert.
+
+     Gelesen wird nichts davon: die Bänder sind zufällig, sie kodieren keinen
+     Kurs. Dass sie rein atmosphärisch sind, hält sie von den Messwerten
+     getrennt — dieselbe Trennung wie beim Glut-Canvas in burn.html.
+
+     Gezeichnet wird in Bild-, nicht in Datenkoordinaten: jedes Band hält einen
+     Vorrat an Stufen, schiebt ihn nach links und hängt rechts eine neue an,
+     sobald links eine herausgelaufen ist. Damit bleibt die Arbeit pro Frame
+     konstant, egal wie lange der Tab offen steht. */
+  (function ticker() {
     const canvas = document.getElementById("flow-canvas");
     if (!canvas || !canvas.getContext) return;
     const ctx = canvas.getContext("2d");
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let parts = [];
+    const reduced = window.matchMedia
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    let bands = [];
     let raf = null;
+    let last = 0;
+
+    /* Eine Stufe ist ein Preis, der eine Weile stand: Breite = Haltedauer,
+       Höhe = Sprung. Beides gewürfelt, aber im selben Maßstab wie echte
+       Bewegung — viele kleine Sprünge, selten ein großer. */
+    function nextStep(prevY, h) {
+      const jump = (Math.random() - .5) * h * .22;
+      return {
+        w: 40 + Math.random() * 150,
+        y: Math.max(h * .08, Math.min(h * .92, prevY + jump))
+      };
+    }
+
+    function makeBand(i, n) {
+      const W = canvas.width, H = canvas.height;
+      /* Die Bänder liegen über die Höhe verteilt, jedes mit eigener
+         Geschwindigkeit: gleiche Tempi ließen sie als ein starres Gitter
+         wandern statt als mehrere unabhängige Spuren. */
+      const base = H * (i + .5) / n;
+      const band = {
+        v: 10 + Math.random() * 22,          /* px/s, nach links */
+        /* Sichtbar als Textur, nie als Inhalt: die Bänder laufen hinter
+           halbtransparenten Karten durch und dürfen in den Zwischenräumen
+           erkennbar sein, ohne mit der Kurve im Diagramm zu konkurrieren.
+           Gemessen liegt die Spitze damit bei ~18 % Deckung. */
+        alpha: .09 + Math.random() * .09,
+        width: 1 + Math.random() * .8,
+        span: H / n,
+        x: 0,
+        steps: []
+      };
+      let y = base + (Math.random() - .5) * band.span * .4;
+      let filled = 0;
+      /* Etwas über die Breite hinaus vorfüllen, damit rechts beim Start keine
+         angeschnittene Kante steht. */
+      while (filled < W + 300) {
+        const s = nextStep(y, band.span);
+        s.y = Math.max(base - band.span * .45, Math.min(base + band.span * .45, s.y));
+        y = s.y;
+        band.steps.push(s);
+        filled += s.w;
+      }
+      band.base = base;
+      return band;
+    }
 
     function seed() {
       canvas.width = canvas.offsetWidth;
       canvas.height = canvas.offsetHeight;
-      const n = Math.max(16, Math.min(46,
-        Math.round(Math.sqrt(canvas.width * canvas.height) / 26)));
-      parts = [];
-      for (let i = 0; i < n; i++) {
-        parts.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          r: 1 + Math.random() * 2,
-          v: 0.12 + Math.random() * 0.4,
-          a: 0.05 + Math.random() * 0.1
-        });
-      }
+      const n = Math.max(3, Math.min(7, Math.round(canvas.height / 190)));
+      bands = [];
+      for (let i = 0; i < n; i++) bands.push(makeBand(i, n));
     }
 
     function paint() {
       const col = cssVar("--price-line") || "#4ee0fc";
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      parts.forEach(p => {
-        ctx.globalAlpha = p.a;
-        ctx.fillStyle = col;
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      ctx.lineCap = "butt";
+      ctx.lineJoin = "miter";
+      ctx.strokeStyle = col;
+      for (const b of bands) {
+        ctx.globalAlpha = b.alpha;
+        ctx.lineWidth = b.width;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fill();
-      });
+        let x = b.x;
+        let prevY = null;
+        for (const s of b.steps) {
+          if (prevY === null) ctx.moveTo(x, s.y);
+          else { ctx.lineTo(x, prevY); ctx.lineTo(x, s.y); }  /* senkrechter Sprung */
+          ctx.lineTo(x + s.w, s.y);                            /* die Haltedauer */
+          prevY = s.y;
+          x += s.w;
+          if (x > W + 200) break;
+        }
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1;
     }
 
-    function step() {
-      parts.forEach(p => {
-        p.x += p.v;
-        if (p.x > canvas.width + 4) { p.x = -4; p.y = Math.random() * canvas.height; }
-      });
+    function advance(dt) {
+      const W = canvas.width;
+      for (const b of bands) {
+        b.x -= b.v * dt;
+        /* Links herausgelaufene Stufen verwerfen, rechts nachlegen: die Spur
+           bleibt endlos, das Array kurz. */
+        while (b.steps.length && b.x + b.steps[0].w < -200) {
+          b.x += b.steps.shift().w;
+        }
+        let end = b.x;
+        for (const s of b.steps) end += s.w;
+        while (end < W + 300) {
+          const prev = b.steps.length ? b.steps[b.steps.length - 1].y : b.base;
+          const s = nextStep(prev, b.span);
+          s.y = Math.max(b.base - b.span * .45, Math.min(b.base + b.span * .45, s.y));
+          b.steps.push(s);
+          end += s.w;
+        }
+      }
+    }
+
+    function loop(now) {
+      const dt = Math.min(.05, (now - last) / 1000 || 0);
+      last = now;
+      advance(dt);
       paint();
-      raf = requestAnimationFrame(step);
+      raf = requestAnimationFrame(loop);
     }
 
     function start() {
       if (raf) cancelAnimationFrame(raf);
       seed();
-      if (reduced) paint(); else step();
+      if (reduced) { paint(); return; }   /* stehendes Bild, keine Bewegung */
+      last = performance.now();
+      raf = requestAnimationFrame(loop);
     }
+    /* Ein Themenwechsel ändert --price-line, also wird neu gezeichnet. */
     window.qdrRepaintFlow = paint;
-    window.addEventListener("resize", start);
+    window.addEventListener("resize", start, { passive: true });
     start();
   })();
 
