@@ -424,7 +424,21 @@ gap in the curve is a gap in the measurement, and is shown as one.
 
 ## Status
 
-Running live at **https://report.qubic.tools** — four pages, 230 tests, version 0.6.0.
+Running live at **https://report.qubic.tools** — four pages, 232 tests, version 0.7.0.
+
+**v0.7** keeps the burn history current and gives the pages one visual system:
+
+- **The backfill re-checks instead of running once.** Midnight turns the running
+  day into a finished one that only the live scan's slice covers, and no recorded
+  tick window can notice that — so the report would have stopped growing the day
+  after deployment. It now asks "is the last complete day in the report?" hourly,
+  against the measurement itself, and an idle check costs no network call.
+- **Panels and tiles carry an accent**, borrowed from dividends.qubic.tools and
+  measured off its rendered DOM rather than guessed: a 160° wash and a border in
+  the same hue, half strength on large panels. The palette needed no change —
+  both apps already used MudBlazor's `#7e6fff` and `#4ee0fc`.
+- **Epoch and year views stay locked** until one whole day is measured, because
+  aggregating a partial day draws an hour as though it were a full period.
 
 **v0.6** added the burn measurement and moved the design into one stylesheet:
 
