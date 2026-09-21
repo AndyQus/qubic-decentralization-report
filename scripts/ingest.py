@@ -288,7 +288,14 @@ def main() -> int:
         return 0
 
     if args.price_sample:
-        row = pipeline.sample_price(client, store)
+        # Its own client: the shared one is built further down, after the
+        # store-only commands have had their turn, and this is the first of
+        # those commands that needs the network.
+        # Its own client: the shared one is built further down, after the
+        # store-only commands have had their turn, and this is the first of
+        # those commands that needs the network.
+        row = pipeline.sample_price(
+            CachedClient(base_url=args.base) if args.base else CachedClient(), store)
         if row is None:
             print("nothing sampled — RPC unreachable or no price in the response",
                   file=sys.stderr)
@@ -319,7 +326,10 @@ def main() -> int:
             print(f"market cap {summary['market_cap']:,} USD")
         for label, ch in (summary.get("change") or {}).items():
             print(f"{label:>4}: {ch['pct']:+.2f}%  "
-                  f"({ch['from']:.4e} → {ch['to']:.4e}, "
+                  # ASCII on purpose: a Windows console defaults to cp1252 and
+                  # dies on an arrow, which would take the whole command down
+                  # over a decoration.
+                  f"({ch['from']:.4e} -> {ch['to']:.4e}, "
                   f"{ch['moves']} move(s), coverage {ch['coverage_pct']}%)")
         cov = summary["coverage"]
         pt = cov["point"]

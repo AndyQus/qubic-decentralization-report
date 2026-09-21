@@ -48,8 +48,22 @@ with sync_playwright() as p:
 
     # --- desktop ---------------------------------------------------------
     pg = b.new_page(viewport={"width": 1180, "height": 1600})
-    pg.on("console", lambda m: issues.append((m.type, m.text))
-          if m.type in ("error", "warning") else None)
+
+    def console(m):
+        """A 503 is not a defect here.
+
+        An unfilled store — no reading yet, or no epoch boundary watched yet —
+        answers 503 by design, and the page turns that into a sentence. Counting
+        it as an issue would train whoever runs this to ignore the output, which
+        is worse than not checking at all. Everything else still counts.
+        """
+        if m.type not in ("error", "warning"):
+            return
+        if "503" in m.text or "Service Unavailable" in m.text:
+            return
+        issues.append((m.type, m.text))
+
+    pg.on("console", console)
     pg.on("pageerror", lambda e: issues.append(("pageerror", str(e))))
     pg.goto(URL)
     pg.wait_for_timeout(2000)
@@ -101,10 +115,13 @@ with sync_playwright() as p:
         issues.append(("chart", "chart has no box — nothing rendered"))
     shot(pg, "light_de_tooltip")
 
-    # The study is the reason this page exists; an empty or unrendered table is
-    # a failure worth naming rather than a blank area to scroll past.
-    if not pg.locator("#study-verdict").is_visible():
-        issues.append(("study", "the payout study verdict is not visible"))
+    # The study is the reason this page exists, so its section must always say
+    # something: the verdict once a boundary has been watched, otherwise the
+    # sentence explaining that none has. A section that is simply blank is the
+    # failure — a reader would scroll past an empty box and learn nothing.
+    if not (pg.locator("#study-verdict").is_visible()
+            or pg.locator("#study-empty").is_visible()):
+        issues.append(("study", "the payout study section renders nothing at all"))
 
     # --- mobile ----------------------------------------------------------
     mob = b.new_page(viewport={"width": 390, "height": 1500},

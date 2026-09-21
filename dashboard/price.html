@@ -830,15 +830,39 @@
     const stepPts = [];
     const gaps = [];
     let prevEnd = null;
-    rows.forEach(r => {
+    rows.forEach((r, i) => {
       const p = isHour ? (r.avg != null ? r.avg : r.c) : r.price;
       if (p == null || !isFinite(p) || p <= 0) return;
       const start = r.at;
-      const end = isHour ? r.at + 3600 : (r.until != null ? r.until : r.at + 60);
+
+      /* Wie weit die Stufe reicht.
+
+         `until` ist die letzte BESTÄTIGUNG, nicht das Ende der Geltung: ein
+         Preis, der einmal gemessen und in der nächsten Minute ersetzt wurde,
+         hat until == at und wäre eine Stufe der Breite null — der Pfad liefe
+         dann diagonal von Punkt zu Punkt und behauptete eine gleitende
+         Bewegung, also genau das, was diese Seite nicht tut.
+
+         Ein Preis galt nachweislich bis zum Beginn des nächsten. Nur das
+         letzte Intervall hat keinen Nachfolger; es reicht bis zu seiner
+         eigenen letzten Bestätigung und keine Sekunde weiter, denn danach hat
+         niemand mehr hingesehen. Dieselbe Regel wie beim Stunden-Rollup. */
+      const nextAt = (i + 1 < rows.length) ? rows[i + 1].at : null;
+      const confirmed = r.until != null ? r.until : r.at;
+      const end = isHour ? r.at + 3600
+                         : (nextAt != null ? Math.max(confirmed, nextAt) : confirmed);
+
       if (prevEnd != null && start - prevEnd > GAP_SLACK_S) {
         gaps.push([prevEnd, start]);
       }
-      stepPts.push({ x0: X(start), x1: X(end), y: Y(p), row: r, price: p });
+      /* Das laufende Intervall ist oft nur einmal bestätigt und hätte damit
+         Breite null — ausgerechnet der aktuelle Preis wäre unsichtbar. Es
+         bekommt deshalb eine Mindestbreite von 2px. Das überzeichnet seine
+         Dauer minimal; unsichtbar zu sein wäre die schlechtere Ungenauigkeit. */
+      const x0 = X(start);
+      let x1 = X(end);
+      if (i === rows.length - 1 && x1 - x0 < 2) x1 = x0 + 2;
+      stepPts.push({ x0: x0, x1: x1, y: Y(p), row: r, price: p });
       prevEnd = end;
     });
 
