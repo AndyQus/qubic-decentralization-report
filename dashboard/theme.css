@@ -50,6 +50,22 @@
 
   --gradient:  linear-gradient(135deg, #7e6fff, #4ee0fc);
 
+  /* ── Accented panels ──────────────────────────────────────────────────────
+     Measured off dividends.qubic.tools, whose panels this borrows: a card
+     carries its accent as a 160deg wash fading out by 60%, plus a border in
+     the same hue at 40% alpha. The palette was already shared (#7e6fff and
+     #4ee0fc are MudBlazor's primary and secondary, which that app themes
+     with), so only the treatment is new.
+
+     The alphas differ per mode and that is deliberate: 40% of a hue reads as a
+     firm edge on a dark ground and as a smear on a light one, so light mode
+     takes a stronger border and a fainter wash. `--panel-accent` is what a
+     page or a single tile overrides; everything below derives from it. */
+  --panel-accent:      #7e6fff;
+  --panel-wash:        0.09;   /* wash alpha at the gradient's origin */
+  --panel-edge:        0.45;   /* border alpha */
+  --panel-edge-hover:  0.75;
+
   /* ── Shape & depth ────────────────────────────────────────────────────── */
   --radius:    16px;
   --radius-sm: 12px;
@@ -112,6 +128,13 @@
     --shadow:       0 2px 8px rgba(0, 0, 0, 0.3);
     --shadow-hover: 0 4px 18px rgba(0, 0, 0, 0.42);
     --card-blur: none;
+
+    /* Dark ground: the wash can be stronger and the edge is what dividends
+       actually measures at (0.4), because a saturated hue holds its shape
+       against #101820 instead of bleeding the way it does on white. */
+    --panel-wash:       0.12;
+    --panel-edge:       0.40;
+    --panel-edge-hover: 0.70;
   }
 }
 
@@ -139,6 +162,13 @@
   --shadow:       0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-hover: 0 4px 18px rgba(0, 0, 0, 0.42);
   --card-blur: none;
+
+  /* Same values as the media-query block above: the manual toggle and the
+     system preference must produce the same page, or switching themes by hand
+     would quietly look different from switching them in the OS. */
+  --panel-wash:       0.12;
+  --panel-edge:       0.40;
+  --panel-edge-hover: 0.70;
 }
 
 /* ── Base ───────────────────────────────────────────────────────────────── */
@@ -188,6 +218,32 @@ a:hover { text-decoration: underline; }
 .glass-card:hover {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-hover);
+}
+
+/* Large panels take the same treatment as the tiles, at roughly half strength.
+   
+   A chart container is mostly empty space, so a wash sized for a 64px tile
+   covers a third of the viewport when it is stretched over one — and a border
+   that reads as crisp on a small card reads as a frame drawn around the page
+   when four of them stack. Halving both keeps the panels part of the same
+   system without the page turning into a grid of outlined boxes.
+   
+   `.qs-card` is the plain card, `.panel` the chart container: both get it, so
+   the pages stay consistent without touching their markup. */
+.qs-card,
+.panel {
+  background-image: linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--panel-accent) calc(var(--panel-wash) * 45%), transparent),
+      transparent 55%);
+  border: 1px solid color-mix(in srgb,
+      var(--panel-accent) calc(var(--panel-edge) * 55%), transparent);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.qs-card:hover,
+.panel:hover {
+  border-color: color-mix(in srgb,
+      var(--panel-accent) calc(var(--panel-edge) * 85%), transparent);
 }
 
 /* ── Layout helpers ─────────────────────────────────────────────────────── */
@@ -474,8 +530,81 @@ a:hover { text-decoration: underline; }
   overflow: hidden;
   border-radius: var(--radius);
 }
+
+/* The accent treatment, borrowed from dividends.qubic.tools: a wash running
+   from the top-left corner and a border in the same hue.
+   
+   Both are painted from ONE variable, `--panel-accent`, so a tile changes its
+   whole appearance by setting a single colour — which is what makes the
+   per-tile accents below one line each instead of a block each.
+   
+   `background-image` rather than `background`, so the wash layers over
+   whatever surface the tile already has (glass, translucent, or plain) instead
+   of replacing it. A tile that is not accented keeps exactly its old look. */
+.qs-stat.accent,
+.qs-stat.warn,
+.qs-stat.themed,
+.qs-panel--accent,
+.qs-card--accent {
+  background-image: linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--panel-accent) calc(var(--panel-wash) * 100%), transparent),
+      transparent 60%);
+  border: 1px solid color-mix(in srgb,
+      var(--panel-accent) calc(var(--panel-edge) * 100%), transparent);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.qs-stat.accent:hover,
+.qs-stat.warn:hover,
+.qs-stat.themed:hover,
+.qs-panel--accent:hover,
+.qs-card--accent:hover {
+  border-color: color-mix(in srgb,
+      var(--panel-accent) calc(var(--panel-edge-hover) * 100%), transparent);
+}
+
+/* Which hue each state paints with. The rail below still carries the state for
+   a reader who cannot separate these colours. */
+.qs-stat.accent  { --panel-accent: var(--accent); }
+.qs-stat.warn    { --panel-accent: var(--warn); }
+.qs-stat.themed  { --panel-accent: var(--stat-accent, var(--accent)); }
+
+/* A tile with no state of its own still gets a hue, cycling across the row.
+   This is what makes the dividends grid read as a system rather than a list:
+   every card is accented, and neighbouring cards differ. Left grey, the
+   stated tiles would look like the only ones that matter.
+
+   The cycle is violet -> periwinkle -> cyan, the three steps between the two
+   brand colours, so the row stays inside the palette instead of introducing
+   hues the rest of the page never uses. It restarts every third tile, which
+   suits the 3-to-5 tile rows these pages actually have.
+
+   Restricted to a tile that carries no state, because `accent`, `warn` and
+   `themed` MEAN something — a warning tile turning cyan because of its
+   position would be a lie about the figure it holds. */
+.qs-stat:not(.accent):not(.warn):not(.themed) {
+  --panel-accent: #7e6fff;
+  background-image: linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--panel-accent) calc(var(--panel-wash) * 100%), transparent),
+      transparent 60%);
+  border: 1px solid color-mix(in srgb,
+      var(--panel-accent) calc(var(--panel-edge) * 100%), transparent);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.qs-stat:not(.accent):not(.warn):not(.themed):hover {
+  border-color: color-mix(in srgb,
+      var(--panel-accent) calc(var(--panel-edge-hover) * 100%), transparent);
+}
+.qs-stat:not(.accent):not(.warn):not(.themed):nth-child(3n+2) { --panel-accent: #6f8cff; }
+.qs-stat:not(.accent):not(.warn):not(.themed):nth-child(3n+3) { --panel-accent: #4ee0fc; }
+/* Uppercase with letter-spacing, measured off the dividends tiles (11.2px,
+   0.45px tracking). Small caps need the tracking to stay legible, and the
+   spacing is what separates a label from a value at a glance — without it the
+   two run together as one block of text. */
 .qs-stat .s-label {
-  font-size: 12px; color: var(--muted); font-weight: 600;
+  font-size: 11.5px; color: var(--muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .05em;
   display: flex; align-items: center; gap: 6px;
 }
 .qs-stat .s-val {
