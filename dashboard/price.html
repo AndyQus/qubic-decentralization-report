@@ -41,7 +41,7 @@
     4. Einordnung    — Quelle, Lizenz, was fehlt
 -->
 
-<link rel="stylesheet" href="./theme.css?v=fb0cde16">
+<link rel="stylesheet" href="./theme.css?v=1f37ecee">
 
 <style>
 /* ─── Page-specific tokens ──────────────────────────────────────────────────
@@ -54,12 +54,18 @@
    dagegen IST die Hauptgröße dieser Seite — er darf die Leitfarbe tragen.
    Die Epochenmarken nehmen Violett (--accent2), damit sie klar als zweite,
    andersartige Information lesbar sind und nicht als Teil der Kurve. */
+   Hoch- und Tiefmarke nehmen die Textfarbe, nicht die Serienfarbe: sie sind
+   eine Ablesehilfe auf der Kurve, keine zweite Reihe. `--chart-halo` ist die
+   Kartenfarbe, gegen die diese Beschriftung freigestellt wird, damit sie auch
+   über der Kurve lesbar bleibt. */
 :root {
   --price-line: #0369a1;
   --price-fill: rgba(3, 105, 161, .13);
   --epoch-mark: #7e6fff;
   --grid:       rgba(17, 24, 39, .09);
   --gap-hatch:  rgba(107, 114, 128, .45);
+  --price-extreme: #111827;
+  --chart-halo: #ffffff;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -68,6 +74,8 @@
     --epoch-mark: #7e6fff;
     --grid:       rgba(242, 245, 250, .10);
     --gap-hatch:  rgba(185, 194, 207, .35);
+    --price-extreme: #f2f5fa;
+    --chart-halo: #0b0f14;
   }
 }
 :root[data-theme="dark"] {
@@ -76,6 +84,8 @@
   --epoch-mark: #7e6fff;
   --grid:       rgba(242, 245, 250, .10);
   --gap-hatch:  rgba(185, 194, 207, .35);
+  --price-extreme: #f2f5fa;
+  --chart-halo: #0b0f14;
 }
 
 /* ─── Hero ─────────────────────────────────────────────────────────────────
@@ -131,6 +141,12 @@
 .chart-svg { display: block; width: 100%; min-width: 320px; height: 360px; }
 .chart-svg[hidden] { display: none; }
 .chart-svg text { font-family: var(--sans); fill: var(--muted); }
+/* Die Preisachse hebt sich von der Zeitachse ab: volle Textfarbe statt
+   --muted, damit die Zahl, um die es geht, nicht die schwächste im Bild ist.
+   Als Klasse und nicht als Attribut, weil ein Präsentationsattribut gegen die
+   Regel darüber verliert. */
+.chart-svg text.y-tick { fill: var(--text); letter-spacing: .01em; }
+.chart-svg text.extreme-label { fill: var(--price-extreme); }
 @media (max-width: 700px) { .chart-svg { height: 290px; } }
 
 .chart-empty {
@@ -151,6 +167,10 @@
 .leg-swatch { width: 14px; height: 3px; border-radius: 2px; flex: none; }
 .leg-swatch.price { background: var(--price-line); }
 .leg-swatch.epoch { background: var(--epoch-mark); height: 12px; width: 2px; }
+.leg-swatch.extreme {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--price-extreme);
+}
 .leg-swatch.gap {
   height: 10px; width: 14px; border-radius: 2px;
   background: repeating-linear-gradient(45deg,
@@ -286,10 +306,12 @@
 </head>
 <body>
 
-<!-- Hintergrundmotiv: langsam nach rechts treibende Punkte — Marktfluss, rein
-     atmosphärisch. Kodiert ausdrücklich nichts; die Messwerte stehen im Hero
-     und im Diagramm, und die beiden Ebenen bleiben getrennt. Gleiche Bauart
-     wie das Glut-Canvas in burn.html und die Kolonie in mining.html. -->
+<!-- Hintergrundmotiv: ein Feld aus Kurspunkten, die halten, springen und nach
+     links ziehen — dieselbe Regel wie die Kurve im Diagramm, nur ohne gerade
+     Linien. Rein atmosphärisch; kodiert ausdrücklich nichts, die Messwerte
+     stehen im Hero und im Diagramm, und die beiden Ebenen bleiben getrennt.
+     Gleiche Bauart wie das Glut-Canvas in burn.html und die Kolonie in
+     mining.html. -->
 <canvas class="qs-canvas" id="flow-canvas" aria-hidden="true"></canvas>
 
 <header class="top qs-header">
@@ -322,6 +344,10 @@
 <main class="qs-main">
 
   <!-- 1 — HERO ------------------------------------------------------------- -->
+  <!-- Hero ohne eigene Fläche: theme.css nimmt `.hero` Rahmen UND Tönung ab,
+       damit der Preis direkt auf der Seite steht statt in einer Box. Das
+       Fluss-Canvas läuft dahinter durch — bei dieser Schriftgröße liest es
+       sich als Textur hinter der Zahl, nicht als Störung in ihr. -->
   <section class="qs-card hero" id="hero">
     <div class="hero-label" data-i18n="heroLabel">Price per QU</div>
     <div class="hero-price"><span id="hero-price">–</span><span class="hero-unit" data-i18n="heroUnit">USD</span></div>
@@ -388,6 +414,7 @@
       <span class="leg-item"><span class="leg-swatch price" aria-hidden="true"></span><span data-i18n="legPrice">Price (steps)</span></span>
       <span class="leg-item" id="leg-epoch" hidden><span class="leg-swatch epoch" aria-hidden="true"></span><span data-i18n="legEpoch">Epoch boundary</span></span>
       <span class="leg-item" id="leg-gap" hidden><span class="leg-swatch gap" aria-hidden="true"></span><span data-i18n="legGap">Not observed</span></span>
+      <span class="leg-item" id="leg-extreme" hidden><span class="leg-swatch extreme" aria-hidden="true"></span><span data-i18n="legExtreme">High and low in view</span></span>
     </div>
   </section>
 
@@ -438,10 +465,40 @@
     <p class="desc" style="margin-top:10px" data-i18n="aboutHistory">History starts when this worker first ran. The RPC serves only "now", so nothing before that can be filled in — and nothing is. Minute detail is kept for 90 days; hourly summaries are kept for good.</p>
   </section>
 
-  <div class="fdisc qs-panel--translucent" style="margin-top:18px">
-    <span data-i18n="disclaimer">Measured figures, not financial advice. Every number on this page is a reading this project took, with the time it was taken.</span>
-  </div>
 </main>
+
+<footer class="qs-footer">
+  <!-- Same footer as index, mining and burn: the legal links belong on every
+       public page, and the caveats travel with the numbers. Only discData
+       names what THIS page measures. -->
+  <div class="fdisc">
+    <b data-i18n="discLabel">Disclaimer:</b>
+    <span data-i18n="discBeta">This page is currently in beta status.</span>
+    <span data-i18n="discData">The price is read from Qubic's own stats service at</span>
+    <span><a href="https://rpc.qubic.org" target="_blank" rel="noreferrer">rpc.qubic.org</a>;</span>
+    <span data-i18n="discData2">no exchange market data is republished here.</span>
+    <span data-i18n="disclaimer">Measured figures, not financial advice. Every number on this page is a reading this project took, with the time it was taken.</span>
+    <span data-i18n="discNoGuarantee">We do not guarantee the completeness, accuracy, or availability of the data.</span>
+    <b data-i18n="discDemo">Use it for analysis purposes only — not as a basis for investment decisions.</b>
+  </div>
+
+  <div class="fbar">
+    <div class="fleft">
+      <span class="flogo" aria-hidden="true"></span>
+      <span>&copy; <span id="foot-year">2026</span> <span data-i18n="sponsored">Qubic – Sponsored by AndyQus</span></span>
+    </div>
+    <div class="flinks">
+      <a href="https://qubic.org" target="_blank" rel="noreferrer">Qubic.org</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://github.com/AndyQus/qubic-decentralization-report" target="_blank" rel="noreferrer">GitHub</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://qubic.org/terms-of-service" target="_blank" rel="noreferrer" data-i18n="tos">Terms of Service</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://qubic.org/privacy-policy" target="_blank" rel="noreferrer" data-i18n="privacy">Privacy Policy</a>
+    </div>
+    <div class="fright"><a href="./log.html">Status &amp; Log</a></div>
+  </div>
+</footer>
 
 <div class="tip" id="tip" role="status" aria-live="polite"></div>
 
@@ -494,6 +551,7 @@
       legPrice: "Price (steps)",
       legEpoch: "Epoch boundary",
       legGap: "Not observed",
+      legExtreme: "High and low in view",
 
       studyTitle: "Around the computor payouts",
       studyDesc: "Every ~4.4 days the protocol pays 676 computors at once. Those payouts are emission, not transfers — the public RPC does not carry them at all, so this comparison exists nowhere else. The table reports what the price did; it does not claim the payout caused it.",
@@ -512,6 +570,12 @@
       aboutNoVolume: "There is no trading volume here, and that is deliberate. Exchange APIs were built against first and then removed: MEXC's terms prohibit republishing their market data without written consent. A volume figure sourced that way would be a licence breach wearing a useful label.",
       aboutHistory: "History starts when this worker first ran. The RPC serves only \"now\", so nothing before that can be filled in — and nothing is. Minute detail is kept for 90 days; hourly summaries are kept for good.",
       disclaimer: "Measured figures, not financial advice. Every number on this page is a reading this project took, with the time it was taken.",
+      discLabel: "Disclaimer:", discBeta: "This page is currently in beta status.",
+      discData: "The price is read from Qubic's own stats service at",
+      discData2: "no exchange market data is republished here.",
+      discNoGuarantee: "We do not guarantee the completeness, accuracy, or availability of the data.",
+      discDemo: "Use it for analysis purposes only — not as a basis for investment decisions.",
+      sponsored: "Qubic – Sponsored by AndyQus", tos: "Terms of Service", privacy: "Privacy Policy",
 
       tipPrice: "Price",
       tipHeld: "Held for",
@@ -566,6 +630,7 @@
       legPrice: "Kurs (Stufen)",
       legEpoch: "Epochengrenze",
       legGap: "Nicht beobachtet",
+      legExtreme: "Hoch und Tief im Ausschnitt",
 
       studyTitle: "Rund um die Computor-Auszahlungen",
       studyDesc: "Alle ~4,4 Tage zahlt das Protokoll 676 Computors auf einmal aus. Diese Auszahlungen sind Emission, keine Überweisungen — die öffentliche RPC führt sie gar nicht, deshalb gibt es diesen Vergleich sonst nirgends. Die Tabelle berichtet, was der Kurs tat; sie behauptet nicht, die Auszahlung habe es verursacht.",
@@ -584,6 +649,12 @@
       aboutNoVolume: "Handelsvolumen gibt es hier nicht, und das ist Absicht. Börsen-APIs waren zuerst gebaut und wurden wieder entfernt: MEXCs AGB untersagen das Weiterveröffentlichen ihrer Marktdaten ohne schriftliche Zustimmung. Eine so beschaffte Volumenzahl wäre ein Lizenzverstoß im nützlichen Gewand.",
       aboutHistory: "Die Historie beginnt mit dem ersten Lauf dieses Workers. Die RPC liefert nur das Jetzt, also lässt sich davor nichts ergänzen — und es wird auch nichts ergänzt. Minutendetails bleiben 90 Tage, Stundenzusammenfassungen dauerhaft.",
       disclaimer: "Gemessene Zahlen, keine Anlageberatung. Jede Zahl auf dieser Seite ist eine Messung dieses Projekts, mit dem Zeitpunkt ihrer Erhebung.",
+      discLabel: "Hinweis:", discBeta: "Diese Seite befindet sich im Beta-Status.",
+      discData: "Der Preis wird aus Qubics eigenem Stats-Dienst gelesen unter",
+      discData2: "Marktdaten von Börsen werden hier nicht weiterveröffentlicht.",
+      discNoGuarantee: "Wir übernehmen keine Gewähr für Vollständigkeit, Richtigkeit oder Verfügbarkeit der Daten.",
+      discDemo: "Nutzung nur zu Analysezwecken — keine Grundlage für Investitionsentscheidungen.",
+      sponsored: "Qubic – Sponsored by AndyQus", tos: "Nutzungsbedingungen", privacy: "Datenschutz",
 
       tipPrice: "Preis",
       tipHeld: "Stand für",
@@ -763,7 +834,10 @@
       chart.clientWidth || (chart.parentElement && chart.parentElement.clientWidth) || 900));
     const narrow = avail < 620;
     const W = narrow ? Math.min(avail, 520) : avail, H = narrow ? 300 : 360;
-    const padL = narrow ? 58 : 78, padR = narrow ? 10 : 18;
+    /* Der linke Rand trägt den Preis — die einzige Zahl, wegen der jemand
+       dieses Diagramm überhaupt ansieht. Er ist deshalb breiter als für die
+       Ziffern nötig: die Achsenschrift steht größer als die der Zeitachse. */
+    const padL = narrow ? 74 : 98, padR = narrow ? 10 : 18;
     const padT = 18, padB = narrow ? 38 : 44;
     const plotW = W - padL - padR;
     const plotH = H - padT - padB;
@@ -837,27 +911,43 @@
       /* Linksbündig am Rand statt über der ersten Marke: rechtsbündig stieße
          er sonst mit dem obersten Achsenwert zusammen. */
       chart.appendChild(el("text", {
-        x: 2, y: 11, "text-anchor": "start",
-        "font-size": 10, opacity: .7
+        x: 2, y: 12, "text-anchor": "start",
+        "font-size": 11, opacity: .75
       }, prefix + "…"));
     }
+    /* Die Preisachse steht größer und kräftiger als die Zeitachse: sie trägt
+       die Größe, um die es geht, und musste bisher mit 11px gegen zehn
+       Nachkommastellen antreten. */
+    const AXIS_FS = narrow ? 12 : 14;
     tickVals.forEach((p, i) => {
       const y = Y(p);
       chart.appendChild(el("line", {
         x1: padL, y1: y, x2: W - padR, y2: y, stroke: gridCol, "stroke-width": 1
       }));
       chart.appendChild(el("text", {
-        x: padL - 8, y: y + 4, "text-anchor": "end", "font-size": 11
+        class: "y-tick",
+        x: padL - 9, y: y + AXIS_FS * 0.36, "text-anchor": "end",
+        "font-size": AXIS_FS, "font-weight": 600
       }, prefix ? "…" + labels[i].slice(prefix.length) : labels[i]));
     });
 
-    /* Zeitachse: 3–6 Marken, an runden Positionen der sichtbaren Spanne. */
-    /* Die Marken tragen "21.09., 15:41" — im viewBox-Raum rund 78 Einheiten
-       breit. Eine feste Anzahl ließ sie auf schmalen Geräten ineinander
-       laufen (i läuft 0..tickCount, das sind tickCount+1 Beschriftungen, eine
-       mehr als es aussieht). Deshalb wird die Anzahl aus dem Platz abgeleitet,
-       den eine Beschriftung tatsächlich braucht. */
-    const LABEL_W = 86;
+    /* Zeitachse: Marken an runden Positionen der sichtbaren Spanne. Die
+       Anzahl folgt dem Platz, den eine Beschriftung wie "21.09., 15:41"
+       tatsächlich braucht (i läuft 0..tickCount, das sind tickCount+1
+       Beschriftungen, eine mehr als es aussieht).
+
+       Geschätzt wurde diese Breite früher mit einer festen Zahl. Das hielt nur
+       so lange, wie alles andere am Layout gleich blieb: als der linke Rand
+       für die größere Preisachse wuchs, schrumpfte plotW, die Schätzung nicht
+       — und auf dem Telefon liefen zwei Marken ineinander. Deshalb wird die
+       Breite jetzt an einem echten Text gemessen, mit einem Sicherheitsabstand
+       von 14 Einheiten zwischen zwei Beschriftungen. */
+    const probe = el("text", { "font-size": 11, opacity: 0 }, fmtClock(tMin));
+    chart.appendChild(probe);
+    let measured = 0;
+    try { measured = probe.getComputedTextLength(); } catch (e) { measured = 0; }
+    chart.removeChild(probe);
+    const LABEL_W = (measured > 0 ? measured : 78) + 14;
     const tickCount = Math.max(1, Math.min(6, Math.floor(plotW / LABEL_W)));
     for (let i = 0; i <= tickCount; i++) {
       const ts = tMin + tSpan * i / tickCount;
@@ -959,6 +1049,55 @@
       chart.appendChild(hit);
     });
 
+    /* Hoch und Tief des SICHTBAREN Ausschnitts, jeweils mit dem Kurs
+       beschriftet. Bezugsgröße sind die gezeichneten Stufen, nicht `valid`:
+       bei Stundenauflösung zeigt die Stufe den Durchschnitt, und eine Marke
+       auf einem Wert, den die Linie nirgends berührt, sähe wie ein Fehler aus.
+       Beim ersten Vorkommen stehenbleiben — wiederholt ein Preis exakt sein
+       Extrem, ist die frühere Stelle die, die es erreicht hat. */
+    let hasExtremes = false;
+    if (stepPts.length > 1) {
+      let hi = stepPts[0], lo = stepPts[0];
+      stepPts.forEach(s => {
+        if (s.price > hi.price) hi = s;
+        if (s.price < lo.price) lo = s;
+      });
+      if (hi.price !== lo.price) {
+        hasExtremes = true;
+        const extCol = cssVar("--price-extreme") || lineCol;
+        const halo = cssVar("--chart-halo") || "#0b0f14";
+        [[hi, "up"], [lo, "down"]].forEach(([s, dir]) => {
+          /* Auf die Mitte der Stufe, aber innerhalb des Plots gehalten: eine
+             Beschriftung am Rand würde sonst über die Achse hinauslaufen. */
+          const xMid = Math.min(W - padR, Math.max(padL, (s.x0 + s.x1) / 2));
+          const above = dir === "up";
+          chart.appendChild(el("circle", {
+            cx: xMid, cy: s.y, r: 4, fill: extCol,
+            stroke: halo, "stroke-width": 1.5
+          }));
+          const label = (above ? "▲ " : "▼ ") + fmtPrice(s.price);
+          /* Nahe am oberen oder unteren Rand kippt die Beschriftung auf die
+             andere Seite des Punktes, statt aus dem Bild zu laufen. */
+          const wantY = above ? s.y - 11 : s.y + 20;
+          const y = wantY < padT + 11 ? s.y + 20
+                  : (wantY > padT + plotH - 4 ? s.y - 11 : wantY);
+          /* Und waagerecht: auf schmalen Karten verschiebt sich die
+             Beschriftung nach innen, damit sie nicht angeschnitten wird. */
+          const halfW = label.length * (narrow ? 3.4 : 3.9) + 4;
+          const x = Math.min(W - padR - halfW, Math.max(padL + halfW, xMid));
+          const txt = el("text", {
+            x: x, y: y, "text-anchor": "middle",
+            class: "extreme-label",
+            "font-size": narrow ? 11 : 12.5, "font-weight": 700, fill: extCol,
+            "paint-order": "stroke",
+            stroke: halo, "stroke-width": 3.5,
+            "stroke-linejoin": "round"
+          }, label);
+          chart.appendChild(txt);
+        });
+      }
+    }
+
     /* Unsichtbare Trefflächen pro Stufe — mindestens 8px breit, damit auch
        ein Ein-Minuten-Intervall auf einem Touchscreen erreichbar bleibt. */
     stepPts.forEach(s => {
@@ -977,8 +1116,10 @@
        nicht am Zeitfenster. */
     const legEpoch = document.getElementById("leg-epoch");
     const legGap = document.getElementById("leg-gap");
+    const legExtreme = document.getElementById("leg-extreme");
     if (legEpoch) legEpoch.hidden = bounds.length === 0;
     if (legGap) legGap.hidden = gaps.length === 0;
+    if (legExtreme) legExtreme.hidden = !hasExtremes;
 
     chart.setAttribute("aria-label",
       t("chartTitle") + ": " + fmtClock(tMin) + " – " + fmtClock(tMax));
@@ -1289,22 +1430,28 @@
   })();
 
   /* ─── Hintergrund-Canvas ──────────────────────────────────────────────────
-     Das Motiv der Seite als Hintergrund: Stufenbänder, die nach links ziehen.
-     Treibende Punkte standen hier vorher und hätten auf jeder beliebigen Seite
-     stehen können — sie sagten nichts über den Preis. Eine Stufenspur dagegen
-     wiederholt genau die Regel, nach der das Diagramm gezeichnet ist: eine
-     Strecke hält waagerecht, dann springt sie senkrecht. Nie diagonal, auch
-     nicht im Dekor — sonst widerspräche der Hintergrund der Aussage, für die
-     diese Seite existiert.
+     Das Motiv der Seite als Hintergrund, aber als Feld statt als Linien.
 
-     Gelesen wird nichts davon: die Bänder sind zufällig, sie kodieren keinen
+     Vorher standen hier durchgezogene Stufenbänder. Die Idee war richtig — der
+     Hintergrund sollte dieselbe Regel wiederholen wie das Diagramm — die
+     Ausführung war es nicht: scharfe 1px-Linien, waagerecht, in genau den
+     Winkeln, in denen auch Panel- und Header-Kanten liegen. Das Auge las sie
+     als verrutschte Rahmen, nicht als Dekor; direkt unter dem Header sah die
+     Seite schlicht kaputt aus. Die beiden Schwesterseiten machen es anders:
+     burn.html streut weiche Glutpunkte, mining.html weiche Knoten. Beide
+     vermeiden gerade, achsparallele Kanten vollständig — deshalb konkurrieren
+     sie nie mit dem Layout.
+
+     Hier also dasselbe Material — weiche, leuchtende Punkte — aber in der
+     Bewegung dieser Seite: ein Punkt steht eine Weile still, springt dann nach
+     oben oder unten und zieht dabei nach links. Halten, springen, halten. Das
+     ist genau die Regel, nach der die Kurve gezeichnet ist, nur ohne eine
+     einzige gerade Linie. Beim Sprung zieht ein kurzer Schweif mit, der sofort
+     ausblendet — er macht den Sprung sichtbar, ohne eine Kante zu hinterlassen.
+
+     Gelesen wird nichts davon: die Sprünge sind gewürfelt, sie kodieren keinen
      Kurs. Dass sie rein atmosphärisch sind, hält sie von den Messwerten
-     getrennt — dieselbe Trennung wie beim Glut-Canvas in burn.html.
-
-     Gezeichnet wird in Bild-, nicht in Datenkoordinaten: jedes Band hält einen
-     Vorrat an Stufen, schiebt ihn nach links und hängt rechts eine neue an,
-     sobald links eine herausgelaufen ist. Damit bleibt die Arbeit pro Frame
-     konstant, egal wie lange der Tab offen steht. */
+     getrennt — dieselbe Trennung wie beim Glut-Canvas in burn.html. */
   (function ticker() {
     const canvas = document.getElementById("flow-canvas");
     if (!canvas || !canvas.getContext) return;
@@ -1312,126 +1459,136 @@
     const reduced = window.matchMedia
       && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    let bands = [];
+    let ticks = [];
     let raf = null;
     let last = 0;
 
-    /* Eine Stufe ist ein Preis, der eine Weile stand: Breite = Haltedauer,
-       Höhe = Sprung. Beides gewürfelt, aber im selben Maßstab wie echte
-       Bewegung — viele kleine Sprünge, selten ein großer. */
-    function nextStep(prevY, h) {
-      const jump = (Math.random() - .5) * h * .22;
-      return {
-        w: 40 + Math.random() * 150,
-        y: Math.max(h * .08, Math.min(h * .92, prevY + jump))
-      };
+    /* Auf hellem Grund verschluckt der Hintergrund die Punkte stärker als auf
+       dunklem, also wird dort kräftiger gezeichnet — dieselbe Korrektur wie in
+       mining.html, und aus demselben Grund aus der gemalten Farbe gelesen und
+       nicht aus dem Theme-Attribut, das bei „System folgen" leer ist. */
+    function isLightGround() {
+      const m = (cssVar("--bg") || "").match(/\d+/g);
+      if (!m || m.length < 3) return false;
+      return (0.299 * +m[0] + 0.587 * +m[1] + 0.114 * +m[2]) > 140;
     }
 
-    function makeBand(i, n) {
-      const W = canvas.width, H = canvas.height;
-      /* Die Bänder liegen über die Höhe verteilt, jedes mit eigener
-         Geschwindigkeit: gleiche Tempi ließen sie als ein starres Gitter
-         wandern statt als mehrere unabhängige Spuren. */
-      const base = H * (i + .5) / n;
-      const band = {
-        v: 10 + Math.random() * 22,          /* px/s, nach links */
-        /* Sichtbar als Textur, nie als Inhalt: die Bänder laufen hinter
-           halbtransparenten Karten durch und dürfen in den Zwischenräumen
-           erkennbar sein, ohne mit der Kurve im Diagramm zu konkurrieren.
-           Gemessen liegt die Spitze damit bei ~18 % Deckung. */
-        alpha: .09 + Math.random() * .09,
-        width: 1 + Math.random() * .8,
-        span: H / n,
-        x: 0,
-        steps: []
+    /* Ein Punkt hält, springt, hält. `wait` ist die Restdauer des Haltens,
+       `from`/`to` die Flanke des laufenden Sprungs, `p` deren Fortschritt. */
+    function spawn(W, H, anywhere) {
+      const y = H * (.06 + Math.random() * .88);
+      return {
+        x: anywhere ? Math.random() * W : W + 20 + Math.random() * 60,
+        y: y,
+        from: y,
+        to: y,
+        p: 1,                                  /* 1 = steht gerade */
+        wait: .4 + Math.random() * 2.4,        /* s, Haltedauer */
+        vx: 9 + Math.random() * 20,            /* px/s, nach links */
+        r: 1.1 + Math.random() * 2.1,
+        alpha: .45 + Math.random() * .5,
+        phase: Math.random() * Math.PI * 2
       };
-      let y = base + (Math.random() - .5) * band.span * .4;
-      let filled = 0;
-      /* Etwas über die Breite hinaus vorfüllen, damit rechts beim Start keine
-         angeschnittene Kante steht. */
-      while (filled < W + 300) {
-        const s = nextStep(y, band.span);
-        s.y = Math.max(base - band.span * .45, Math.min(base + band.span * .45, s.y));
-        y = s.y;
-        band.steps.push(s);
-        filled += s.w;
-      }
-      band.base = base;
-      return band;
     }
 
     function seed() {
       canvas.width = canvas.offsetWidth;
       canvas.height = canvas.offsetHeight;
-      const n = Math.max(3, Math.min(7, Math.round(canvas.height / 190)));
-      bands = [];
-      for (let i = 0; i < n; i++) bands.push(makeBand(i, n));
-    }
-
-    function paint() {
-      const col = cssVar("--price-line") || "#4ee0fc";
       const W = canvas.width, H = canvas.height;
-      ctx.clearRect(0, 0, W, H);
-      ctx.lineCap = "butt";
-      ctx.lineJoin = "miter";
-      ctx.strokeStyle = col;
-      for (const b of bands) {
-        ctx.globalAlpha = b.alpha;
-        ctx.lineWidth = b.width;
-        ctx.beginPath();
-        let x = b.x;
-        let prevY = null;
-        for (const s of b.steps) {
-          if (prevY === null) ctx.moveTo(x, s.y);
-          else { ctx.lineTo(x, prevY); ctx.lineTo(x, s.y); }  /* senkrechter Sprung */
-          ctx.lineTo(x + s.w, s.y);                            /* die Haltedauer */
-          prevY = s.y;
-          x += s.w;
-          if (x > W + 200) break;
-        }
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
+      /* Anzahl nach Fläche, gedeckelt: ein hoher Monitor soll nicht leer
+         wirken, ein breiter nicht zu Rauschen werden. */
+      const n = Math.max(20, Math.min(72, Math.round(Math.sqrt(W * H) / 21)));
+      ticks = [];
+      for (let i = 0; i < n; i++) ticks.push(spawn(W, H, true));
     }
 
     function advance(dt) {
-      const W = canvas.width;
-      for (const b of bands) {
-        b.x -= b.v * dt;
-        /* Links herausgelaufene Stufen verwerfen, rechts nachlegen: die Spur
-           bleibt endlos, das Array kurz. */
-        while (b.steps.length && b.x + b.steps[0].w < -200) {
-          b.x += b.steps.shift().w;
-        }
-        let end = b.x;
-        for (const s of b.steps) end += s.w;
-        while (end < W + 300) {
-          const prev = b.steps.length ? b.steps[b.steps.length - 1].y : b.base;
-          const s = nextStep(prev, b.span);
-          s.y = Math.max(b.base - b.span * .45, Math.min(b.base + b.span * .45, s.y));
-          b.steps.push(s);
-          end += s.w;
+      const W = canvas.width, H = canvas.height;
+      for (const t of ticks) {
+        t.x -= t.vx * dt;
+        if (t.x < -30) Object.assign(t, spawn(W, H, false));
+
+        if (t.p < 1) {
+          /* Der Sprung selbst ist kurz — er soll als Ruck lesbar sein, nicht
+             als Gleiten; sonst wäre es wieder eine Kurve. */
+          t.p = Math.min(1, t.p + dt * 5.5);
+          const e = t.p < .5 ? 4 * t.p * t.p * t.p
+                             : 1 - Math.pow(-2 * t.p + 2, 3) / 2;
+          t.y = t.from + (t.to - t.from) * e;
+        } else {
+          t.wait -= dt;
+          if (t.wait <= 0) {
+            /* Viele kleine Sprünge, selten ein großer — im selben Verhältnis
+               wie echte Bewegung. */
+            const big = Math.random() < .16;
+            const jump = (Math.random() - .5) * H * (big ? .12 : .035);
+            t.from = t.y;
+            t.to = Math.max(H * .04, Math.min(H * .96, t.y + jump));
+            t.p = 0;
+            t.wait = .4 + Math.random() * 2.4;
+          }
         }
       }
+    }
+
+    function paint(now) {
+      const W = canvas.width, H = canvas.height;
+      const col = cssVar("--price-line") || "#4ee0fc";
+      const boost = isLightGround() ? 1.5 : 1;
+      const t0 = (now || 0) / 1000;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = col;
+      ctx.strokeStyle = col;
+      ctx.lineCap = "round";
+
+      for (const t of ticks) {
+        /* Langsames Pulsieren, damit das Feld auch im Halten lebt. */
+        const pulse = .78 + .22 * Math.sin(t0 * .8 + t.phase);
+        const a = Math.min(1, t.alpha * pulse * boost);
+
+        /* Der Schweif zeigt die Flanke, die der Punkt gerade zieht, und
+           verschwindet mit ihr. Kein bleibender Strich, keine Kante. */
+        if (t.p < 1) {
+          ctx.globalAlpha = a * .62 * (1 - t.p);
+          ctx.lineWidth = t.r * .9;
+          ctx.beginPath();
+          ctx.moveTo(t.x, t.from);
+          ctx.lineTo(t.x, t.y);
+          ctx.stroke();
+        }
+
+        /* Weicher Hof plus harter Kern — dieselbe Zeichnung wie die Glut in
+           burn.html, damit die drei Seiten als eine Familie lesen. */
+        ctx.globalAlpha = a * .38;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, t.r * 3.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalAlpha = a;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
 
     function loop(now) {
       const dt = Math.min(.05, (now - last) / 1000 || 0);
       last = now;
       advance(dt);
-      paint();
+      paint(now);
       raf = requestAnimationFrame(loop);
     }
 
     function start() {
       if (raf) cancelAnimationFrame(raf);
       seed();
-      if (reduced) { paint(); return; }   /* stehendes Bild, keine Bewegung */
+      if (reduced) { paint(0); return; }   /* stehendes Feld, keine Bewegung */
       last = performance.now();
       raf = requestAnimationFrame(loop);
     }
     /* Ein Themenwechsel ändert --price-line, also wird neu gezeichnet. */
-    window.qdrRepaintFlow = paint;
+    window.qdrRepaintFlow = () => paint(performance.now());
     window.addEventListener("resize", start, { passive: true });
     start();
   })();
@@ -1440,6 +1597,10 @@
   applyTheme();
   applyLang();
   syncWindowSeg();
+  /* Das Fußzeilenjahr steht nicht im Markup, damit die Seite am 1. Januar
+     nicht das falsche Jahr behauptet. */
+  var fy = document.getElementById("foot-year");
+  if (fy) fy.textContent = String(new Date().getFullYear());
   loadAll();
   /* Der Preis wird minütlich neu gelesen; die Seite holt etwas seltener nach,
      damit ein offener Tab nicht dauernd Anfragen stellt. */

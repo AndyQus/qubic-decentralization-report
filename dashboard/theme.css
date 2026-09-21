@@ -246,6 +246,26 @@ a:hover { text-decoration: underline; }
       var(--panel-accent) calc(var(--panel-edge) * 85%), transparent);
 }
 
+/* Der Hero ist kein Panel. Er trägt bereits die größte Zahl der Seite und
+   darunter eine Reihe eigener Kacheln, jede mit eigenem Rand — ein Rahmen um
+   das Ganze zeichnet dann nur eine Box um eine Box. Die Kacheln behalten ihre
+   Ränder, der Hero selbst gibt seinen ab und steht direkt auf der Seite.
+
+   Das gilt auch für die getönte Fläche: `--translucent` ist dafür da, kleine
+   Schrift über einem laufenden Canvas lesbar zu halten. Die Hero-Ziffern sind
+   das Gegenteil von kleiner Schrift — sie tragen sich selbst, und die Fläche
+   bliebe als hellere Box stehen, also genau der Rahmen, der hier weg soll. */
+.qs-card.hero,
+.qs-card.hero:hover {
+  background-image: none;
+  border: 1px solid transparent;
+}
+.qs-card.hero.qs-card--translucent {
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 /* ── Layout helpers ─────────────────────────────────────────────────────── */
 .qs-wrap {
   max-width: var(--content-width);

@@ -47,3 +47,4 @@ scripts/burn_*.png
 # in development holds simulated prices. They must never be committed as though
 # they showed a real market.
 scripts/price_*.png
+scripts/hero_*.png

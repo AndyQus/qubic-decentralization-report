@@ -216,3 +216,26 @@ def test_fetches_go_through_the_projects_own_api():
     assert urls, "no API calls found — the page fetches nothing"
     for u in urls:
         assert u.startswith("/v1/"), f"unexpected fetch target: {u}"
+
+
+def test_every_content_card_is_translucent_over_the_moving_background():
+    """`.qs-card` alone sets only a background *image* — a gradient fading to
+    transparent — and no background colour, so on a page running a canvas behind
+    the content the animation shows straight through the card. Small type over
+    moving particles needs the blur that `--translucent` brings.
+
+    The hero is the documented exception: theme.css strips its border and tint
+    on purpose (`.qs-card.hero`), and then cancels `--translucent` again for it,
+    because a lighter panel there would restore exactly the box the hero is
+    meant to shed. Its type is large enough to carry itself over the texture.
+    """
+    src = page_text()
+    assert 'class="qs-canvas"' in src, (
+        "precondition: this test is about pages with a background canvas")
+    cards = re.findall(r'<section class="([^"]*qs-card[^"]*)"', src)
+    assert cards, "no cards found — the markup shape changed"
+    content = [c for c in cards if "hero" not in c]
+    assert content, "no content cards found besides the hero"
+    opaque = [c for c in content if "qs-card--translucent" not in c]
+    assert not opaque, (
+        f"content card(s) without --translucent over a moving canvas: {opaque}")
