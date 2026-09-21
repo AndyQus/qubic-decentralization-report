@@ -11,6 +11,14 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 
+# Worker runtime state. The log is the tail /log.html serves, the lock is how
+# start_worker.ps1 refuses to be the second writer against one SQLite file, and
+# the .lnk is what Git Bash leaves behind where worker.sh makes its FIFO (MSYS
+# emulates the named pipe with a shortcut). All three are per-machine.
+data/worker.log
+data/worker.lock
+data/.worker.fifo*
+
 # Node / build
 node_modules/
 dist/
@@ -48,3 +56,7 @@ scripts/burn_*.png
 # they showed a real market.
 scripts/price_*.png
 scripts/hero_*.png
+# Einzelaufnahmen aus der Handprüfung, die keinem der Präfixe oben folgen. Sie
+# entstehen gegen denselben Entwicklungs-Store und zeigen damit dieselben
+# simulierten Preise — sie gehören aus demselben Grund nicht ins Repo.
+scripts/live_*.png

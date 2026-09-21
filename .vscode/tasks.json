@@ -33,6 +33,42 @@
       "presentation": { "reveal": "always", "panel": "dedicated" }
     },
     {
+      // What F5 actually waits on: API and worker together, the way the
+      // container runs them. `dependsOn` with "parallel" starts both and
+      // completes once each one's endsPattern has matched, so Chrome opens
+      // against an API that is up AND a store that something is filling.
+      "label": "Start API + worker",
+      "dependsOn": ["Start API", "Start worker"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    },
+    {
+      // The other half of a working dashboard. The API serves what it finds and
+      // never backfills, so without this the page shows a frozen store — a price
+      // "last confirmed 4.6 h ago" and a 503 on /v1/price/epochs — which reads as
+      // a broken frontend but is an empty store. The container runs both
+      // (QDR_ROLE=both); this restores that pairing for F5.
+      "label": "Start worker",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass",
+               "-File", "${workspaceFolder}/scripts/start_worker.ps1"],
+      "isBackground": true,
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": {
+        "pattern": { "regexp": "^\\s*$", "file": 1, "location": 2, "message": 3 },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*(Starting ingest worker|\\[worker\\] backfilling).*",
+          // The watch line is the last thing printed before the loop runs
+          // forever. Matching anything earlier (the backfill, say) would let the
+          // browser launch before the store has its first fresh reading.
+          "endsPattern": ".*\\[worker\\] watching.*"
+        }
+      },
+      "presentation": { "reveal": "always", "panel": "dedicated", "group": "dev" }
+    },
+    {
       "label": "Install deps",
       "type": "shell",
       "command": "python -m pip install -r requirements.txt",

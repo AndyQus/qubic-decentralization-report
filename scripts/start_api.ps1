@@ -1,4 +1,4 @@
-# Start the API for F5 in VS Code — or say that one is already running.
+﻿# Start the API for F5 in VS Code — or say that one is already running.
 #
 # Why a script and not a one-liner in tasks.json: the inline version embedded a
 # Python one-liner containing single quotes, commas and `timeout=2` inside a

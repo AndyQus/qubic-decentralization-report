@@ -10,7 +10,10 @@
       "request": "launch",
       "url": "http://localhost:8000/dashboard/",
       "webRoot": "${workspaceFolder}/dashboard",
-      "preLaunchTask": "Start API"
+      // API *and* worker, because the API alone serves a store nothing fills:
+      // the price would sit at whatever a previous worker last wrote, and
+      // /v1/price/epochs would 503 for want of an observed epoch boundary.
+      "preLaunchTask": "Start API + worker"
     },
     {
       // The live mining view. Unlike index.html it has no bundled-data fallback —
@@ -22,7 +25,10 @@
       "request": "launch",
       "url": "http://localhost:8000/dashboard/mining.html",
       "webRoot": "${workspaceFolder}/dashboard",
-      "preLaunchTask": "Start API"
+      // Mining needs the worker even more than the report does: its samples are
+      // not replayable (a node answers what it looks like right now), so an
+      // unsampled minute is gone. The API cannot produce them on request.
+      "preLaunchTask": "Start API + worker"
     },
     {
       // No server involved: index.html falls back to the bundled data.js. Handy for

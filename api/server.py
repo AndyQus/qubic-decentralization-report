@@ -631,12 +631,19 @@ def price_latest():
     `held_for_s` and `polls` are what make a flat price readable: "unchanged for
     12 minutes across 12 readings" is a measurement, whereas "unchanged" alone
     could equally mean nobody looked.
+
+    `next_refresh_in` tells the page when a NEW reading can exist, so a live
+    view can count down to real data instead of polling blind. It follows the
+    worker, not this server's cache: the sampler stores minute-aligned readings
+    (`at = now // 60 * 60`), so the next one lands on the next minute boundary.
+    The server cache is 15s and would count down to the same number four times a
+    minute, three of them to nothing new.
     """
     import time as _t
 
     now = _t.time()
     if _price_cache["data"] and now - _price_cache["at"] < PRICE_TTL_S:
-        return _price_cache["data"]
+        return dict(_price_cache["data"], next_refresh_in=_price_next_refresh_in(now))
 
     store = get_store()
     data = pipeline.price_summary(store)
@@ -644,7 +651,20 @@ def price_latest():
         raise _no_data("market price")
     data["measured"] = True
     _price_cache.update({"at": now, "data": data})
-    return data
+    return dict(data, next_refresh_in=_price_next_refresh_in(now))
+
+
+def _price_next_refresh_in(now: float) -> int:
+    """Seconds until the sampler can have written a new reading.
+
+    The worker aligns to the minute and then needs a moment for the RPC call and
+    the write, so the countdown targets the next boundary plus a small grace.
+    Without that grace the page would fetch exactly at :00 and reliably read the
+    previous minute, making every other refresh look like a price that held.
+    """
+    interval = pipeline.PRICE_SAMPLE_INTERVAL_S
+    grace = 5
+    return max(1, round(interval - (now % interval) + grace))
 
 
 @app.get("/v1/price/series", tags=["price"], summary="Price over time")

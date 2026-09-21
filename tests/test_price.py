@@ -134,6 +134,29 @@ def test_latest_reports_how_long_the_price_has_stood():
     assert body["measured"] is True
 
 
+def test_latest_says_when_a_new_reading_can_exist():
+    """A live page has to count down to real data, not to a cache expiry.
+
+    The sampler writes minute-aligned readings, so the next one lands on the
+    next minute boundary. `next_refresh_in` follows that, not this server's
+    15-second response cache — a countdown on the cache would reach zero four
+    times a minute, three of them with nothing new behind it.
+    """
+    path, _ = _store_with_prices()
+    c = _client(path)
+
+    body = c.get("/v1/price/latest").json()
+    nxt = body["next_refresh_in"]
+    assert 0 < nxt <= pipeline.PRICE_SAMPLE_INTERVAL_S + 5, nxt
+
+    # The second call is served from the cache, and must still count DOWN --
+    # returning the cached body verbatim would freeze the page's countdown.
+    time.sleep(1.1)
+    again = c.get("/v1/price/latest").json()
+    assert again["next_refresh_in"] < nxt, (nxt, again["next_refresh_in"])
+    assert again["price"] == body["price"], "the cached reading itself must not change"
+
+
 def test_the_series_declares_itself_as_steps():
     """A consumer that smooths this into a curve invents motion between two
     measurements. The payload says outright how it must be drawn."""

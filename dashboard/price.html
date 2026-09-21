@@ -53,7 +53,8 @@
    weil "zerstört" nicht wie ein Navigationselement aussehen darf. Der Preis
    dagegen IST die Hauptgröße dieser Seite — er darf die Leitfarbe tragen.
    Die Epochenmarken nehmen Violett (--accent2), damit sie klar als zweite,
-   andersartige Information lesbar sind und nicht als Teil der Kurve. */
+   andersartige Information lesbar sind und nicht als Teil der Kurve.
+
    Hoch- und Tiefmarke nehmen die Textfarbe, nicht die Serienfarbe: sie sind
    eine Ablesehilfe auf der Kurve, keine zweite Reihe. `--chart-halo` ist die
    Kartenfarbe, gegen die diese Beschriftung freigestellt wird, damit sie auch
@@ -130,6 +131,80 @@
 .hero-facts {
   display: grid; gap: 10px; margin-top: 18px;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+/* ─── Refresh-Ticker ────────────────────────────────────────────────────────
+   Gleiche Bauart wie in mining.html, damit die beiden Live-Seiten dasselbe
+   Zeichen für "die Seite sieht noch hin" tragen. Der Countdown zählt auf die
+   nächste Worker-Messung, nicht auf den Server-Cache: der Preis entsteht
+   minütlich, und eine Uhr, die viermal pro Minute auf null läuft, hätte
+   dreimal nichts anzukündigen. */
+.refresh-bar {
+  font-size: 11.5px; color: var(--muted);
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 12px 4px 10px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--surface);
+  white-space: nowrap;
+}
+.refresh-bar .r-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--price-line); flex: 0 0 auto;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--price-line) 45%, transparent);
+  animation: rpulse 2s ease-out infinite;
+}
+.refresh-bar.stale .r-dot { animation: none; background: var(--warn); }
+.refresh-bar.error .r-dot { animation: none; background: var(--danger); }
+/* Laden ist keine Warnung: der erste Abruf ist schlicht unterwegs. Der Punkt
+   behält die Serienfarbe und pulst schneller, statt gelb zu werden. */
+.refresh-bar.loading .r-dot { animation: rpulse 1s ease-out infinite; }
+@keyframes rpulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--price-line) 45%, transparent); }
+  70%  { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* ─── Aufleuchten bei neuen Daten ───────────────────────────────────────────
+   Derselbe Griff wie beim solution_count in mining.html: kein Rahmen um den
+   Wert — der läse sich als Darstellungsfehler —, sondern der Wert selbst wird
+   kurz heller und fällt zurück. */
+@keyframes dataflash {
+  0%   { filter: brightness(1); text-shadow: none; }
+  22%  { filter: brightness(1.5);
+         text-shadow: 0 0 14px color-mix(in srgb, var(--price-line) 60%, transparent),
+                      0 0 46px color-mix(in srgb, var(--price-line) 34%, transparent); }
+  100% { filter: brightness(1); text-shadow: none; }
+}
+.flash { animation: dataflash 1.1s ease-out; }
+
+/* Die Kurve bekommt beim Eintreffen eines neuen Preises einen kurzen
+   Helligkeitsschub. Bewusst schwächer als der Ring am letzten Punkt: der Ring
+   sagt WO der neue Wert sitzt, die Linie nur DASS etwas ankam. */
+@keyframes lineflash {
+  0%   { filter: brightness(1); }
+  25%  { filter: brightness(1.45); }
+  100% { filter: brightness(1); }
+}
+.chart-svg.flash-line .price-line,
+.chart-svg.flash-line .price-area { animation: lineflash .85s ease-out; }
+
+/* Der Ring am rechtesten Kurvenpunkt: er schwillt einmal an und verklingt —
+   dort, wo der neue Wert tatsächlich angekommen ist. */
+@keyframes tippulse {
+  0%   { r: 3; opacity: .95; }
+  100% { r: 15; opacity: 0; }
+}
+.tip-pulse { animation: tippulse 1.2s ease-out forwards; }
+/* Der ruhende Punkt bleibt stehen und markiert das "Jetzt"-Ende der Kurve. */
+.tip-dot { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .refresh-bar .r-dot,
+  .flash,
+  .chart-svg.flash-line .price-line,
+  .chart-svg.flash-line .price-area,
+  .tip-pulse { animation: none; }
+  /* Ohne Animation wäre der Puls-Ring ein stehender Kreis über der Kurve. */
+  .tip-pulse { display: none; }
 }
 
 /* ─── Chart ──────────────────────────────────────────────────────────────── */
@@ -325,6 +400,13 @@
     </div>
     <div class="spacer"></div>
     <div class="controls">
+      <!-- Refresh-Ticker: Alter der letzten Messung + Countdown auf die nächste -->
+      <div class="refresh-bar loading" id="refresh-bar" aria-live="polite">
+        <span class="r-dot" id="r-dot"></span>
+        <span id="r-ago">–</span>
+        <span style="color:var(--faint)">·</span>
+        <span><span data-i18n="inWord">in</span> <span id="r-countdown">–</span>s</span>
+      </div>
       <nav class="qs-nav" id="site-nav" aria-label="Sections">
         <a class="how-link qs-link" href="./" data-i18n="navReport">Report</a>
         <a class="how-link qs-link" href="./burn.html" data-i18n="burnReport">Burn</a>
@@ -594,6 +676,10 @@
       unavailApi: "API not reachable",
       unavailFile: "This page was opened as a file (file://) and has no API. Start the server and open it through that: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/price.html",
       chartEmpty: "No readings in this range.",
+      inWord: "in",
+      agoSuffix: "ago",
+      justNow: "just now",
+      noReading: "no reading",
       secondsShort: "s", minutesShort: "min", hoursShort: "h", daysShort: "d"
     },
     de: {
@@ -673,6 +759,10 @@
       unavailApi: "API nicht erreichbar",
       unavailFile: "Diese Seite wurde als Datei (file://) geöffnet und hat keine API. Starte den Server und öffne sie darüber: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/price.html",
       chartEmpty: "Keine Messungen in diesem Zeitraum.",
+      inWord: "in",
+      agoSuffix: "her",
+      justNow: "gerade eben",
+      noReading: "keine Messung",
       secondsShort: "s", minutesShort: "Min", hoursShort: "Std", daysShort: "T"
     }
   };
@@ -780,6 +870,24 @@
   let series = null;
   let study = null;
 
+  /* Wer Bewegung abbestellt hat, bekommt keine. Das CSS hält das ohnehin über
+     die Media Query; die Konstante verhindert zusätzlich, dass Klassen gesetzt
+     und Knoten angelegt werden, die dann nichts tun. */
+  const REDUCED = !!(window.matchMedia
+    && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  /* ─── Live-Aktualisierung ─────────────────────────────────────────────────
+     Der Preis wird vom Worker minütlich gemessen; `next_refresh_in` aus
+     /v1/price/latest sagt, wann die nächste Messung vorliegen kann. Die Seite
+     holt genau dann nach, statt auf einem festen 90-Sekunden-Raster zu liegen,
+     das gegenüber dem Minutentakt langsam wegdriftet. */
+  let prevPrice   = null;   // letzter gezeigter Preis, für den Vergleich
+  let flowPlaced  = false;  // Hintergrundspuren einmal am fertigen Hero ausgerichtet
+  let lastFetchTs = null;   // Unix-TS der letzten erfolgreichen Antwort
+  let countdownVal = 0;
+  let pollTimer = null;
+  let countdownTimer = null;
+
   /* ─── Chart ─────────────────────────────────────────────────────────────── */
   const SVG_NS = "http://www.w3.org/2000/svg";
   const chart = document.getElementById("chart");
@@ -802,8 +910,14 @@
      und eine durchgezogene Stufe würde behaupten, er habe gehalten. */
   const GAP_SLACK_S = 150;
 
-  function drawChart(payload) {
+  /* `pulse` ist wahr, wenn dieser Aufruf auf einen NEUEN Preis folgt. Nur dann
+     leuchtet die Kurve auf und der Ring am letzten Punkt geht auf. Neuzeichnen
+     aus anderem Anlass — Themenwechsel, Sprachwechsel, Fensterwahl, Resize —
+     lässt das Bild still, sonst wäre der Blitz kein Signal mehr, sondern eine
+     Eigenschaft des Scrollens. */
+  function drawChart(payload, pulse) {
     chart.innerHTML = "";
+    chart.classList.remove("flash-line");
     const empty = document.getElementById("chart-empty");
     const rows = (payload && payload.series) || [];
     const isHour = payload && payload.resolution === "hour";
@@ -940,15 +1054,25 @@
        so lange, wie alles andere am Layout gleich blieb: als der linke Rand
        für die größere Preisachse wuchs, schrumpfte plotW, die Schätzung nicht
        — und auf dem Telefon liefen zwei Marken ineinander. Deshalb wird die
-       Breite jetzt an einem echten Text gemessen, mit einem Sicherheitsabstand
-       von 14 Einheiten zwischen zwei Beschriftungen. */
+       Breite jetzt an einem echten Text gemessen.
+
+       Der Abstand wird dabei zwischen den RÄNDERN gerechnet, nicht zwischen
+       den Ankerpunkten: die erste Marke ist linksbündig, die zweite zentriert,
+       ihre Kanten liegen also nicht symmetrisch um die Anker. Wer nur Anker
+       gegen Anker prüft, hält zwei Marken für getrennt, die sich um wenige
+       Einheiten überlappen — genau das war hier auf dem Telefon der Fall. */
     const probe = el("text", { "font-size": 11, opacity: 0 }, fmtClock(tMin));
     chart.appendChild(probe);
     let measured = 0;
     try { measured = probe.getComputedTextLength(); } catch (e) { measured = 0; }
     chart.removeChild(probe);
-    const LABEL_W = (measured > 0 ? measured : 78) + 14;
-    const tickCount = Math.max(1, Math.min(6, Math.floor(plotW / LABEL_W)));
+    const labelW = measured > 0 ? measured : 78;
+    const GUTTER = 10;
+    /* Erste und letzte Marke liegen bündig am Rand, dazwischen sitzen die
+       zentrierten. Der engste Fall ist die erste gegen die zweite: die erste
+       belegt volle Breite nach rechts, die zweite eine halbe nach links. */
+    const needed = labelW * 1.5 + GUTTER;
+    const tickCount = Math.max(1, Math.min(6, Math.floor(plotW / needed)));
     for (let i = 0; i <= tickCount; i++) {
       const ts = tMin + tSpan * i / tickCount;
       chart.appendChild(el("text", {
@@ -1011,10 +1135,15 @@
       });
       area += ` L ${stepPts[stepPts.length - 1].x1} ${padT + plotH} Z`;
 
-      chart.appendChild(el("path", { d: area, fill: fillCol, stroke: "none" }));
+      /* Die Klassen sind das, woran das Aufleuchten greift: bei einem neuen
+         Preis bekommt das SVG `flash-line`, und nur diese beiden Knoten
+         reagieren darauf. Gitter, Achsen und Epochenmarken bleiben ruhig. */
+      chart.appendChild(el("path", {
+        d: area, fill: fillCol, stroke: "none", class: "price-area"
+      }));
       chart.appendChild(el("path", {
         d: line, fill: "none", stroke: lineCol, "stroke-width": 2,
-        "stroke-linejoin": "round"
+        "stroke-linejoin": "round", class: "price-line"
       }));
     }
 
@@ -1072,7 +1201,7 @@
           const xMid = Math.min(W - padR, Math.max(padL, (s.x0 + s.x1) / 2));
           const above = dir === "up";
           chart.appendChild(el("circle", {
-            cx: xMid, cy: s.y, r: 4, fill: extCol,
+            cx: xMid, cy: s.y, r: 3.5, fill: extCol,
             stroke: halo, "stroke-width": 1.5
           }));
           const label = (above ? "▲ " : "▼ ") + fmtPrice(s.price);
@@ -1090,12 +1219,39 @@
             class: "extreme-label",
             "font-size": narrow ? 11 : 12.5, "font-weight": 700, fill: extCol,
             "paint-order": "stroke",
-            stroke: halo, "stroke-width": 3.5,
+            stroke: halo, "stroke-width": 2.5, "stroke-opacity": .85,
             "stroke-linejoin": "round"
           }, label);
           chart.appendChild(txt);
         });
       }
+    }
+
+    /* Das "Jetzt"-Ende der Kurve: ein ruhender Punkt auf dem letzten Wert, und
+       darüber ein Ring, der bei einem neuen Preis einmal aufgeht. Der Ring
+       wird bei jedem Zeichnen angelegt, aber die Animation läuft nur, wenn
+       drawChart mit `pulse` gerufen wurde — ein Themenwechsel oder ein
+       Fensterwechsel zeichnet sonst neu und würde grundlos pulsen.
+
+       Nur bei Intervallauflösung: in der Stundenansicht ist der letzte Punkt
+       eine laufende, noch unvollständige Stunde, kein eingetroffener Kurs. */
+    const lastStep = stepPts.length ? stepPts[stepPts.length - 1] : null;
+    if (lastStep && !isHour) {
+      const nowX = Math.min(W - padR, lastStep.x1);
+      /* `REDUCED` gehört hierher und nicht nur ins CSS: dort wäre der Ring ein
+         versteckter Knoten, den jedes Zeichnen neu anlegt. Wer Bewegung
+         abbestellt hat, bekommt ihn gar nicht erst. */
+      if (pulse && !REDUCED) {
+        chart.appendChild(el("circle", {
+          cx: nowX, cy: lastStep.y, r: 3, fill: "none",
+          stroke: lineCol, "stroke-width": 2, class: "tip-pulse"
+        }));
+      }
+      chart.appendChild(el("circle", {
+        cx: nowX, cy: lastStep.y, r: 3, fill: lineCol,
+        stroke: cssVar("--chart-halo") || "#0b0f14", "stroke-width": 1.5,
+        class: "tip-dot"
+      }));
     }
 
     /* Unsichtbare Trefflächen pro Stufe — mindestens 8px breit, damit auch
@@ -1123,6 +1279,15 @@
 
     chart.setAttribute("aria-label",
       t("chartTitle") + ": " + fmtClock(tMin) + " – " + fmtClock(tMax));
+
+    /* Der Schimmer wird erst nach dem Aufbau gesetzt: die Klasse auf einem noch
+       leeren SVG hätte nichts zum Animieren, und ein Reflow dazwischen sorgt
+       dafür, dass die Animation auch bei zwei Preisen kurz hintereinander neu
+       startet statt stehenzubleiben. */
+    if (pulse && !REDUCED) {
+      void chart.offsetWidth;
+      chart.classList.add("flash-line");
+    }
   }
 
   function showStepTip(evt, s, isHour) {
@@ -1174,6 +1339,45 @@
     tip.style.top = Math.max(8, y) + "px";
   }
   function hideTip() { tip.classList.remove("show"); }
+
+  /* ─── Refresh-Ticker ────────────────────────────────────────────────────── */
+  /* Wie lange die letzte Messung her ist, in Worten. Sekundengenau nur unter
+     einer Minute — darüber wäre die Genauigkeit erfunden, weil der Worker
+     ohnehin im Minutenraster misst. */
+  function fmtAgo(unixTs) {
+    if (unixTs == null) return t("noReading");
+    const secs = Math.max(0, Math.round(Date.now() / 1000 - unixTs));
+    if (secs < 10) return t("justNow");
+    return fmtSpan(secs) + " " + t("agoSuffix");
+  }
+
+  function setRefreshState(state) {
+    const bar = document.getElementById("refresh-bar");
+    if (bar) bar.className = "refresh-bar " + (state || "");
+  }
+
+  function startCountdown(seconds) {
+    clearInterval(countdownTimer);
+    countdownVal = Math.max(1, Math.round(seconds));
+    const el = document.getElementById("r-countdown");
+    const agoEl = document.getElementById("r-ago");
+    function tick() {
+      if (el) el.textContent = countdownVal;
+      if (agoEl) agoEl.textContent = fmtAgo(lastFetchTs);
+      if (countdownVal > 0) countdownVal--;
+    }
+    tick();
+    countdownTimer = setInterval(tick, 1000);
+  }
+
+  /* Ein Wert leuchtet auf. Die Klasse wird erst entfernt und nach einem Reflow
+     neu gesetzt, sonst startet die Animation beim zweiten Mal nicht neu. */
+  function flashEl(el) {
+    if (!el || REDUCED) return;
+    el.classList.remove("flash");
+    void el.offsetWidth;
+    el.classList.add("flash");
+  }
 
   /* ─── Hero ──────────────────────────────────────────────────────────────── */
   function renderHero() {
@@ -1329,7 +1533,7 @@
     chart.hidden = true;
   }
 
-  async function loadSeries() {
+  async function loadSeries(pulse) {
     /* Unter 24 Stunden lohnt die Intervall-Auflösung, darüber wird die
        Stundenzusammenfassung geladen — sonst liefert ein Jahresfenster
        Zehntausende Punkte für ein Diagramm von 900 Pixeln Breite. */
@@ -1338,7 +1542,7 @@
     const q = windowSecs > 0 ? `&window=${windowSecs}` : "";
     try {
       series = await getJSON(`/v1/price/series?resolution=${res}${q}`);
-      drawChart(series);
+      drawChart(series, pulse);
     } catch (e) {
       series = null;
       drawChart({ series: [] });
@@ -1350,11 +1554,40 @@
   }
 
   async function loadAll() {
+    let changed = false;
     try {
       latest = await getJSON("/v1/price/latest");
+      /* Ein neuer Preis, nicht ein neuer Abruf. Qubics Kurs hält oft minutenlang
+         still — würde jeder Poll blitzen, wäre das Aufleuchten ein Zeichen für
+         "die Seite lebt" und nicht mehr für "der Preis hat sich bewegt". Beim
+         ersten Laden bleibt es ruhig: da ist noch nichts, wogegen sich etwas
+         geändert haben könnte. */
+      changed = prevPrice !== null && latest.price !== prevPrice;
+      prevPrice = latest.price;
+      lastFetchTs = latest.at != null ? latest.at : Math.round(Date.now() / 1000);
+
       renderHero();
+      if (changed) {
+        flashEl(document.getElementById("hero-price"));
+        /* Marktkapitalisierung und 24-Stunden-Änderung folgen unmittelbar aus
+           dem Preis, also leuchten sie mit. Umlauf und Epoche nicht: die
+           bewegen sich nach eigener Uhr und hätten hier nichts zu melden. */
+        flashEl(document.getElementById("f-cap"));
+        flashEl(document.getElementById("f-change"));
+      }
+      setRefreshState(latest.status === "stale" ? "stale" : "live");
     } catch (e) {
-      if (e && e.message === "file") { showBuilding(t("unavailFile")); return; }
+      setRefreshState("error");
+      lastFetchTs = null;
+      if (e && e.message === "file") {
+        clearInterval(countdownTimer);
+        const cd = document.getElementById("r-countdown");
+        const ago = document.getElementById("r-ago");
+        if (cd) cd.textContent = "–";
+        if (ago) ago.textContent = t("noReading");
+        showBuilding(t("unavailFile"));
+        return;
+      }
       showBuilding(e && e.status === 503 ? t("buildingBody") : t("unavailApi"));
     }
     /* Die Studie zuerst: das Diagramm zeichnet die Epochenmarken aus ihr. Ein
@@ -1366,7 +1599,27 @@
       study = null;
     }
     renderStudy();
-    await loadSeries();
+    await loadSeries(changed);
+    /* Jetzt steht der Hero in seiner endgültigen Höhe — die Hintergrundspuren
+       richten sich danach aus und werden deshalb einmal neu gesetzt. Nur beim
+       ersten Durchlauf: später bliebe die Höhe ohnehin gleich, und ein Neusetzen
+       würde die Spur sichtbar zurückspringen lassen. */
+    if (!flowPlaced && window.qdrRelayoutFlow) {
+      flowPlaced = true;
+      window.qdrRelayoutFlow();
+    }
+    scheduleNextPoll();
+  }
+
+  /* Der Server sagt, wann eine neue Messung vorliegen kann; ohne diese Angabe
+     — etwa auf dem Fehlerpfad — wird konservativ nachgefasst, damit eine Seite,
+     die einmal ins Leere gelaufen ist, nicht stehenbleibt. */
+  function scheduleNextPoll() {
+    clearTimeout(pollTimer);
+    const fromServer = latest && latest.next_refresh_in;
+    const secs = (fromServer > 0) ? fromServer : 30;
+    startCountdown(secs);
+    pollTimer = setTimeout(loadAll, secs * 1000);
   }
 
   /* ─── Controls ──────────────────────────────────────────────────────────── */
@@ -1430,27 +1683,34 @@
   })();
 
   /* ─── Hintergrund-Canvas ──────────────────────────────────────────────────
-     Das Motiv der Seite als Hintergrund, aber als Feld statt als Linien.
+     Eine einzige, sehr langsam wandernde Stufenkurve.
 
-     Vorher standen hier durchgezogene Stufenbänder. Die Idee war richtig — der
-     Hintergrund sollte dieselbe Regel wiederholen wie das Diagramm — die
-     Ausführung war es nicht: scharfe 1px-Linien, waagerecht, in genau den
-     Winkeln, in denen auch Panel- und Header-Kanten liegen. Das Auge las sie
-     als verrutschte Rahmen, nicht als Dekor; direkt unter dem Header sah die
-     Seite schlicht kaputt aus. Die beiden Schwesterseiten machen es anders:
-     burn.html streut weiche Glutpunkte, mining.html weiche Knoten. Beide
-     vermeiden gerade, achsparallele Kanten vollständig — deshalb konkurrieren
-     sie nie mit dem Layout.
+     Hier standen nacheinander zwei Fassungen, und beide sind an derselben
+     Stelle gescheitert — an der Frage, wie viel gleichzeitig passiert:
 
-     Hier also dasselbe Material — weiche, leuchtende Punkte — aber in der
-     Bewegung dieser Seite: ein Punkt steht eine Weile still, springt dann nach
-     oben oder unten und zieht dabei nach links. Halten, springen, halten. Das
-     ist genau die Regel, nach der die Kurve gezeichnet ist, nur ohne eine
-     einzige gerade Linie. Beim Sprung zieht ein kurzer Schweif mit, der sofort
-     ausblendet — er macht den Sprung sichtbar, ohne eine Kante zu hinterlassen.
+       1. Stufenbänder aus dünnen Linien. Scharfe 1px-Kanten, waagerecht, in
+          genau den Winkeln, in denen auch Panel- und Header-Ränder liegen —
+          das Auge las sie als verrutschte Rahmen, die Seite sah kaputt aus.
+       2. Ein Feld aus springenden Punkten, die bei jedem Sprung grün oder rot
+          aufleuchteten. Die Richtung war ablesbar, aber es zuckte an vielen
+          Stellen gleichzeitig; gemessen war fast die Hälfte des Feldes
+          dauernd farbig. Ruhe ließ sich daran nicht mehr nachregeln, weil das
+          Unruhige nicht die Helligkeit war, sondern die schiere Zahl
+          unabhängiger Ereignisse.
 
-     Gelesen wird nichts davon: die Sprünge sind gewürfelt, sie kodieren keinen
-     Kurs. Dass sie rein atmosphärisch sind, hält sie von den Messwerten
+     Deshalb jetzt genau ein bewegtes Objekt statt vieler: eine Stufenkurve,
+     die gleichmäßig nach links zieht. Nichts blinkt, nichts wechselt
+     sprunghaft seinen Zustand — die einzige Bewegung ist eine gleichförmige
+     Wanderung, und die nimmt das Auge als ruhig wahr, auch wenn sie nie
+     aufhört.
+
+     Die Regel der Seite bleibt sichtbar: waagerecht halten, senkrecht
+     springen, nie diagonal. Dass die Stufen weich und dick gezeichnet werden
+     statt als Haarlinien, ist die Lehre aus Fassung 1 — so entsteht keine
+     Kante, die mit dem Layout konkurriert.
+
+     Gelesen wird nichts davon: der Verlauf ist gewürfelt und kodiert keinen
+     Kurs. Dass er rein atmosphärisch ist, hält ihn von den Messwerten
      getrennt — dieselbe Trennung wie beim Glut-Canvas in burn.html. */
   (function ticker() {
     const canvas = document.getElementById("flow-canvas");
@@ -1459,115 +1719,179 @@
     const reduced = window.matchMedia
       && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    let ticks = [];
+    /* Zwei Linien: die vordere trägt die Form, die hintere läuft langsamer und
+       schwächer und gibt Tiefe. Mehr wären wieder ein Gitter. */
+    const LAYERS = 2;
+    let lines = [];
     let raf = null;
     let last = 0;
 
-    /* Auf hellem Grund verschluckt der Hintergrund die Punkte stärker als auf
-       dunklem, also wird dort kräftiger gezeichnet — dieselbe Korrektur wie in
-       mining.html, und aus demselben Grund aus der gemalten Farbe gelesen und
-       nicht aus dem Theme-Attribut, das bei „System folgen" leer ist. */
+    /* --bg steht als Hex in theme.css (#f2f4f9), nicht als rgb(). Eine frühere
+       Fassung suchte hier mit /\d+/ nach Dezimalzahlen und las aus "#f2f4f9"
+       die Ziffern 2, 4, 9 — Helligkeit 4, also "dunkel". Der Zuschlag für
+       hellen Grund hat dadurch nie gegriffen. Beide Schreibweisen werden
+       deshalb ausgewertet. */
     function isLightGround() {
-      const m = (cssVar("--bg") || "").match(/\d+/g);
-      if (!m || m.length < 3) return false;
-      return (0.299 * +m[0] + 0.587 * +m[1] + 0.114 * +m[2]) > 140;
+      const s = (cssVar("--bg") || "").trim();
+      let r, g, b;
+      let m = s.match(/^#([0-9a-f]{6})$/i);
+      if (m) {
+        const v = parseInt(m[1], 16);
+        r = (v >> 16) & 255; g = (v >> 8) & 255; b = v & 255;
+      } else if ((m = s.match(/^#([0-9a-f]{3})$/i))) {
+        r = parseInt(m[1][0] + m[1][0], 16);
+        g = parseInt(m[1][1] + m[1][1], 16);
+        b = parseInt(m[1][2] + m[1][2], 16);
+      } else {
+        const n = s.match(/\d+(?:\.\d+)?/g);
+        if (!n || n.length < 3) return false;
+        r = +n[0]; g = +n[1]; b = +n[2];
+      }
+      return (0.299 * r + 0.587 * g + 0.114 * b) > 140;
     }
 
-    /* Ein Punkt hält, springt, hält. `wait` ist die Restdauer des Haltens,
-       `from`/`to` die Flanke des laufenden Sprungs, `p` deren Fortschritt. */
-    function spawn(W, H, anywhere) {
-      const y = H * (.06 + Math.random() * .88);
-      return {
-        x: anywhere ? Math.random() * W : W + 20 + Math.random() * 60,
-        y: y,
-        from: y,
-        to: y,
-        p: 1,                                  /* 1 = steht gerade */
-        wait: .4 + Math.random() * 2.4,        /* s, Haltedauer */
-        vx: 9 + Math.random() * 20,            /* px/s, nach links */
-        r: 1.1 + Math.random() * 2.1,
-        alpha: .45 + Math.random() * .5,
-        phase: Math.random() * Math.PI * 2
+    /* Höhenlage mit Bedacht: die Ränder sind verboten, die Mitte ist verdeckt.
+
+       Ganz oben lief eine Linie fast waagerecht dicht unter der Header-Kante
+       durch — parallel zu einer echten Layout-Kante, und genau so las sie sich
+       auch: wie ein verrutschter Rahmen. Ganz unten gilt dasselbe gegenüber der
+       Fußzeile. Die Seitenmitte wiederum verdecken die Panels.
+
+       Feste Prozentwerte lösen das nicht: 27 % der Höhe liegen auf einem hohen
+       Desktop im freien Band unter dem Hero, auf einem 780 px hohen Telefon
+       aber mitten in der Preiszahl. Deshalb wird die Lage aus dem Layout
+       gelesen — unter der Hero-Zahl und unter den Karten — und nur dort, wo es
+       nichts zu messen gibt, auf Anteile zurückgefallen. */
+    /* Der Hero ist dichter belegt, als er aussieht: zwischen Preiszahl,
+       Haltedauer-Pille und Kachelreihe blieben gemessen 18 px, und über dem
+       Label nur 41 px — beides zu wenig, und das obere säße obendrein parallel
+       zur Header-Kante, also genau dort, wo diese Seite schon einmal nach
+       kaputtem Layout aussah.
+
+       Der großzügige Raum liegt unterhalb der Kacheln (gemessen 544 px). Beide
+       Spuren liegen deshalb dort, weit auseinander gezogen. Das Motiv wandert
+       damit aus dem Hero heraus — kein Verlust: dort steht die größte Zahl der
+       Seite, und die braucht keinen Hintergrund, der mit ihr konkurriert. */
+    function baseFor(i, H) {
+      const fallback = H * (i === 0 ? .46 : .78);
+      const facts = document.querySelector(".hero-facts");
+      if (!facts || !facts.getBoundingClientRect) return fallback;
+      const below = H - facts.getBoundingClientRect().bottom;
+      if (below < 150) return null;   /* zu flach für zwei Spuren */
+      const top = facts.getBoundingClientRect().bottom;
+      /* Auf 28 % und 68 % des freien Feldes: genug Abstand zur Kachelreihe
+         darüber, zum unteren Rand darunter und zwischen den beiden Spuren. */
+      return top + below * (i === 0 ? .28 : .68);
+    }
+
+    /* Eine Stufe ist ein Preis, der eine Weile stand: Breite = Haltedauer,
+       Höhe = Sprung. Viele kleine Sprünge, selten ein großer — im selben
+       Verhältnis wie echte Bewegung. */
+    function nextStep(prevY, band, base) {
+      const big = Math.random() < .14;
+      const jump = (Math.random() - .5) * band * (big ? 1.1 : .34);
+      const y = Math.max(base - band, Math.min(base + band, prevY + jump));
+      return { w: 70 + Math.random() * 190, y: y };
+    }
+
+    function makeLine(i) {
+      const W = canvas.width, H = canvas.height;
+      const base = baseFor(i, H);
+      if (base === null) return null;   /* keine Lage frei — Spur entfällt */
+      const line = {
+        base: base,
+        band: H * (i === 0 ? .075 : .085),
+        v: i === 0 ? 7 : 4.6,          /* px/s — bewusst sehr langsam */
+        width: i === 0 ? 2.6 : 2.0,
+        alpha: i === 0 ? .42 : .30,
+        x: 0,
+        steps: []
       };
+      let y = base;
+      let filled = 0;
+      /* Über die Breite hinaus vorfüllen, damit rechts keine angeschnittene
+         Kante steht. */
+      while (filled < W + 400) {
+        const s = nextStep(y, line.band, base);
+        y = s.y;
+        line.steps.push(s);
+        filled += s.w;
+      }
+      return line;
     }
 
     function seed() {
       canvas.width = canvas.offsetWidth;
       canvas.height = canvas.offsetHeight;
-      const W = canvas.width, H = canvas.height;
-      /* Anzahl nach Fläche, gedeckelt: ein hoher Monitor soll nicht leer
-         wirken, ein breiter nicht zu Rauschen werden. */
-      const n = Math.max(20, Math.min(72, Math.round(Math.sqrt(W * H) / 21)));
-      ticks = [];
-      for (let i = 0; i < n; i++) ticks.push(spawn(W, H, true));
+      lines = [];
+      for (let i = 0; i < LAYERS; i++) {
+        const L = makeLine(i);
+        if (L) lines.push(L);
+      }
     }
 
     function advance(dt) {
-      const W = canvas.width, H = canvas.height;
-      for (const t of ticks) {
-        t.x -= t.vx * dt;
-        if (t.x < -30) Object.assign(t, spawn(W, H, false));
-
-        if (t.p < 1) {
-          /* Der Sprung selbst ist kurz — er soll als Ruck lesbar sein, nicht
-             als Gleiten; sonst wäre es wieder eine Kurve. */
-          t.p = Math.min(1, t.p + dt * 5.5);
-          const e = t.p < .5 ? 4 * t.p * t.p * t.p
-                             : 1 - Math.pow(-2 * t.p + 2, 3) / 2;
-          t.y = t.from + (t.to - t.from) * e;
-        } else {
-          t.wait -= dt;
-          if (t.wait <= 0) {
-            /* Viele kleine Sprünge, selten ein großer — im selben Verhältnis
-               wie echte Bewegung. */
-            const big = Math.random() < .16;
-            const jump = (Math.random() - .5) * H * (big ? .12 : .035);
-            t.from = t.y;
-            t.to = Math.max(H * .04, Math.min(H * .96, t.y + jump));
-            t.p = 0;
-            t.wait = .4 + Math.random() * 2.4;
-          }
+      const W = canvas.width;
+      for (const L of lines) {
+        L.x -= L.v * dt;
+        /* Links Herausgelaufenes verwerfen, rechts nachlegen: die Spur bleibt
+           endlos, das Array kurz — die Arbeit pro Bild bleibt konstant, egal
+           wie lange der Tab offen steht. */
+        while (L.steps.length && L.x + L.steps[0].w < -300) {
+          L.x += L.steps.shift().w;
+        }
+        let end = L.x;
+        for (const s of L.steps) end += s.w;
+        while (end < W + 400) {
+          const prev = L.steps.length ? L.steps[L.steps.length - 1].y : L.base;
+          const s = nextStep(prev, L.band, L.base);
+          L.steps.push(s);
+          end += s.w;
         }
       }
     }
 
-    function paint(now) {
+    function paint() {
       const W = canvas.width, H = canvas.height;
       const col = cssVar("--price-line") || "#4ee0fc";
-      const boost = isLightGround() ? 1.5 : 1;
-      const t0 = (now || 0) / 1000;
+      /* Auf hellem Grund verschluckt die Seite die Spur stärker — und theme.css
+         dimmt `.qs-canvas` dort zusätzlich von .9 auf .55. Gemessen hob das den
+         alten Faktor 1.5 exakt wieder auf: beide Themes landeten bei derselben
+         Deckkraft, obwohl das helle mehr braucht. Der Faktor gleicht jetzt
+         beides aus. */
+      const boost = isLightGround() ? 2.4 : 1;
       ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = col;
-      ctx.strokeStyle = col;
+      /* Runde Enden und Ecken: eine Stufe bleibt als Stufe lesbar, bekommt
+         aber keine spitze Kante, die nach Layout aussieht. */
       ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = col;
 
-      for (const t of ticks) {
-        /* Langsames Pulsieren, damit das Feld auch im Halten lebt. */
-        const pulse = .78 + .22 * Math.sin(t0 * .8 + t.phase);
-        const a = Math.min(1, t.alpha * pulse * boost);
-
-        /* Der Schweif zeigt die Flanke, die der Punkt gerade zieht, und
-           verschwindet mit ihr. Kein bleibender Strich, keine Kante. */
-        if (t.p < 1) {
-          ctx.globalAlpha = a * .62 * (1 - t.p);
-          ctx.lineWidth = t.r * .9;
-          ctx.beginPath();
-          ctx.moveTo(t.x, t.from);
-          ctx.lineTo(t.x, t.y);
-          ctx.stroke();
-        }
-
-        /* Weicher Hof plus harter Kern — dieselbe Zeichnung wie die Glut in
-           burn.html, damit die drei Seiten als eine Familie lesen. */
-        ctx.globalAlpha = a * .38;
-        ctx.beginPath();
-        ctx.arc(t.x, t.y, t.r * 3.8, 0, Math.PI * 2);
-        ctx.fill();
+      for (const L of lines) {
+        /* Der Verlauf blendet die Spur an beiden Rändern aus, damit sie nirgends
+           angeschnitten beginnt oder endet. */
+        const grad = ctx.createLinearGradient(0, 0, W, 0);
+        const a = Math.min(1, L.alpha * boost);
+        grad.addColorStop(0, "rgba(0,0,0,0)");
+        grad.addColorStop(.16, col);
+        grad.addColorStop(.84, col);
+        grad.addColorStop(1, "rgba(0,0,0,0)");
 
         ctx.globalAlpha = a;
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = L.width;
         ctx.beginPath();
-        ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2);
-        ctx.fill();
+        let x = L.x;
+        let prevY = null;
+        for (const s of L.steps) {
+          if (prevY === null) ctx.moveTo(x, s.y);
+          else { ctx.lineTo(x, prevY); ctx.lineTo(x, s.y); }  /* senkrechter Sprung */
+          ctx.lineTo(x + s.w, s.y);                            /* die Haltedauer */
+          prevY = s.y;
+          x += s.w;
+          if (x > W + 300) break;
+        }
+        ctx.stroke();
       }
       ctx.globalAlpha = 1;
     }
@@ -1576,23 +1900,26 @@
       const dt = Math.min(.05, (now - last) / 1000 || 0);
       last = now;
       advance(dt);
-      paint(now);
+      paint();
       raf = requestAnimationFrame(loop);
     }
 
     function start() {
       if (raf) cancelAnimationFrame(raf);
       seed();
-      if (reduced) { paint(0); return; }   /* stehendes Feld, keine Bewegung */
+      if (reduced) { paint(); return; }   /* stehendes Bild, keine Bewegung */
       last = performance.now();
       raf = requestAnimationFrame(loop);
     }
     /* Ein Themenwechsel ändert --price-line, also wird neu gezeichnet. */
-    window.qdrRepaintFlow = () => paint(performance.now());
+    window.qdrRepaintFlow = paint;
+    /* Die Lage der Spuren hängt am Layout des Heros, und der steht erst, wenn
+       die Zahl und die Haltedauer-Pille geladen sind. Deshalb kann der Aufrufer
+       nach dem ersten Laden einmal neu setzen lassen. */
+    window.qdrRelayoutFlow = start;
     window.addEventListener("resize", start, { passive: true });
     start();
   })();
-
   /* ─── Start ─────────────────────────────────────────────────────────────── */
   applyTheme();
   applyLang();
@@ -1601,10 +1928,20 @@
      nicht das falsche Jahr behauptet. */
   var fy = document.getElementById("foot-year");
   if (fy) fy.textContent = String(new Date().getFullYear());
+  setRefreshState("loading");
+  /* loadAll() plant über scheduleNextPoll() seinen eigenen nächsten Lauf, aus
+     `next_refresh_in` des Servers. Ein festes Intervall gäbe es hier nicht mehr:
+     es würde gegenüber dem Minutentakt des Workers langsam wegdriften, bis der
+     Countdown regelmäßig auf eine Messung zeigt, die längst da war. */
   loadAll();
-  /* Der Preis wird minütlich neu gelesen; die Seite holt etwas seltener nach,
-     damit ein offener Tab nicht dauernd Anfragen stellt. */
-  setInterval(() => { loadAll(); }, 90000);
+
+  /* Ein Tab im Hintergrund bekommt seine Timer von Browsern gedrosselt, also
+     steht die Seite beim Zurückkommen unter Umständen auf einem alten Preis mit
+     abgelaufenem Countdown. Sichtbar werden heißt deshalb: sofort nachfassen. */
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (lastFetchTs == null || Date.now() / 1000 - lastFetchTs > 60) loadAll();
+  });
 })();
 </script>
 </body>

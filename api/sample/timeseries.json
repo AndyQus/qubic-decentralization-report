@@ -66,19 +66,35 @@
     },
     {
       "epoch": 229,
-      "status": "live",
+      "status": "sealed",
       "computors": 676,
       "operators": 676,
       "declared_operators": 0,
       "unattributed_slots": 676,
       "onchain_linked_share": 0.0,
       "attributed_share": 0.0,
-      "gini_revenue": 0.920594,
-      "hhi_revenue": 0.016123,
-      "nakamoto_one_third_revenue": 14,
-      "nakamoto_half_revenue": 23,
+      "gini_revenue": 0.025214,
+      "hhi_revenue": 5e-06,
+      "nakamoto_one_third_revenue": 219,
+      "nakamoto_half_revenue": 328,
       "nakamoto_one_third_slots": 226,
-      "top1_share": 0.032921
+      "top1_share": 0.001528
+    },
+    {
+      "epoch": 230,
+      "status": "sealed",
+      "computors": 676,
+      "operators": 676,
+      "declared_operators": 0,
+      "unattributed_slots": 676,
+      "onchain_linked_share": 0.0,
+      "attributed_share": 0.0,
+      "gini_revenue": 0.009324,
+      "hhi_revenue": 1e-06,
+      "nakamoto_one_third_revenue": 223,
+      "nakamoto_half_revenue": 334,
+      "nakamoto_one_third_slots": 226,
+      "top1_share": 0.001497
     }
   ]
 }
