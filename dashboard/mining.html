@@ -107,11 +107,17 @@ html { scroll-behavior: smooth; }
 }
 
 /* ─── Flash on new data ─────────────────────────────────────────────────────── */
+/* A ring drawn around the box would box in the number and read as a border
+   glitch, so the value itself brightens instead: the glow it already carries
+   swells for a moment and falls back to its resting state. */
 @keyframes dataflash {
-  0%   { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent); }
-  100% { box-shadow: none; }
+  0%   { filter: brightness(1); text-shadow: 0 0 40px var(--hero-glow); }
+  22%  { filter: brightness(1.55);
+         text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 60%, transparent),
+                      0 0 46px color-mix(in srgb, var(--accent) 38%, transparent); }
+  100% { filter: brightness(1); text-shadow: 0 0 40px var(--hero-glow); }
 }
-.flash { animation: dataflash .7s ease-out; }
+.flash { animation: dataflash 1.1s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   .flash { animation: none; }
 }
@@ -1833,9 +1839,9 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
       .then(data => {
         lastFetchTs = data.fetched_at || Math.floor(Date.now() / 1000);
 
-        /* Neue Daten → Flash auf den Hero-Container */
-        flashEl(document.querySelector(".hero-count-wrap"));
-
+        /* Kein Flash auf den Container: der feuerte bei jedem Poll, auch wenn
+           die Zahl gleich blieb. renderHero() leuchtet die Zahl selbst auf,
+           und zwar nur bei einer echten Änderung. */
         render(data);
         appendHistoryPoint(data);
 
