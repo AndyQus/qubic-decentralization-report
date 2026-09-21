@@ -20,6 +20,16 @@ cluster** — built on Qubic's **self-reporting** anti-Sybil approach and extend
 on-chain and behavioral signals to quantify concentration/collusion among the 676
 Computors.
 
+It has since grown two further measurements, both of figures the public RPC does not
+publish at the resolution they need, and each with its own page:
+
+| Page | Question it answers | Why it exists |
+|---|---|---|
+| **Report** (`/`) | How concentrated is the network, per epoch and over time? | The original request. |
+| **Burn** (`/dashboard/burn.html`) | How much QU is burned per day, and by which contract? | The RPC's `burnedQus` is a cumulative epoch aggregate — it does not move between boundaries, so it cannot answer "today". This counts the burn events themselves. |
+| **Mining Live** (`/dashboard/mining.html`) | What does the ant colony look like right now? | Live mining state is served from a node's peer port, not the RPC, and a node only answers for *now* — a reading not taken is gone. |
+| **How it works** (`/how-it-works`) | What is measured, and how? | Generated from `docs/CONCEPT*.md` at build time, so the page cannot disagree with the concept it was built from. |
+
 **Run it** (details under [Docker](#docker--publishing)). Two services share one volume:
 the ingest worker writes the store, the API serves it.
 
@@ -35,10 +45,12 @@ stays on "building the report" — the worker is what makes it self-updating.
 
 | | |
 |---|---|
-| ✅ **Revenue per computor slot** | From a Bob node's end-epoch log. Epochs 225-228 sealed with 676/676 computors paid — the public RPC does not expose these payouts at all (they are protocol emission, not transfers). |
+| ✅ **Revenue per computor slot** | From a Bob node's end-epoch log. Epochs 220-230 sealed, 676/676 computors paid in each — the public RPC does not expose these payouts at all (they are protocol emission, not transfers). |
 | ✅ **Concentration metrics + dynamics** | Gini, HHI, Nakamoto ⅓/½, top-N share, per epoch and over time. |
 | ✅ **Keeps itself current** | The worker backfills on first start, seals each epoch as it closes, and re-derives any epoch an older code version computed — a deploy retires the figures it corrects. |
-| ✅ **Honest about its limits** | No sample data, ever. An unfilled store answers 503 and the page says it is building. Every figure is labelled for what it measures. |
+| ✅ **Burned supply, per day and per contract** | Counted from a Bob node's tick logs, because the RPC's `burnedQus` only steps once per epoch. Backfills the days before the worker existed by dating past ticks from measurement. Measured 2026-09-17: 194,520,597 QU of contract burns in one day, dominated by QEarn. |
+| ✅ **Live mining state, with history** | The colony's figures come from a node's peer port and are not replayable, so the worker samples them on a timer and keeps a rolling two-epoch window. |
+| ✅ **Honest about its limits** | No sample data, ever. An unfilled store answers 503 and the page says it is building. Every figure is labelled for what it measures — a partial day says so, and the chart refuses to aggregate one into a period. |
 | 🔶 **Operator attribution: 0%** | **The one thing still missing, and it needs the community, not more code.** See below. |
 | 🔶 **Explorer embedding** | Widget, iframe and raw API are shipped (`docs/EMBEDDING.md`); no explorer has adopted it yet. |
 
@@ -160,6 +172,22 @@ The API is FastAPI, so the interactive docs come with it — no extra setup:
 | `http://localhost:8000/redoc` | ReDoc — the same spec, easier to read |
 | `http://localhost:8000/openapi.json` | OpenAPI spec (import into Postman/Insomnia, generate clients) |
 | `http://localhost:8000/api` | plain JSON index of the endpoints |
+
+**The endpoints, grouped by what they answer:**
+
+| Group | Endpoints |
+|---|---|
+| **Report** | `/v1/report/latest`, `/v1/report/{epoch}`, `/v1/report/{epoch}/versions`, `/v1/report/{epoch}/snapshot.json`, `/v1/epochs`, `/v1/clusters/{epoch}` |
+| **Metrics** | `/v1/metrics/timeseries`, `/v1/dashboard-data` |
+| **Burn** | `/v1/burn/latest`, `/v1/burn/series?by=day\|epoch\|year`, `/v1/burn/contracts`, `/v1/burn/coverage` |
+| **Mining** | `/v1/mining` (live reading), `/v1/mining/series` (stored history) |
+| **Service** | `/v1/pulse`, `/v1/store`, `/v1/diagnostics` (*why is the report empty?*), `/v1/log` (worker tail), `/health` |
+
+Every endpoint answers `503` rather than inventing a figure the store cannot back
+(`tests/test_burn_page.py`, `tests/test_mining.py`). The API also never *writes*:
+one writer, many readers — a rule with a history, since an API process running an
+older build used to recompute epochs on request and overwrite the worker's
+corrections behind its back (`tests/test_api_is_read_only.py`).
 
 ### Embedding in an explorer
 
@@ -304,8 +332,9 @@ docker image prune -f              # remove the superseded image
 | `QDR_MINING_SAMPLE_INTERVAL` | Seconds between mining samples written to the store by the ingest worker | `30` |
 | `QDR_BURN_BACKFILL_DAYS` | Days of burn history to count on start, from before the worker existed (see below) | `4` (one epoch; `0` disables) |
 | `QDR_BURN_BACKFILL_CALLS` | Call budget for that backfill | `days x 300 + 100` (~270 calls buy one day) |
+| `QDR_BURN_BACKFILL_INTERVAL` | Seconds between re-checks for a finished day that is still half-measured (an idle check costs no network call) | `3600` |
 
-### Burn history: why it starts empty, and how to fill it
+### Burn history: why the live scan alone cannot fill it
 
 Tick logs carry no timestamp. The live scan therefore dates a burn by the moment
 it watched it happen, which is only true near the chain head — so a fresh
@@ -316,8 +345,8 @@ anything).
 
 Older days are not lost, only unfilled: `/v1/ticks/{t}/tick-data` carries a real
 wall-clock time, so a past tick can be dated by measurement rather than assumed
-from a tick rate. The worker therefore counts the last **4 days** (one epoch) on
-its first start, and `QDR_BURN_BACKFILL_DAYS` changes or disables that:
+from a tick rate. The worker therefore keeps the last **4 days** (one epoch)
+filled, and `QDR_BURN_BACKFILL_DAYS` changes or disables that:
 
 ```bash
 docker run -e QDR_BURN_BACKFILL_DAYS=7 ...        # more history
@@ -329,19 +358,43 @@ It defaults to **on** despite costing a few hundred calls against a public node,
 because the deployment this image serves is installed by a watcher that pulls the
 image and sets no environment. An opt-in flag there could never be switched on,
 and the burn page would stay at a single partial day permanently — a default
-nobody can reach is not a choice. The cost is paid once per deployment.
+nobody can reach is not a choice. The cost is paid once per day of history, not
+once per restart.
+
+How much history is available at all is the node's decision, not this setting's:
+measured 2026-09-20, `bob.qubic.li` retained **4.2 days** (its `initialTick` to
+its current indexing tick). Asking for more is not an error — the window is
+clamped to what the node still holds — but it cannot conjure ticks the node has
+dropped.
 
 A day of chain is ~134,000 ticks at the measured 1.55 ticks/s and one call
 covers 500, so **a day costs ~270 calls**; the budget scales with the days asked
 for unless `QDR_BURN_BACKFILL_CALLS` overrides it. A run that exhausts its budget
-stops partway, is *not* recorded as done, and resumes on the next start.
+stops partway and is *not* recorded as done, so the next pass continues it.
 
-It runs **once**: a completed window is recorded in the store and a restart
-skips it, so a host that reinstalls the image on every push does not re-scan the
-same ticks. A run that stopped early — at a gap Bob could not serve, or on its
-call budget — is *not* recorded, so it resumes on the next start instead of
-leaving a silent hole. `--burn-backfill-force` recounts a window already recorded
-as done.
+It does not re-scan work already done, and it does not stop watching either.
+Two questions, asked in that order:
+
+- **"Is the last complete day in the report?"** — checked against the measurement
+  itself: a day counts as done when its stored buckets cover ≥95% of that day's
+  own measured tick span, the same threshold the chart uses for its `partial`
+  flag, so the two can never disagree. Today is excluded, because it is still
+  running and the live scan owns it.
+- **"Did we already scan this stretch of chain?"** — a completed tick window is
+  recorded in the store, so a host that reinstalls the image on every push does
+  not re-scan the same ticks.
+
+The day question has to come first, and not only for correctness: a new day lies
+outside every recorded tick window, so the window marker alone would never notice
+that midnight had turned the running day into a half-measured finished one. The
+worker therefore re-checks every hour (`QDR_BURN_BACKFILL_INTERVAL`). An idle
+check costs **one local SQLite query and no network call at all** — the gap check
+runs before the tick window is resolved, which is itself ~20 RPC lookups.
+
+A run that stopped early — at a gap Bob could not serve, or on its call budget —
+is *not* recorded, so the next pass resumes it rather than leaving a silent hole.
+`--burn-backfill-force` recounts a window already recorded as done, and
+`--burn-status` prints what each day actually holds.
 
 Until one whole day has been measured, the chart's Epoch and Year views stay
 disabled: aggregating a partial day would draw an hour as though it were a full
@@ -371,8 +424,32 @@ gap in the curve is a gap in the measurement, and is shown as one.
 
 ## Status
 
-Working end-to-end on sample data: research + core engine + persistent store + API +
-dashboard are in place.
+Running live at **https://report.qubic.tools** — four pages, 230 tests, version 0.6.0.
+
+**v0.6** added the burn measurement and moved the design into one stylesheet:
+
+- **Burned supply per day and per contract.** The RPC publishes one cumulative counter
+  that only steps at an epoch boundary, so a daily figure has to be counted from a node's
+  own burn events. Two event shapes are counted and reported separately, because they
+  answer different questions: transfers to the burn address (netted, since most
+  1,000,000 QU round trips come straight back) and `BURNING` events, which are the only
+  source that says what a burn was *for*.
+- **Historical backfill.** Tick logs carry no timestamp, so the live scan can only date
+  what it watches happen and a new deployment's series began at its own cold start.
+  `/v1/ticks/{t}/tick-data` carries a real wall-clock time, so past ticks are dated by
+  bisection — ~20 lookups per day boundary, no tick-rate assumption anywhere. The worker
+  fills the last 4 days on start and re-checks hourly, so a finished day cannot be left
+  half-measured.
+- **Coverage is a measurement over a measurement.** A day's denominator is that day's own
+  measured tick span, not a constant: the real rate averages 1.55 ticks/s and varies 29%
+  between days, which used to make complete days report 50-65% coverage.
+
+**v0.5** added the live mining page and the worker's mining sampler. **v0.4** made the
+image run its own ingest and follow the host's container conventions, and kept the service
+serving when the data volume cannot be written. **v0.3** made a deploy retire the figures
+its own code corrects: every start re-derives epochs computed by an older `code_version`.
+`/v1/log` and `/log.html` came alongside, so an operator without shell access can tell
+"still building" from "broken".
 
 **v0.2** reworked the analysis after community feedback (see
 [`docs/CONCEPT.md`](docs/CONCEPT.md) §7.1):
