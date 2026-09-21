@@ -834,6 +834,53 @@ def backfill_burns(
             "boundaries": ranges}
 
 
+def missing_burn_days(store: Store, days: int, today: Optional[str] = None) -> list[str]:
+    """Which of the last `days` FINISHED UTC days are not fully measured yet.
+
+    The tick-window marker (`burn_backfill_runs`) answers "did we already scan
+    this stretch of chain?", which is the right question for skipping repeated
+    work but the wrong one for staying current: tomorrow is a new day outside
+    every recorded window, so the marker says nothing about it, while the live
+    scan only ever covers a slice of it.
+
+    This asks the question an operator actually has — "is the last complete day
+    in the report?" — against the measurement itself. A day counts as done when
+    its stored buckets cover at least 95% of the day's own measured tick span,
+    the same threshold `build_burn_series` uses for the `partial` flag, so the
+    chart and this check can never disagree about what "complete" means.
+
+    Today is excluded: it is still running, the live scan owns it, and it cannot
+    be complete by definition. A day with no measured span at all is reported as
+    missing, because "we never looked" is not "we found nothing".
+    """
+    if days <= 0:
+        return []
+    today = today or burn.observed_day()
+    spans = store.day_ticks()
+    scanned: dict[str, int] = {}
+    for row in store.burn_series(by="day"):
+        span_ticks = int(row["to_tick"]) - int(row["from_tick"]) + 1
+        scanned[row["key"]] = max(scanned.get(row["key"], 0), span_ticks)
+
+    out = []
+    start = dating.day_start(today)
+    # `days` counts back INCLUSIVE of today, matching the tick window
+    # `backfill_burns_days` resolves (days=4 -> today and the three days before
+    # it). Today is then dropped, because it is still running. The two must
+    # agree: a check looking one day further back than the window can fill would
+    # report a day as missing forever and the backfill would never settle.
+    for back in range(1, int(days)):            # 1 = yesterday; today is excluded
+        day = dating.day_of(start - back * dating.SECONDS_PER_DAY)
+        span = spans.get(day)
+        if not span or not span.get("complete"):
+            out.append(day)                      # never dated, or still open
+            continue
+        period = int(span["to_tick"]) - int(span["from_tick"]) + 1
+        if scanned.get(day, 0) < period * 0.95:
+            out.append(day)
+    return sorted(out)
+
+
 def backfill_burns_days(
     client: CachedClient,
     store: Store,
@@ -842,6 +889,7 @@ def backfill_burns_days(
     max_calls: int = 400,
     force: bool = False,
     progress=None,
+    today: Optional[str] = None,
 ) -> dict:
     """Backfill the last `days` whole UTC days, once per deployment.
 
@@ -868,6 +916,26 @@ def backfill_burns_days(
     if days <= 0:
         return {"scanned": 0, "reason": "disabled"}
 
+    # The cheap question first, before any network call.
+    #
+    # This runs on a timer (the worker re-checks hourly, because midnight turns
+    # the running day into a finished one). Resolving the tick window costs ~20
+    # RPC lookups by bisection, and paying that every hour to learn there is
+    # nothing to do would be 20 pointless requests an hour against a public node
+    # for the lifetime of the deployment. `missing_burn_days` reads the local
+    # store only, so an idle pass costs one SQLite query and no network at all.
+    #
+    # `force` still has to reach the work, so it skips this shortcut.
+    # Which UTC day it is decides both the window and what counts as missing, so
+    # it is resolved once here and threaded through. A caller may pin it — tests
+    # do, because a test whose result depends on the wall clock passes today and
+    # fails tomorrow, which is how this parameter came to exist.
+    today = today or burn.observed_day()
+    missing = missing_burn_days(store, days, today=today)
+    if not force and not missing and store.burn_backfill_runs():
+        return {"scanned": 0, "reason": "already done", "missing_days": [],
+                "still_missing": []}
+
     try:
         info = client.tick_info()
         head = int(info.get("tick") or 0)
@@ -891,7 +959,7 @@ def backfill_burns_days(
     # from a tick rate is exactly the mistake this module's dating exists to
     # retire: the rate the old code assumed (~2.7/s) is nearly double the
     # measured one, so "N days back" by arithmetic would land on the wrong day.
-    target = dating.day_start(burn.observed_day()) - (int(days) - 1) * dating.SECONDS_PER_DAY
+    target = dating.day_start(today) - (int(days) - 1) * dating.SECONDS_PER_DAY
     floor = max(initial, 0) if initial else max(0, hi - 2_000_000)
     lo = dating.find_first_tick_at_or_after(client.tick_timestamp, target, floor, hi)
     if lo is None:
@@ -902,9 +970,19 @@ def backfill_burns_days(
     if lo >= hi:
         return {"scanned": 0, "reason": "nothing to backfill", "from_tick": lo}
 
-    if not force and store.burn_backfill_done(lo, hi):
+    # Skip only when there is nothing left to fill. Two questions, and the day
+    # one has to come first:
+    #
+    #   * `missing_burn_days` asks whether the last N finished days are actually
+    #     in the report. This is what keeps a long-running deployment current:
+    #     tomorrow is a new day outside every recorded tick window, so the window
+    #     marker alone would never notice it was missing.
+    #   * the window marker then prevents re-scanning a stretch of chain that a
+    #     previous run already counted, which is what makes this safe to call on
+    #     every container start.
+    if not force and not missing and store.burn_backfill_done(lo, hi):
         return {"scanned": 0, "reason": "already done",
-                "from_tick": lo, "to_tick": hi}
+                "from_tick": lo, "to_tick": hi, "missing_days": []}
 
     out = backfill_burns(client, store, bob, from_tick=lo, to_tick=hi,
                          max_calls=max_calls, progress=progress)
@@ -924,6 +1002,10 @@ def backfill_burns_days(
     else:
         out["recorded"] = False
     out["requested_days"] = int(days)
+    out["missing_days"] = missing
+    # What is STILL missing after this pass — the honest answer to "is the last
+    # complete day in the report?", asked again now that the work is done.
+    out["still_missing"] = missing_burn_days(store, days, today=today)
     return out
 
 

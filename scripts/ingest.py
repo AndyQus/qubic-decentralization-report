@@ -351,6 +351,10 @@ def main() -> int:
               f"{out['days']} day-bucket(s) written")
         for g in out.get("gaps") or []:
             print(f"  ! gap, not counted: {g[0]}..{g[1]}", file=sys.stderr)
+        if out.get("still_missing"):
+            # The question an operator actually asks, answered after the work:
+            # is the last complete day in the report?
+            print(f"  ! still not fully measured: {', '.join(out['still_missing'])}")
         if args.burn_backfill_days and not out.get("recorded"):
             # Say it out loud: an unrecorded run will be attempted again on the
             # next start, which is the intended behaviour but looks like a loop

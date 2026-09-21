@@ -31,6 +31,11 @@ WALLET = "W1" + "Y" * 58
 RATE = 1.55
 LO = 1_000_000
 DAY0 = "2026-09-17"
+# The synthetic chain ends here, and every test that asks "which days are
+# missing?" must be told so. Without it the answer is read off the real wall
+# clock: these tests passed on 2026-09-20 and failed the next morning, because
+# the day the chain ends became "yesterday" and was duly reported missing.
+TODAY = "2026-09-20"
 BASE_TS = dating.day_start(DAY0)
 
 
@@ -245,14 +250,14 @@ def test_a_completed_backfill_is_not_repeated_on_the_next_start():
     bob = FakeBob(burn_ticks=[_tick_at("2026-09-18", hour=13)], indexed=head)
 
     first = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3,
-                                         max_calls=2000)
+                                         max_calls=2000, today=TODAY)
     assert first.get("reason") is None
     assert first["recorded"] is True
     calls_after_first = len(bob.calls)
     assert calls_after_first > 0
 
     second = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3,
-                                          max_calls=2000)
+                                          max_calls=2000, today=TODAY)
     assert second["reason"] == "already done"
     assert len(bob.calls) == calls_after_first, "the node was scanned twice"
 
@@ -264,11 +269,11 @@ def test_a_backfill_that_hit_a_gap_is_retried_on_the_next_start():
     # Bob refuses everything from midway on, so the run stops at a gap.
     bob = FakeBob(indexed=head, fail_from=_tick_at("2026-09-19"))
 
-    out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3)
+    out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3, today=TODAY)
     assert out["recorded"] is False
     assert not store.burn_backfill_done(out["from_tick"], out["to_tick"])
 
-    again = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3)
+    again = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3, today=TODAY)
     assert again.get("reason") != "already done"
 
 
@@ -277,10 +282,10 @@ def test_force_reruns_a_window_already_recorded():
     store = fresh_store()
     bob = FakeBob(burn_ticks=[_tick_at("2026-09-18", hour=13)], indexed=head)
 
-    pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3)
+    pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3, today=TODAY)
     before = len(bob.calls)
     out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3,
-                                       force=True)
+                                       force=True, today=TODAY)
     assert out.get("reason") is None
     assert len(bob.calls) > before
 
@@ -290,7 +295,7 @@ def test_zero_days_is_off_and_never_calls_the_node():
     head = _tick_at("2026-09-20", hour=1)
     bob = FakeBob(indexed=head)
     client = FakeClient(head)
-    out = pipeline.backfill_burns_days(client, fresh_store(), bob, days=0)
+    out = pipeline.backfill_burns_days(client, fresh_store(), bob, days=0, today=TODAY)
     assert out["reason"] == "disabled"
     assert not bob.calls and client.lookups == 0
 
@@ -305,7 +310,7 @@ def test_the_window_starts_at_a_measured_day_boundary_not_an_assumed_rate():
     head = _tick_at("2026-09-20", hour=6)
     store = fresh_store()
     bob = FakeBob(indexed=head)
-    out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=2)
+    out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=2, today=TODAY)
     # Day 2 of 2 counting back from 2026-09-20 is 2026-09-19.
     expected = _tick_at("2026-09-19")
     assert abs(out["from_tick"] - expected) <= 2, (out["from_tick"], expected)
@@ -317,7 +322,7 @@ def test_a_window_older_than_bobs_history_starts_at_bobs_floor():
     floor = _tick_at("2026-09-19", hour=12)
     store = fresh_store()
     bob = FakeBob(indexed=head, initial=floor)
-    out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=30)
+    out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=30, today=TODAY)
     assert out["from_tick"] >= floor
     for frm, _to in bob.calls:
         assert frm >= floor
@@ -332,7 +337,7 @@ def test_a_run_that_ran_out_of_budget_is_not_recorded_as_done():
     store = fresh_store()
     bob = FakeBob(indexed=head)
     out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3,
-                                       max_calls=2)          # far too few
+                                       max_calls=2, today=TODAY)          # far too few
     assert not out["gaps"], "this test is only meaningful without a gap"
     assert out["complete"] is False
     assert out["reached_tick"] < out["to_tick"]
@@ -341,7 +346,7 @@ def test_a_run_that_ran_out_of_budget_is_not_recorded_as_done():
 
     # and the next start must therefore still do the work
     again = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3,
-                                         max_calls=2)
+                                         max_calls=2, today=TODAY)
     assert again.get("reason") != "already done"
 
 
@@ -352,7 +357,7 @@ def test_a_full_run_reports_complete_and_is_recorded():
     store = fresh_store()
     bob = FakeBob(burn_ticks=[_tick_at("2026-09-19", hour=4)], indexed=head)
     out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3,
-                                       max_calls=2000)
+                                       max_calls=2000, today=TODAY)
     assert out["complete"] is True
     assert out["reached_tick"] >= out["to_tick"]
     assert out["recorded"] is True
@@ -423,3 +428,121 @@ def test_two_writers_on_one_store_do_not_error():
     assert not errs, errs
     days = {r["key"] for r in Store(store_path).burn_series(by="day")}
     assert "2026-09-20" in days and "2026-09-16" in days
+
+
+# ── staying current, not just "having run once" ────────────────────────────
+#
+# The tick-window marker answers "did we scan this stretch of chain?". That is
+# the right question for not repeating work and the wrong one for staying
+# current: tomorrow is a new day outside every recorded window. These pin the
+# day-level check that actually answers "is the last complete day in the report?"
+
+
+def test_a_fully_measured_day_is_not_reported_missing():
+    store = fresh_store()
+    day = "2026-09-19"
+    store.put_day_ticks(day, 1000, 134_919, complete=True)
+    store.put_burn_bucket(from_tick=1000, to_tick=134_919, epoch=231, day=day,
+                          burned=5, burn_events=1, contract_burned=0,
+                          contract_events=0, by_contract={})
+    assert pipeline.missing_burn_days(store, days=2, today="2026-09-20") == []
+
+
+def test_a_day_covered_only_in_part_is_reported_missing():
+    """The live scan's slice of a day is not the day."""
+    store = fresh_store()
+    day = "2026-09-19"
+    store.put_day_ticks(day, 1000, 134_919, complete=True)
+    store.put_burn_bucket(from_tick=1000, to_tick=11_000, epoch=231, day=day,
+                          burned=5, burn_events=1, contract_burned=0,
+                          contract_events=0, by_contract={})
+    assert pipeline.missing_burn_days(store, days=2, today="2026-09-20") == [day]
+
+
+def test_a_day_never_looked_at_is_reported_missing():
+    """'We never looked' is not 'we found nothing'."""
+    assert pipeline.missing_burn_days(fresh_store(), days=2,
+                                      today="2026-09-20") == ["2026-09-19"]
+
+
+def test_today_is_never_reported_missing():
+    """It is still running and the live scan owns it."""
+    store = fresh_store()
+    got = pipeline.missing_burn_days(store, days=3, today="2026-09-20")
+    assert "2026-09-20" not in got
+
+
+def test_the_check_spans_the_same_window_the_backfill_fills():
+    """days=3 means today plus the two before it, on both sides.
+
+    A check reaching one day further back than the window can fill would report
+    that day missing forever, and the backfill would never settle.
+    """
+    got = pipeline.missing_burn_days(fresh_store(), days=3, today="2026-09-20")
+    assert got == ["2026-09-18", "2026-09-19"]
+
+
+def test_a_new_day_reopens_the_backfill_although_the_window_was_recorded():
+    """The case a long-running deployment actually hits: yesterday's window was
+    recorded as done, then midnight passed. The marker knows nothing about the
+    new day; the day check must, or the report silently stops growing."""
+    head = _tick_at("2026-09-20", hour=1)
+    store = fresh_store()
+    bob = FakeBob(burn_ticks=[_tick_at("2026-09-19", hour=4)], indexed=head)
+    first = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3,
+                                         max_calls=2000, today=TODAY)
+    assert first["recorded"] is True
+    assert first["still_missing"] == []
+
+    # A day passes: the same window is still recorded, but 2026-09-20 is now a
+    # finished day nobody counted in full.
+    assert pipeline.missing_burn_days(store, days=3, today="2026-09-21")
+
+
+def test_an_idle_pass_makes_no_network_calls_at_all():
+    """The worker re-checks hourly, so an idle pass must be free.
+
+    Resolving the tick window costs ~20 RPC lookups by bisection. Paying that
+    every hour to learn there is nothing to do would be 20 pointless requests an
+    hour against a public node, forever. The gap check reads the local store, so
+    it has to come first.
+    """
+    head = _tick_at("2026-09-20", hour=1)
+    store = fresh_store()
+    bob = FakeBob(burn_ticks=[_tick_at("2026-09-19", hour=4)], indexed=head)
+    first = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=3,
+                                         max_calls=2000, today=TODAY)
+    assert first["still_missing"] == []
+
+    client = FakeClient(head)
+    calls_before = len(bob.calls)
+    idle = pipeline.backfill_burns_days(client, store, bob, days=3, max_calls=2000, today=TODAY)
+    assert idle["reason"] == "already done"
+    assert client.lookups == 0, "resolved the tick window for nothing"
+    assert len(bob.calls) == calls_before
+
+
+def test_the_day_is_resolved_once_per_run_not_per_question():
+    """Midnight must not fall between the window and the gap check.
+
+    `missing_burn_days` and the window both need to know which day it is. If each
+    asked the clock separately, a run crossing midnight would resolve a window for
+    one day and judge completeness against another — and the worker re-checks
+    hourly, so it crosses midnight every night. Passing `today` explicitly is what
+    makes a run internally consistent; this pins that it is honoured.
+    """
+    head = _tick_at("2026-09-20", hour=1)
+    store = fresh_store()
+    bob = FakeBob(indexed=head)
+    out = pipeline.backfill_burns_days(FakeClient(head), store, bob, days=2,
+                                       max_calls=2000, today="2026-09-20")
+    # days=2 with today pinned -> the window starts at 2026-09-19's midnight,
+    # and 09-19 is the only finished day in scope.
+    assert abs(out["from_tick"] - _tick_at("2026-09-19")) <= 2
+    assert out["missing_days"] == ["2026-09-19"]
+
+    # A different `today` must move both together, not just one of them.
+    other = pipeline.backfill_burns_days(FakeClient(head), fresh_store(), bob,
+                                         days=2, max_calls=2000, today="2026-09-19")
+    assert abs(other["from_tick"] - _tick_at("2026-09-18")) <= 2
+    assert other["missing_days"] == ["2026-09-18"]

@@ -139,10 +139,22 @@ if [ "$BURN_BACKFILL_DAYS" -gt 0 ] 2>/dev/null; then
   # scan writes the running one; `put_burn_bucket` supersedes by containment, and
   # both are idempotent per day. The store is WAL-mode SQLite, which is built for
   # one writer plus readers — and these two writers touch different days.
+  # It repeats, because a day does not stay filled. Midnight turns the running
+  # day into a finished one that only the live scan's slice covers, and the
+  # tick-window marker cannot notice: a new day lies outside every window it
+  # recorded. So this asks the day-level question instead — "is the last
+  # complete day in the report?" — and the answer changes once per day.
+  #
+  # Cheap when there is nothing to do: the check reads the store and returns
+  # without touching a node, so the idle cost of the hourly pass is one local
+  # query. Work only happens on the day a real gap appears.
   echo "[worker] backfilling the last ${BURN_BACKFILL_DAYS} day(s) of burns in the background"
   echo "[worker]   (~9 min per day against the public node; the watch loop starts now)"
   (
-    python scripts/ingest.py --burn-backfill --burn-backfill-days "${BURN_BACKFILL_DAYS}" --burn-calls "${BURN_BACKFILL_CALLS}" &&       echo "[worker] burn backfill finished" ||       echo "[worker] burn backfill incomplete; it resumes on the next start" >&2
+    while true; do
+      python scripts/ingest.py --burn-backfill --burn-backfill-days "${BURN_BACKFILL_DAYS}" --burn-calls "${BURN_BACKFILL_CALLS}" ||         echo "[worker] burn backfill pass incomplete; retrying later" >&2
+      sleep "${QDR_BURN_BACKFILL_INTERVAL:-3600}"
+    done
   ) &
 fi
 

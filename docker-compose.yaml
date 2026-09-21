@@ -60,6 +60,11 @@ services:
       # a run that stopped short is resumed rather than declared finished.
       # Costs ~270 calls per day; the budget scales with the days asked for.
       - QDR_BURN_BACKFILL_DAYS=${QDR_BURN_BACKFILL_DAYS:-4}
+      # How often the worker re-asks "is the last complete day in the report?".
+      # Midnight turns the running day into a finished one that only the live
+      # scan's slice covers, and no recorded tick window can notice that. An
+      # idle check reads the local store and makes no network call at all.
+      - QDR_BURN_BACKFILL_INTERVAL=${QDR_BURN_BACKFILL_INTERVAL:-3600}
       # How often the running epoch is refreshed. The analysis only changes at an
       # epoch boundary (~4.4 days), but balance snapshots must be taken while the
       # boundary is passing, so this stays well under it.
