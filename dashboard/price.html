@@ -262,6 +262,20 @@
   .study-table { font-size: 12px; }
   .study-table th, .study-table td { padding: 7px 7px; }
   .cov-bar { width: 28px; }
+
+  /* Auf dem Telefon frisst jede Schicht Breite: Spalte, Karte, Element. Die
+     Seite behält aussen einen schmalen Rand und gibt drinnen fast alles der
+     Kurve und der Tabelle. */
+  .qs-main { padding-left: 10px; padding-right: 10px; }
+  .qs-card { padding: 14px 10px; }
+
+  /* Der Rahmen darf schmaler werden als 320px, sonst schiebt die Kurve die
+     ganze Seite seitwärts; das viewBox skaliert ohnehin mit. */
+  .chart-svg { min-width: 0; }
+
+  /* Die gerahmten Kästen tragen ihr eigenes Polster zusätzlich zur Karte;
+     enger gesetzt bleiben sie erkennbar, ohne weitere Breite zu kosten. */
+  .study-verdict, .notice { padding-left: 10px; padding-right: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -838,7 +852,13 @@
     });
 
     /* Zeitachse: 3–6 Marken, an runden Positionen der sichtbaren Spanne. */
-    const tickCount = plotW > 620 ? 6 : 3;
+    /* Die Marken tragen "21.09., 15:41" — im viewBox-Raum rund 78 Einheiten
+       breit. Eine feste Anzahl ließ sie auf schmalen Geräten ineinander
+       laufen (i läuft 0..tickCount, das sind tickCount+1 Beschriftungen, eine
+       mehr als es aussieht). Deshalb wird die Anzahl aus dem Platz abgeleitet,
+       den eine Beschriftung tatsächlich braucht. */
+    const LABEL_W = 86;
+    const tickCount = Math.max(1, Math.min(6, Math.floor(plotW / LABEL_W)));
     for (let i = 0; i <= tickCount; i++) {
       const ts = tMin + tSpan * i / tickCount;
       chart.appendChild(el("text", {

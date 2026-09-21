@@ -23,3 +23,5 @@ venv
 !docs/CONCEPT.md
 !docs/CONCEPT.de.md
 scripts/shot_*.png
+scripts/price_*.png
+scripts/burn_*.png
