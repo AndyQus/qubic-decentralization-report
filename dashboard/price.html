@@ -48,12 +48,29 @@
 
   Zwei Regeln prägen jede Zeichnung hier:
 
-    1. STUFEN, keine Kurven. Eine Zeile im Store ist ein Intervall: der Preis
-       galt von `at` bis `until`. Eine Diagonale dazwischen würde eine Bewegung
-       behaupten, die nie stattfand. Die API sagt das selbst — `draw: "step"`.
+    1. Eine Zeile im Store ist ein INTERVALL, kein Punkt: der Preis galt von
+       `at` bis `until`. Zwischen zwei Messungen bewegte er sich nicht
+       allmählich — er stand still und sprang dann. Die API sagt das selbst,
+       `draw: "step"`.
+
+       Dafür gibt es zwei Ansichten, und die Wahl steht am Diagramm:
+
+         * "Stufen" zeichnet genau das — waagerecht über die Haltedauer,
+           senkrecht auf den nächsten Preis, nie diagonal. Das ist die
+           wörtliche Darstellung der Messung, und drawSteps() hält sich
+           strikt daran (ein Test pinnt es: keine C/S/Q/T/A-Pfadbefehle).
+         * "Fluss" glättet dieselben Messungen zu einer Kurve, weil sich die
+           Richtung so über längere Strecken schneller liest. Das ist die
+           Voreinstellung — und weil eine Kurve mehr behauptet als gemessen
+           wurde, trägt die Ansicht ihre Einschränkung mit sich: `flowNote`
+           unter dem Diagramm und "interpoliert" in der Legende. Beides darf
+           nicht wegfallen, sonst zeigt die Seite in ihrer Voreinstellung eine
+           Bewegung, die sie nirgends belegt.
+
     2. Eine Lücke bleibt eine Lücke. Wo nicht gemessen wurde, wird nichts
        gezeichnet; `polls` je Intervall unterscheidet "Preis stand still" von
-       "niemand hat hingesehen".
+       "niemand hat hingesehen". Die Fluss-Ansicht verbindet über eine Lücke
+       hinweg NICHT — dort bricht die Kurve ab und setzt dahinter neu an.
 
   Kein Handelsvolumen: die RPC veröffentlicht keins, und es von einer Börse zu
   holen verstieße gegen deren AGB (siehe qdr/market-Historie im Git-Log).
@@ -62,7 +79,8 @@
 
   Abschnitte:
     1. Hero          — Preis, seit wann unverändert, Marktkapitalisierung
-    2. Chart         — Stufen über Zeit, mit Epochengrenzen
+    2. Chart         — Kursverlauf über Zeit, mit Epochengrenzen
+                       (Fluss oder Stufen, umschaltbar)
     3. Epochenstudie — Kursbewegung rund um die Auszahlungen
     4. Einordnung    — Quelle, Lizenz, was fehlt
 -->
@@ -81,17 +99,38 @@
    Die Epochenmarken nehmen Violett (--accent2), damit sie klar als zweite,
    andersartige Information lesbar sind und nicht als Teil der Kurve.
 
-   Hoch- und Tiefmarke nehmen die Textfarbe, nicht die Serienfarbe: sie sind
-   eine Ablesehilfe auf der Kurve, keine zweite Reihe. `--chart-halo` ist die
-   Kartenfarbe, gegen die diese Beschriftung freigestellt wird, damit sie auch
-   über der Kurve lesbar bleibt. */
+   Hoch und Tief tragen Richtungsfarben statt der Textfarbe: die Leitfarbe für
+   das Hoch, Rot für das Tief. Die Textfarbe war neutral und damit ehrlich, aber
+   sie zwang den Leser, erst das Dreieck zu entziffern, um zu wissen, welche der
+   beiden Marken er ansieht. Die Farben sind dabei keine Wertung des Kurses,
+   sondern nur eine Unterscheidung der beiden Marken.
+
+   `--chart-halo` ist die Kartenfarbe, gegen die diese Beschriftung freigestellt
+   wird, damit sie auch über der Kurve lesbar bleibt.
+
+   `--price-up` ist die Leitfarbe der Seite (`--accent`), nicht mehr Grün, und
+   `--price-down` bleibt Rot. Das ist bewusst KEIN symmetrisches Farbpaar mehr:
+
+     * "Aufwärts" ist auf dieser Seite der Normalzustand der Darstellung — die
+       Kurve trägt die Farbe über weite Strecken, der Preis steht in ihr. Eine
+       Signalfarbe, die fast immer leuchtet, signalisiert nichts; die Leitfarbe
+       dagegen liest sich als "das ist die Größe, um die es hier geht".
+     * "Abwärts" bleibt Rot, weil es die Abweichung ist, die auffallen soll.
+
+   Die Studientabelle behält ihr Grün/Rot über `--success`/`--danger`: dort
+   stehen die Werte als Spalte nebeneinander und werden verglichen, nicht als
+   Fläche gelesen. Deshalb sind das hier eigene Namen und keine Aliase.
+
+   `--chart-halo` ist die Kartenfarbe, gegen die die Extremwert-Beschriftung
+   freigestellt wird, damit sie auch über der Kurve lesbar bleibt. */
 :root {
   --price-line: #0369a1;
   --price-fill: rgba(3, 105, 161, .13);
   --epoch-mark: #7e6fff;
   --grid:       rgba(17, 24, 39, .09);
   --gap-hatch:  rgba(107, 114, 128, .45);
-  --price-extreme: #111827;
+  --price-up:   var(--accent);
+  --price-down: #dc2626;
   --chart-halo: #ffffff;
 }
 @media (prefers-color-scheme: dark) {
@@ -101,7 +140,8 @@
     --epoch-mark: #7e6fff;
     --grid:       rgba(242, 245, 250, .10);
     --gap-hatch:  rgba(185, 194, 207, .35);
-    --price-extreme: #f2f5fa;
+    --price-up:   var(--accent);
+    --price-down: #fb7185;
     --chart-halo: #0b0f14;
   }
 }
@@ -111,7 +151,8 @@
   --epoch-mark: #7e6fff;
   --grid:       rgba(242, 245, 250, .10);
   --gap-hatch:  rgba(185, 194, 207, .35);
-  --price-extreme: #f2f5fa;
+  --price-up:   var(--accent);
+  --price-down: #fb7185;
   --chart-halo: #0b0f14;
 }
 
@@ -127,7 +168,12 @@
 .hero-price {
   font-family: var(--mono); font-weight: 700;
   font-size: clamp(30px, 7vw, 56px); line-height: 1.05;
-  color: var(--text); letter-spacing: -.02em;
+  /* Die Leitfarbe statt der Textfarbe: der Preis ist die Hauptgröße dieser
+     Seite und trägt dieselbe Farbe wie die Kurve, in der er gezeichnet wird.
+     Dieselbe Rolle wie der solution_count auf Mining Live, der ebenfalls in
+     --accent steht. Die Einheit daneben bleibt --muted, sonst zöge "USD"
+     dieselbe Aufmerksamkeit wie der Betrag. */
+  color: var(--accent); letter-spacing: -.02em;
   font-variant-numeric: tabular-nums;
   /* Die Einheit steht hinter der Zahl statt darunter — so liest sich die Zeile
      als ein Betrag ("0,0000004100 USD") statt als Wert mit Bildunterschrift.
@@ -192,15 +238,57 @@
 /* ─── Aufleuchten bei neuen Daten ───────────────────────────────────────────
    Derselbe Griff wie beim solution_count in mining.html: kein Rahmen um den
    Wert — der läse sich als Darstellungsfehler —, sondern der Wert selbst wird
-   kurz heller und fällt zurück. */
+   kurz heller und fällt zurück.
+
+   `--flash-col` ist der Griff, an dem die Richtung hängt: der Preis setzt ihn
+   vor dem Aufleuchten auf Grün oder Rot, alle anderen Werte erben die
+   Serienfarbe. So braucht es nur eine Animation statt dreier. */
+:root { --flash-col: var(--price-line); }
 @keyframes dataflash {
   0%   { filter: brightness(1); text-shadow: none; }
   22%  { filter: brightness(1.5);
-         text-shadow: 0 0 14px color-mix(in srgb, var(--price-line) 60%, transparent),
-                      0 0 46px color-mix(in srgb, var(--price-line) 34%, transparent); }
+         text-shadow: 0 0 14px color-mix(in srgb, var(--flash-col) 60%, transparent),
+                      0 0 46px color-mix(in srgb, var(--flash-col) 34%, transparent); }
   100% { filter: brightness(1); text-shadow: none; }
 }
 .flash { animation: dataflash 1.1s ease-out; }
+
+/* ─── Der Preis zählt ───────────────────────────────────────────────────────
+   Wie der solution_count in mining.html: bei einer Änderung läuft die Zahl von
+   ihrem alten Wert zum neuen, statt umzuspringen. Das macht die Richtung sichtbar
+   — man SIEHT, ob es hoch oder runter ging, auch wenn man erst nach der Bewegung
+   hinsieht.
+
+   Der Preis hat dabei eine Eigenheit, die der Zähler dort nicht hat: er steht bei
+   ~4e-7 und wird mit zehn Nachkommastellen gesetzt. `tabular-nums` ist deshalb
+   hier nicht Kosmetik, sondern Bedingung — ohne gleich breite Ziffern würde die
+   Zahl während des Zählens in der Breite zappeln und die ganze Zeile mitreißen.
+   Das steht schon auf `.hero-price`; die Klasse hier hält nur die Farbe.
+
+   Seit der Preis im Ruhezustand die Leitfarbe trägt, kann "aufwärts" nicht mehr
+   durch einen Farbwechsel angezeigt werden: --price-up IST diese Farbe, ein
+   Wechsel dorthin wäre unsichtbar. Ein Anstieg wird deshalb als kurzes
+   Aufhellen derselben Farbe gezeigt, ein Rückgang weiterhin als Wechsel nach
+   Rot. Die Asymmetrie ist gewollt und dieselbe wie im Diagramm: die Leitfarbe
+   ist der Normalfall, Rot die Abweichung. */
+.hero-price.up   { color: color-mix(in srgb, var(--price-up) 78%, #fff); }
+.hero-price.down { color: var(--price-down); }
+/* Der Rückweg in den Ruhezustand ist langsam: die Richtung bleibt einen Moment
+   ablesbar, statt mit der Zählanimation zu verschwinden. */
+#hero-price { transition: color .9s ease; }
+@media (prefers-reduced-motion: reduce) {
+  #hero-price { transition: none; }
+}
+
+/* Die Haltedauer-Pille färbt sich mit: sie sitzt direkt unter dem Preis, und
+   zwei verschiedene Farben für dasselbe Ereignis läsen sich als zwei Ereignisse. */
+.hero-held.up   { background: color-mix(in srgb, var(--price-up) 10%, transparent);
+                  border-color: color-mix(in srgb, var(--price-up) 32%, transparent); }
+.hero-held.down { background: color-mix(in srgb, var(--price-down) 10%, transparent);
+                  border-color: color-mix(in srgb, var(--price-down) 32%, transparent); }
+.hero-held.up .held-dot   { background: var(--price-up); }
+.hero-held.down .held-dot { background: var(--price-down); }
+.hero-held, .hero-held .held-dot { transition: background .9s ease, border-color .9s ease; }
 
 /* Die Kurve bekommt beim Eintreffen eines neuen Preises einen kurzen
    Helligkeitsschub. Bewusst schwächer als der Ring am letzten Punkt: der Ring
@@ -238,6 +326,11 @@
   display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
   margin: 14px 0 10px;
 }
+/* Der Stil-Umschalter steht rechts vom Zeitfenster, mit Abstand dazwischen: er
+   wählt etwas anderes aus (WIE gezeichnet wird, nicht WORÜBER), und zwei gleich
+   aussehende Schaltergruppen direkt nebeneinander läsen sich als eine. */
+#style-seg { margin-left: auto; }
+@media (max-width: 620px) { #style-seg { margin-left: 0; } }
 .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .chart-svg { display: block; width: 100%; min-width: 320px; height: 360px; }
 .chart-svg[hidden] { display: none; }
@@ -247,7 +340,11 @@
    Als Klasse und nicht als Attribut, weil ein Präsentationsattribut gegen die
    Regel darüber verliert. */
 .chart-svg text.y-tick { fill: var(--text); letter-spacing: .01em; }
-.chart-svg text.extreme-label { fill: var(--price-extreme); }
+/* Die Extremwert-Beschriftung bekommt ihre Farbe pro Marke gesetzt, damit Hoch
+   und Tief sich unterscheiden; die Klasse bleibt als gemeinsamer Anker für
+   Schriftschnitt und Freistellung. */
+.chart-svg text.extreme-label.up { fill: var(--price-up); }
+.chart-svg text.extreme-label.down { fill: var(--price-down); }
 @media (max-width: 700px) { .chart-svg { height: 290px; } }
 
 .chart-empty {
@@ -267,11 +364,25 @@
 .leg-item[hidden] { display: none; }
 .leg-swatch { width: 14px; height: 3px; border-radius: 2px; flex: none; }
 .leg-swatch.price { background: var(--price-line); }
-.leg-swatch.epoch { background: var(--epoch-mark); height: 12px; width: 2px; }
-.leg-swatch.extreme {
-  width: 9px; height: 9px; border-radius: 50%;
-  background: var(--price-extreme);
+/* In der Fluss-Ansicht trägt die Linie einen Verlauf von der Leitfarbe nach Rot; das
+   Plättchen zeigt denselben, sonst benennt es eine Farbe, die im Bild nicht
+   vorkommt. Das Attribut dafür setzt das Skript am Body-Element. */
+body[data-chart-style="flow"] .leg-swatch.price {
+  background: linear-gradient(90deg, var(--price-up), var(--price-down));
 }
+.leg-swatch.epoch { background: var(--epoch-mark); height: 12px; width: 2px; }
+/* Zwei Punkte nebeneinander statt einem: der Legendeneintrag nennt Hoch UND
+   Tief, und ein einfarbiger Punkt davor könnte nur eins von beiden zeigen. */
+.leg-swatch.extreme {
+  width: 20px; height: 9px; border-radius: 0; background: none;
+  display: inline-flex; align-items: center; gap: 2px;
+}
+.leg-swatch.extreme::before,
+.leg-swatch.extreme::after {
+  content: ""; width: 9px; height: 9px; border-radius: 50%;
+}
+.leg-swatch.extreme::before { background: var(--price-up); }
+.leg-swatch.extreme::after  { background: var(--price-down); }
 .leg-swatch.gap {
   height: 10px; width: 14px; border-radius: 2px;
   background: repeating-linear-gradient(45deg,
@@ -399,6 +510,34 @@
   .study-verdict, .notice { padding-left: 10px; padding-right: 10px; }
 }
 
+/* ─── "Kurse per API" ───────────────────────────────────────────────────────
+   Befehl und Antwort teilen sich einen Rahmen, damit sie als ein Block gelesen
+   werden: oben was man eingibt, unten was zurückkommt. Beides ist auswählbar
+   und umbricht nicht — wer kopiert, will den Befehl unversehrt haben, und ein
+   waagerechter Scrollbalken im Kasten ist dafür der ehrlichere Preis als ein
+   Umbruch mitten in der URL. */
+.api-ex {
+  margin-top: 12px; border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; background: var(--surface-2, rgba(0,0,0,.14));
+}
+.api-cmd {
+  display: block; padding: 11px 13px; font-family: var(--mono); font-size: 12.5px;
+  color: var(--text); background: color-mix(in srgb, var(--accent) 9%, transparent);
+  border-bottom: 1px solid var(--border); overflow-x: auto; white-space: pre;
+}
+/* Das $-Zeichen als ::before, damit es beim Kopieren nicht mitkommt. */
+.api-cmd::before { content: "$ "; color: var(--accent); user-select: none; }
+.api-out {
+  margin: 0; padding: 11px 13px; font-family: var(--mono); font-size: 12.5px;
+  line-height: 1.6; color: var(--muted); overflow-x: auto; white-space: pre;
+}
+.api-out .cmt { color: var(--faint); }
+/* Platzhalter statt Zahlen: sichtbar KEIN Messwert, sondern eine Leerstelle. */
+.api-out .ph { color: var(--accent); }
+.api-list { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; line-height: 1.75; }
+.api-list code { font-family: var(--mono); font-size: 12.5px; color: var(--text); }
+@media (max-width: 560px) { .api-cmd, .api-out { font-size: 11.5px; } }
+
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
   html { scroll-behavior: auto; }
@@ -407,13 +546,18 @@
 </head>
 <body>
 
-<!-- Hintergrundmotiv: ein Feld aus Kurspunkten, die halten, springen und nach
-     links ziehen — dieselbe Regel wie die Kurve im Diagramm, nur ohne gerade
-     Linien. Rein atmosphärisch; kodiert ausdrücklich nichts, die Messwerte
-     stehen im Hero und im Diagramm, und die beiden Ebenen bleiben getrennt.
-     Gleiche Bauart wie das Glut-Canvas in burn.html und die Kolonie in
-     mining.html. -->
-<canvas class="qs-canvas" id="flow-canvas" aria-hidden="true"></canvas>
+<!-- Hintergrundmotiv: dasselbe Partikelnetz wie auf Mining Live — driftende
+     Punkte, die sich verbinden, wenn sie nahe genug beieinander liegen.
+
+     Vorher lief hier eine wandernde Stufenkurve, das Motiv der Seite selbst.
+     Sie war thematisch näher dran, aber sie konkurrierte mit dem Diagramm:
+     zwei Stufenkurven übereinander, und die im Hintergrund war die größere.
+     Das Netz hat diese Kollision nicht, und die beiden Live-Seiten tragen
+     damit denselben Grund.
+
+     Rein atmosphärisch; kodiert ausdrücklich nichts. Die Messwerte stehen im
+     Hero und im Diagramm, und die beiden Ebenen bleiben getrennt. -->
+<canvas class="qs-canvas" id="colony-canvas" aria-hidden="true"></canvas>
 
 <header class="top qs-header">
   <div class="top-inner qs-header-inner">
@@ -421,7 +565,7 @@
       <div class="logo qs-logo" aria-hidden="true"></div>
       <div>
         <h1 class="qs-title" data-i18n="pageTitle">Price</h1>
-        <div class="sub qs-subtitle"><span data-i18n="subtitle">Market price · Qubic Decentralization Report</span></div>
+        <div class="sub qs-subtitle"><span data-i18n="subtitle">Market price · Qubic Report</span></div>
       </div>
     </div>
     <div class="spacer"></div>
@@ -459,10 +603,6 @@
   <section class="qs-card hero" id="hero">
     <div class="hero-label" data-i18n="heroLabel">Price per QU</div>
     <div class="hero-price"><span id="hero-price">–</span><span class="hero-unit" data-i18n="heroUnit">USD</span></div>
-    <div class="hero-held" id="hero-held" hidden>
-      <span class="held-dot" aria-hidden="true"></span>
-      <span id="held-text">–</span>
-    </div>
     <div class="hero-facts">
       <div class="qs-stat glass-card themed">
         <div class="s-label" data-i18n="capLabel">Market cap</div>
@@ -495,7 +635,7 @@
   <!-- 2 — CHART ------------------------------------------------------------ -->
   <section class="qs-card qs-card--translucent">
     <h2 data-i18n="chartTitle">Price over time</h2>
-    <p class="desc" data-i18n="chartDesc">Every step is a price that stood for a measured stretch of time. Vertical marks are epoch boundaries, where the protocol pays its 676 computors.</p>
+    <p class="desc" data-i18n="chartDesc">Every reading is a price that stood for a measured stretch of time. Vertical marks are epoch boundaries, where the protocol pays its 676 computors.</p>
 
     <div class="chart-controls">
       <div class="seg qs-seg" id="window-seg" role="group" aria-label="Range">
@@ -504,6 +644,13 @@
         ><button data-window="86400" data-i18n="win24h">24 h</button
         ><button data-window="604800" data-i18n="win7d">7 d</button
         ><button data-window="0" data-i18n="winAll">All</button>
+      </div>
+      <!-- Zeichenart. Die Wahl bleibt in localStorage, damit sie eine Sitzung
+           überlebt — wer die weiche Ansicht bevorzugt, will sie nicht bei jedem
+           Besuch neu wählen. -->
+      <div class="seg qs-seg" id="style-seg" role="group" aria-label="Chart style">
+        <button data-style="flow" data-i18n="styleFlow">Flow</button
+        ><button data-style="steps" data-i18n="styleSteps">Steps</button>
       </div>
     </div>
 
@@ -519,11 +666,27 @@
     <div class="chart-empty" id="chart-empty" hidden>–</div>
 
     <div class="chart-legend">
-      <span class="leg-item"><span class="leg-swatch price" aria-hidden="true"></span><span data-i18n="legPrice">Price (steps)</span></span>
+      <span class="leg-item"><span class="leg-swatch price" aria-hidden="true"></span><span id="leg-price-text" data-i18n="legPrice">Price (steps)</span></span>
       <span class="leg-item" id="leg-epoch" hidden><span class="leg-swatch epoch" aria-hidden="true"></span><span data-i18n="legEpoch">Epoch boundary</span></span>
       <span class="leg-item" id="leg-gap" hidden><span class="leg-swatch gap" aria-hidden="true"></span><span data-i18n="legGap">Not observed</span></span>
       <span class="leg-item" id="leg-extreme" hidden><span class="leg-swatch extreme" aria-hidden="true"></span><span data-i18n="legExtreme">High and low in view</span></span>
     </div>
+
+    <!-- Die Haltedauer steht jetzt hier, direkt unter dem Diagramm, statt im
+         Hero. Grund: sie beantwortet genau die Frage, die das Bild aufwirft —
+         "die Linie ist rechts flach, sieht da überhaupt noch jemand hin?".
+         Neben der Kurve gelesen ist sie eine Auskunft über das, was man gerade
+         sieht; oben unter der Preiszahl war sie eine Behauptung über eine Zahl,
+         die selbst noch keinen Verlauf hatte. -->
+    <div class="hero-held" id="hero-held" hidden>
+      <span class="held-dot" aria-hidden="true"></span>
+      <span id="held-text">–</span>
+    </div>
+
+    <!-- Nur in der weichen Ansicht sichtbar: sie glättet zwischen den Messungen
+         und zeigt damit eine Bewegung, die so nicht gemessen wurde. Das muss
+         dabeistehen, sonst nimmt die zweite Variante der ersten ihre Aussage. -->
+    <p class="agg-locked" id="flow-note" hidden></p>
   </section>
 
   <!-- Ehrlichkeitshinweis: steht direkt UNTER dem Diagramm, als Fußnote zu dem,
@@ -566,6 +729,49 @@
   </section>
 
   <!-- 4 — EINORDNUNG ------------------------------------------------------- -->
+  <!-- ── Kurse per API ──────────────────────────────────────────────────────
+       Jede Zahl auf dieser Seite kommt aus einem öffentlichen Endpunkt, und
+       zwar aus genau dem, der hier steht. Der Abschnitt steht VOR der
+       Einordnung, weil "wie komme ich selbst dran" die häufigere Frage ist als
+       "woher stammt es"; die Lizenzfrage beantwortet dann die Karte darunter.
+       Die Beispielantwort ist gekürzt, aber nicht erfunden — sie hat die Form,
+       die /v1/price/latest wirklich liefert. -->
+  <section class="qs-card qs-card--translucent" id="api-card">
+    <h2 data-i18n="apiTitle">Get these prices via API</h2>
+    <p class="desc" data-i18n="apiLead">Everything on this page is public and needs no key. The same readings, in JSON:</p>
+
+    <!-- Die Beispielantwort zeigt die FORM, nicht Messwerte: Zahlen stehen als
+         <…> Platzhalter da. Ein echt aussehender Preis in der Seite würde noch
+         Monate später gerendert, lange nachdem er falsch ist — genau das, was
+         diese Seite über sich selbst bestreitet. (tests/test_price_page.py
+         verbietet lange Zahlenliterale im Markup und hält das fest.) -->
+    <div class="api-ex">
+      <code class="api-cmd">curl https://report.qubic.tools/v1/price/latest</code>
+<pre class="api-out">{
+  "price": <span class="ph">&lt;usd&gt;</span>,            <span class="cmt" data-i18n="apiCmtPrice">// USD per QU</span>
+  "status": "live",
+  "at": <span class="ph">&lt;unix&gt;</span>,              <span class="cmt" data-i18n="apiCmtAt">// when it was read</span>
+  "held_for_s": <span class="ph">&lt;sec&gt;</span>,       <span class="cmt" data-i18n="apiCmtHeld">// how long it has stood</span>
+  "market_cap": <span class="ph">&lt;usd&gt;</span>,
+  "change": { "24h": { "pct": <span class="ph">&lt;pct&gt;</span>, ... } },
+  "source": { "provider": "Qubic RPC", ... }
+}</pre>
+    </div>
+
+    <p class="desc" style="margin-top:14px" data-i18n="apiMore">Three more endpoints carry the rest of this page:</p>
+    <ul class="api-list">
+      <li><code>/v1/price/series?range=24h</code> — <span data-i18n="apiSeries">the step series behind the chart. Each row is an interval: the price held from <code>at</code> until <code>until</code>. Draw it as steps, never as a curve.</span></li>
+      <li><code>/v1/price/epochs</code> — <span data-i18n="apiEpochs">the study of what the price does around the computor payouts.</span></li>
+      <li><code>/v1/price/at?t=&lt;unix&gt;</code> — <span data-i18n="apiAt">the price at one moment, with the reading it came from.</span></li>
+    </ul>
+
+    <p class="desc" style="margin-top:14px">
+      <span data-i18n="apiSwagger">Every parameter and response is documented in the interactive API reference, where each endpoint can be run straight from the browser:</span>
+      <a href="/docs#/price" target="_blank" rel="noreferrer" data-i18n="apiSwaggerLink">Open the API reference&nbsp;&rarr;</a>
+    </p>
+    <p class="desc" style="margin-top:8px" data-i18n="apiTerms">Free to use, including commercially. Please attribute the report and do not poll faster than once a minute — the underlying reading only changes that often.</p>
+  </section>
+
   <section class="qs-card qs-card--translucent">
     <h2 data-i18n="aboutTitle">Where these figures come from</h2>
     <p class="desc" id="about-source" data-i18n="aboutSource">The price is read from Qubic's own <code>/v1/latest-stats</code> — the same endpoint this project already uses for supply and tick quality. Qubic's stats service holds the licence for the figure it publishes.</p>
@@ -619,6 +825,7 @@
 
   const LS_LANG = "qdr.lang";
   const LS_THEME = "qdr.theme";
+  const LS_STYLE = "qdr.price.chartStyle";
   const root = document.documentElement;
 
   /* ─── i18n ──────────────────────────────────────────────────────────────
@@ -632,7 +839,7 @@
       miningLive: "Mining Live",
       howItWorks: "How it works",
       pageTitle: "Price",
-      subtitle: "Market price · Qubic Decentralization Report",
+      subtitle: "Market price · Qubic Report",
 
       heroLabel: "Price per QU",
       heroUnit: "USD",
@@ -650,13 +857,17 @@
       heldStale: "Last confirmed {span} ago",
 
       noteTitle: "What is measured here:",
-      noteBody: "The price is read once a minute from Qubic's own RPC and stored when it changes, together with how long it held. The chart draws steps, never a curve — between two readings the price did not move gradually, it stood still and then jumped. There is no trading volume on this page: the RPC publishes none.",
+      noteBody: "The price is read once a minute from Qubic's own RPC and stored when it changes, together with how long it held. Between two readings the price did not move gradually — it stood still and then jumped. The Flow view smooths that into a curve because the direction reads faster that way; switch to Steps to see the readings themselves, unsmoothed. There is no trading volume on this page: the RPC publishes none.",
 
       chartTitle: "Price over time",
-      chartDesc: "Every step is a price that stood for a measured stretch of time. Vertical marks are epoch boundaries, where the protocol pays its 676 computors.",
+      chartDesc: "Every reading is a price that stood for a measured stretch of time. Vertical marks are epoch boundaries, where the protocol pays its 676 computors.",
       win1h: "1 h", win6h: "6 h", win24h: "24 h", win7d: "7 d", winAll: "All",
       resNote: "Showing hourly summaries — each step is an hour's time-weighted average, not a single reading.",
+      styleSteps: "Steps",
+      styleFlow: "Flow",
+      flowNote: "Flow view: the same readings, drawn as a smooth curve. The curve between two readings is interpolation, not measurement — the price stood still and then jumped. Switch to Steps to see what was actually measured.",
       legPrice: "Price (steps)",
+      legPriceFlow: "Price (interpolated)",
       legEpoch: "Epoch boundary",
       legGap: "Not observed",
       legExtreme: "High and low in view",
@@ -673,6 +884,18 @@
       payoutLine: "Most recent sealed payout: epoch {epoch} paid {qu} QU to {n} computors{usd}.",
       payoutUsd: ", worth {usd} at the current price",
 
+      apiTitle: "Get these prices via API",
+      apiLead: "Everything on this page is public and needs no key. The same readings, in JSON:",
+      apiCmtPrice: "// USD per QU",
+      apiCmtAt: "// when it was read",
+      apiCmtHeld: "// how long it has stood",
+      apiMore: "Three more endpoints carry the rest of this page:",
+      apiSeries: "the step series behind the chart. Each row is an interval: the price held from at until until. Draw it as steps, never as a curve.",
+      apiEpochs: "the study of what the price does around the computor payouts.",
+      apiAt: "the price at one moment, with the reading it came from.",
+      apiSwagger: "Every parameter and response is documented in the interactive API reference, where each endpoint can be run straight from the browser:",
+      apiSwaggerLink: "Open the API reference →",
+      apiTerms: "Free to use, including commercially. Please attribute the report and do not poll faster than once a minute — the underlying reading only changes that often.",
       aboutTitle: "Where these figures come from",
       aboutSource: "The price is read from Qubic's own /v1/latest-stats — the same endpoint this project already uses for supply and tick quality. Qubic's stats service holds the licence for the figure it publishes.",
       aboutNoVolume: "There is no trading volume here, and that is deliberate. Exchange APIs were built against first and then removed: MEXC's terms prohibit republishing their market data without written consent. A volume figure sourced that way would be a licence breach wearing a useful label.",
@@ -715,7 +938,7 @@
       miningLive: "Mining Live",
       howItWorks: "Funktionsweise",
       pageTitle: "Kurs",
-      subtitle: "Marktpreis · Qubic Decentralization Report",
+      subtitle: "Marktpreis · Qubic Report",
 
       heroLabel: "Preis je QU",
       heroUnit: "USD",
@@ -733,13 +956,17 @@
       heldStale: "Zuletzt bestätigt vor {span}",
 
       noteTitle: "Was hier gemessen wird:",
-      noteBody: "Der Preis wird jede Minute von Qubics eigener RPC gelesen und gespeichert, wenn er sich ändert — zusammen mit der Dauer, die er stand. Das Diagramm zeichnet Stufen, nie eine Kurve: zwischen zwei Messungen bewegte sich der Preis nicht allmählich, er stand still und sprang dann. Handelsvolumen gibt es hier nicht, die RPC veröffentlicht keins.",
+      noteBody: "Der Preis wird jede Minute von Qubics eigener RPC gelesen und gespeichert, wenn er sich ändert — zusammen mit der Dauer, die er stand. Zwischen zwei Messungen bewegte sich der Preis nicht allmählich: er stand still und sprang dann. Die Fluss-Ansicht glättet das zu einer Kurve, weil sich die Richtung so schneller liest; auf Stufen umschalten zeigt die Messungen selbst, ungeglättet. Handelsvolumen gibt es hier nicht, die RPC veröffentlicht keins.",
 
       chartTitle: "Kursverlauf",
-      chartDesc: "Jede Stufe ist ein Preis, der eine gemessene Zeit lang stand. Die senkrechten Marken sind Epochengrenzen — dort zahlt das Protokoll seine 676 Computors aus.",
+      chartDesc: "Jede Messung ist ein Preis, der eine gemessene Zeit lang stand. Die senkrechten Marken sind Epochengrenzen — dort zahlt das Protokoll seine 676 Computors aus.",
       win1h: "1 Std", win6h: "6 Std", win24h: "24 Std", win7d: "7 Tage", winAll: "Alles",
       resNote: "Zeigt Stundenzusammenfassungen — jede Stufe ist der zeitgewichtete Mittelwert einer Stunde, keine einzelne Messung.",
+      styleSteps: "Stufen",
+      styleFlow: "Fluss",
+      flowNote: "Fluss-Ansicht: dieselben Messungen, als weiche Kurve gezeichnet. Der Verlauf zwischen zwei Messungen ist Interpolation, keine Messung — der Preis stand still und sprang dann. Für das tatsächlich Gemessene auf Stufen umschalten.",
       legPrice: "Kurs (Stufen)",
+      legPriceFlow: "Kurs (interpoliert)",
       legEpoch: "Epochengrenze",
       legGap: "Nicht beobachtet",
       legExtreme: "Hoch und Tief im Ausschnitt",
@@ -756,6 +983,18 @@
       payoutLine: "Jüngste versiegelte Auszahlung: Epoche {epoch} zahlte {qu} QU an {n} Computors{usd}.",
       payoutUsd: ", zum aktuellen Kurs {usd}",
 
+      apiTitle: "Kurse per API abrufen",
+      apiLead: "Alles auf dieser Seite ist öffentlich und braucht keinen Schlüssel. Dieselben Messungen als JSON:",
+      apiCmtPrice: "// USD je QU",
+      apiCmtAt: "// wann gemessen wurde",
+      apiCmtHeld: "// wie lange er schon steht",
+      apiMore: "Drei weitere Endpunkte tragen den Rest dieser Seite:",
+      apiSeries: "die Stufenreihe hinter dem Diagramm. Jede Zeile ist ein Intervall: Der Preis galt von at bis until. Als Stufen zeichnen, nie als Kurve.",
+      apiEpochs: "die Auswertung, was der Kurs rund um die Computor-Auszahlungen tut.",
+      apiAt: "der Preis zu einem Zeitpunkt, mitsamt der Messung, aus der er stammt.",
+      apiSwagger: "Jeder Parameter und jede Antwort ist in der interaktiven API-Referenz dokumentiert, in der sich jeder Endpunkt direkt im Browser ausführen lässt:",
+      apiSwaggerLink: "Zur API-Referenz →",
+      apiTerms: "Frei nutzbar, auch kommerziell. Bitte den Report als Quelle nennen und nicht häufiger als einmal pro Minute abfragen — öfter ändert sich die zugrunde liegende Messung ohnehin nicht.",
       aboutTitle: "Woher diese Zahlen kommen",
       aboutSource: "Der Preis stammt aus Qubics eigenem /v1/latest-stats — demselben Endpunkt, den dieses Projekt schon für Umlaufmenge und Tick-Qualität nutzt. Qubics Stats-Dienst hält die Lizenz für die Zahl, die er veröffentlicht.",
       aboutNoVolume: "Handelsvolumen gibt es hier nicht, und das ist Absicht. Börsen-APIs waren zuerst gebaut und wurden wieder entfernt: MEXCs AGB untersagen das Weiterveröffentlichen ihrer Marktdaten ohne schriftliche Zustimmung. Eine so beschaffte Volumenzahl wäre ein Lizenzverstoß im nützlichen Gewand.",
@@ -895,6 +1134,21 @@
   let latest = null;
   let series = null;
   let study = null;
+  /* "flow" ist die Voreinstellung: die weiche Kurve macht die Richtung über
+     längere Strecken schneller lesbar, und das ist es, wonach die meisten Leser
+     auf einer Kursseite zuerst suchen.
+
+     Damit trägt die Seite aber eine Bringschuld, die sie vorher nicht hatte:
+     die Voreinstellung zeigt jetzt eine interpolierte Linie, also eine
+     Darstellung, die zwischen zwei Messungen mehr behauptet, als gemessen
+     wurde. Beides hängt deshalb daran und darf nicht wegfallen:
+
+       * `flowNote` steht unter dem Diagramm und sagt es in Worten;
+       * die Legende sagt "interpoliert" statt "Stufen".
+
+     Der Umschalter steht direkt daneben, und "Stufen" ist von dort einen Klick
+     entfernt. */
+  let chartStyle = safeGet(LS_STYLE) === "steps" ? "steps" : "flow";
 
   /* Wer Bewegung abbestellt hat, bekommt keine. Das CSS hält das ohnehin über
      die Media Query; die Konstante verhindert zusätzlich, dass Klassen gesetzt
@@ -908,7 +1162,6 @@
      holt genau dann nach, statt auf einem festen 90-Sekunden-Raster zu liegen,
      das gegenüber dem Minutentakt langsam wegdriftet. */
   let prevPrice   = null;   // letzter gezeigter Preis, für den Vergleich
-  let flowPlaced  = false;  // Hintergrundspuren einmal am fertigen Hero ausgerichtet
   let lastFetchTs = null;   // Unix-TS der letzten erfolgreichen Antwort
   let countdownVal = 0;
   let pollTimer = null;
@@ -940,8 +1193,29 @@
      leuchtet die Kurve auf und der Ring am letzten Punkt geht auf. Neuzeichnen
      aus anderem Anlass — Themenwechsel, Sprachwechsel, Fensterwahl, Resize —
      lässt das Bild still, sonst wäre der Blitz kein Signal mehr, sondern eine
-     Eigenschaft des Scrollens. */
+     Eigenschaft des Scrollens.
+
+     Zwei Zeichenarten, ein Aufruf. `drawSteps` ist die Voreinstellung und die
+     ehrliche: sie zeigt, was gemessen wurde. `drawFlow` glättet und sagt das
+     dazu. Welche gilt, entscheidet `chartStyle`; alles andere — Achsen,
+     Lücken, Epochenmarken, Tooltips — bauen beide selbst, weil sie sich in
+     Geometrie und Farbgebung zu stark unterscheiden, um sich einen Rumpf zu
+     teilen, ohne dass er zur Fallunterscheidung verkommt. */
   function drawChart(payload, pulse) {
+    /* Die Legende benennt, was gerade im Bild ist: in der Fluss-Ansicht ist die
+       Linie interpoliert, und "Kurs (Stufen)" darunter wäre schlicht falsch. */
+    const legText = document.getElementById("leg-price-text");
+    if (legText) legText.textContent = t(chartStyle === "flow" ? "legPriceFlow" : "legPrice");
+    const flowNote = document.getElementById("flow-note");
+    if (flowNote) {
+      flowNote.hidden = chartStyle !== "flow";
+      if (chartStyle === "flow") flowNote.textContent = t("flowNote");
+    }
+    if (chartStyle === "flow") return drawFlow(payload, pulse);
+    return drawSteps(payload, pulse);
+  }
+
+  function drawSteps(payload, pulse) {
     chart.innerHTML = "";
     chart.classList.remove("flash-line");
     const empty = document.getElementById("chart-empty");
@@ -1112,7 +1386,7 @@
        der Ehrlichkeitsregel dieser Seite. */
     const stepPts = [];
     const gaps = [];
-    let prevEnd = null;
+    let prevConfirmed = null;
     rows.forEach((r, i) => {
       const p = isHour ? (r.avg != null ? r.avg : r.c) : r.price;
       if (p == null || !isFinite(p) || p <= 0) return;
@@ -1131,12 +1405,28 @@
          eigenen letzten Bestätigung und keine Sekunde weiter, denn danach hat
          niemand mehr hingesehen. Dieselbe Regel wie beim Stunden-Rollup. */
       const nextAt = (i + 1 < rows.length) ? rows[i + 1].at : null;
-      const confirmed = r.until != null ? r.until : r.at;
+      /* Bei Stundenauflösung ist `until` nicht die Grenze der Zeile: der Eimer
+         umfasst die volle Stunde, und die Zeile ist bis `at + 3600` belegt.
+         Würde hier `until` stehen, sähe jede Stundenzeile aus, als endete sie
+         in ihrem eigenen Beginn — und die Lückenprüfung darunter erklärte dann
+         JEDE Stunde zur Lücke. */
+      const confirmed = isHour ? r.at + 3600 : (r.until != null ? r.until : r.at);
       const end = isHour ? r.at + 3600
                          : (nextAt != null ? Math.max(confirmed, nextAt) : confirmed);
 
-      if (prevEnd != null && start - prevEnd > GAP_SLACK_S) {
-        gaps.push([prevEnd, start]);
+      /* Die Lücke wird gegen die letzte BESTÄTIGUNG geprüft, nicht gegen `end`.
+         `end` ist nach oben auf den Beginn des nächsten Intervalls gezogen —
+         damit die Stufe ihre Haltedauer voll ausfüllt —, und genau dadurch war
+         `start - prevEnd` nie größer als null: die Prüfung verglich den Beginn
+         eines Intervalls mit sich selbst und hat deshalb NIE eine Lücke
+         gefunden. Eine unbeobachtete Nacht sah aus wie ein Preis, der still
+         stand. Aufgefallen ist es erst in der Fluss-Ansicht, wo dieselbe Stelle
+         als lange Diagonale erscheint statt als flache Stufe.
+
+         `prevConfirmed` ist der letzte Zeitpunkt, zu dem tatsächlich jemand
+         hingesehen hat — und nur bis dorthin ist der Preis belegt. */
+      if (prevConfirmed != null && start - prevConfirmed > GAP_SLACK_S) {
+        gaps.push([prevConfirmed, start]);
       }
       /* Das laufende Intervall ist oft nur einmal bestätigt und hätte damit
          Breite null — ausgerechnet der aktuelle Preis wäre unsichtbar. Es
@@ -1146,7 +1436,7 @@
       let x1 = X(end);
       if (i === rows.length - 1 && x1 - x0 < 2) x1 = x0 + 2;
       stepPts.push({ x0: x0, x1: x1, y: Y(p), row: r, price: p });
-      prevEnd = end;
+      prevConfirmed = confirmed;
     });
 
     if (stepPts.length) {
@@ -1167,9 +1457,24 @@
       chart.appendChild(el("path", {
         d: area, fill: fillCol, stroke: "none", class: "price-area"
       }));
+      /* Die Ecken werden gerundet, die Stufen bleiben Stufen.
+
+         `stroke-linejoin: round` allein tat dabei fast nichts: es rundet nur um
+         die halbe Strichstärke, bei 2px also um einen Pixel. Sichtbar weich wird
+         die Kante erst über `paint-order` und eine zweite, breitere Linie
+         darunter — aber das wäre eine Attrappe, die den Sprung verdickt.
+
+         Stattdessen zeichnet die Linie mit deutlich runderen Gelenken: die
+         Strichstärke steigt leicht und `stroke-linecap: round` schließt die
+         Enden. Der Knick bleibt ein rechter Winkel — die Aussage der Seite
+         bleibt unangetastet —, aber er sticht nicht mehr.
+
+         Wer eine WIRKLICH weiche Linie will, schaltet auf "Fluss": dort ist die
+         Glättung der Punkt, und dort steht auch dabei, was sie kostet. */
       chart.appendChild(el("path", {
-        d: line, fill: "none", stroke: lineCol, "stroke-width": 2,
-        "stroke-linejoin": "round", class: "price-line"
+        d: line, fill: "none", stroke: lineCol, "stroke-width": 2.4,
+        "stroke-linejoin": "round", "stroke-linecap": "round",
+        "stroke-miterlimit": 1, class: "price-line"
       }));
     }
 
@@ -1219,9 +1524,12 @@
       });
       if (hi.price !== lo.price) {
         hasExtremes = true;
-        const extCol = cssVar("--price-extreme") || lineCol;
         const halo = cssVar("--chart-halo") || "#0b0f14";
         [[hi, "up"], [lo, "down"]].forEach(([s, dir]) => {
+          /* Hoch in der Leitfarbe, Tief rot — so unterscheiden sich die beiden.
+             Vorher trugen beide die Textfarbe; wer nur kurz hinsah, musste das
+             Dreieck lesen, um zu wissen, welche Marke er vor sich hatte. */
+          const extCol = cssVar(dir === "up" ? "--price-up" : "--price-down") || lineCol;
           /* Auf die Mitte der Stufe, aber innerhalb des Plots gehalten: eine
              Beschriftung am Rand würde sonst über die Achse hinauslaufen. */
           const xMid = Math.min(W - padR, Math.max(padL, (s.x0 + s.x1) / 2));
@@ -1242,7 +1550,7 @@
           const x = Math.min(W - padR - halfW, Math.max(padL + halfW, xMid));
           const txt = el("text", {
             x: x, y: y, "text-anchor": "middle",
-            class: "extreme-label",
+            class: "extreme-label " + dir,
             "font-size": narrow ? 11 : 12.5, "font-weight": 700, fill: extCol,
             "paint-order": "stroke",
             stroke: halo, "stroke-width": 2.5, "stroke-opacity": .85,
@@ -1339,6 +1647,415 @@
     positionTip(evt);
   }
 
+  /* ─── Fluss-Ansicht ────────────────────────────────────────────────────────
+     Die zweite Zeichenart. Sie nimmt dieselben Messungen und zeichnet sie als
+     weiche Kurve über einem Farbverlauf.
+
+     Sie steht ausdrücklich NEBEN der Stufenansicht, nicht an deren Stelle, und
+     sie ersetzt sie nicht als Voreinstellung. Der Grund ist derselbe, aus dem
+     die Stufen überhaupt existieren: zwischen zwei Messungen bewegte sich der
+     Preis nicht allmählich. Eine Kurve behauptet genau das. Weil das eine echte
+     Aussage über die Daten ist und keine Geschmacksfrage, steht unter dem
+     Diagramm ein Satz, der sie zurücknimmt (`flowNote`), und die Legende sagt
+     "interpoliert" statt "Stufen".
+
+     Was die Ansicht dafür kann: sie macht die RICHTUNG über längere Strecken
+     lesbar. Die Fläche ist zweifarbig — Leitfarbe, wo der Ausschnitt über seinem
+     Startpreis liegt, rot darunter —, und die Linie trägt denselben Verlauf.
+     Auf 7 Tagen oder "Alles" sieht man damit auf einen Blick, ob der Kurs über
+     oder unter dem steht, wo er anfing; die Stufenansicht beantwortet das erst,
+     wenn man zwei Achsenwerte vergleicht.
+
+     Die Glättung ist eine Catmull-Rom-Spline, in kubische Bézier-Segmente
+     umgerechnet. Monoton ist sie nicht — die Kurve kann zwischen zwei Punkten
+     leicht über den höheren hinausschwingen. Bei einer Linie, die ohnehin als
+     Interpolation ausgewiesen ist, wäre eine strengere Variante Genauigkeit an
+     der falschen Stelle; das Überschwingen bleibt über `TENSION` klein. */
+  const TENSION = 0.5;
+
+  function catmullRom(pts) {
+    if (pts.length < 2) return "";
+    let d = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i - 1] || pts[i];
+      const p1 = pts[i], p2 = pts[i + 1];
+      const p3 = pts[i + 2] || p2;
+      const c1x = p1[0] + (p2[0] - p0[0]) / 6 * TENSION;
+      const c1y = p1[1] + (p2[1] - p0[1]) / 6 * TENSION;
+      const c2x = p2[0] - (p3[0] - p1[0]) / 6 * TENSION;
+      const c2y = p2[1] - (p3[1] - p1[1]) / 6 * TENSION;
+      d += ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2[0].toFixed(2)} ${p2[1].toFixed(2)}`;
+    }
+    return d;
+  }
+
+  function drawFlow(payload, pulse) {
+    chart.innerHTML = "";
+    chart.classList.remove("flash-line");
+    const empty = document.getElementById("chart-empty");
+    const rows = (payload && payload.series) || [];
+    const isHour = payload && payload.resolution === "hour";
+
+    if (!rows.length) {
+      chart.hidden = true;
+      empty.hidden = false;
+      empty.textContent = t("chartEmpty");
+      return;
+    }
+    chart.hidden = false;
+    empty.hidden = true;
+
+    /* Geometrie wie in der Stufenansicht — dieselben Ränder, damit ein Wechsel
+       der Zeichenart das Bild nicht auch noch verschiebt. */
+    const avail = Math.max(320, Math.floor(
+      chart.clientWidth || (chart.parentElement && chart.parentElement.clientWidth) || 900));
+    const narrow = avail < 620;
+    const W = narrow ? Math.min(avail, 520) : avail, H = narrow ? 300 : 360;
+    const padL = narrow ? 74 : 98, padR = narrow ? 10 : 18;
+    const padT = 18, padB = narrow ? 38 : 44;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    chart.setAttribute("viewBox", `0 0 ${W} ${H}`);
+
+    const tMin = rows[0].at;
+    const tMax = Math.max(
+      rows[rows.length - 1].until != null ? rows[rows.length - 1].until : rows[rows.length - 1].at,
+      rows[rows.length - 1].at + (isHour ? 3600 : 60)
+    );
+    const tSpan = Math.max(1, tMax - tMin);
+
+    const prices = [];
+    rows.forEach(r => { if (isHour) { prices.push(r.h, r.l); } else { prices.push(r.price); } });
+    const valid = prices.filter(p => p != null && isFinite(p) && p > 0);
+    if (!valid.length) { chart.hidden = true; empty.hidden = false; empty.textContent = t("chartEmpty"); return; }
+    let pMin = Math.min.apply(null, valid);
+    let pMax = Math.max.apply(null, valid);
+    if (pMax - pMin < pMax * 1e-9) { pMin = pMin * 0.999; pMax = pMax * 1.001; }
+    const pad = (pMax - pMin) * 0.12;
+    pMin -= pad; pMax += pad;
+
+    const X = ts => padL + (ts - tMin) / tSpan * plotW;
+    const Y = p => padT + (1 - (p - pMin) / (pMax - pMin)) * plotH;
+
+    const gridCol = cssVar("--grid") || "rgba(255,255,255,.1)";
+    const epochCol = cssVar("--epoch-mark") || "#7e6fff";
+    const gapCol = cssVar("--gap-hatch") || "rgba(185,194,207,.35)";
+    /* Notfarbe ist die Leitfarbe, nicht mehr Grün: --price-up ist inzwischen
+       als var(--accent) definiert, und ein grüner Rückfall wäre die einzige
+       Stelle der Seite, an der doch wieder Grün erschiene. */
+    const upCol = cssVar("--price-up") || cssVar("--accent") || "#4ee0fc";
+    const downCol = cssVar("--price-down") || "#fb7185";
+    const halo = cssVar("--chart-halo") || "#0b0f14";
+
+    /* Die Punkte: ein Wert je Intervall, an dessen BEGINN gesetzt. Die
+       Stufenansicht braucht Anfang und Ende, weil sie die Haltedauer als Breite
+       zeichnet; hier ist die Breite die Interpolation, und ein zweiter Punkt am
+       Intervallende würde die Kurve dort flach ziehen und den Sprung danach
+       steiler machen, als er war. */
+    /* Die Punkte, in Segmente zerlegt.
+
+       Ein Segment endet, wo eine Lücke beginnt. Das ist hier nicht Kosmetik,
+       sondern dieselbe Regel wie in der Stufenansicht, nur strenger nötig: eine
+       Stufe über eine unbeobachtete Nacht ist eine flache Linie und fällt kaum
+       auf, eine interpolierte Kurve darüber ist eine lange, selbstbewusste
+       Diagonale — also genau die Behauptung einer Bewegung, die niemand gemessen
+       hat. Die Kurve setzt hinter der Lücke deshalb neu an, und die Schraffur
+       steht dazwischen.
+
+       Geprüft wird gegen die letzte BESTÄTIGUNG (`prevConfirmed`), nicht gegen
+       das nach vorn gezogene Intervallende — siehe die längere Begründung in
+       drawSteps. */
+    const segs = [];
+    let cur = [];
+    const gaps = [];
+    let prevConfirmed = null;
+    let lastConfirmed = null;
+    rows.forEach(r => {
+      const p = isHour ? (r.avg != null ? r.avg : r.c) : r.price;
+      if (p == null || !isFinite(p) || p <= 0) return;
+      const confirmed = isHour ? r.at + 3600 : (r.until != null ? r.until : r.at);
+      if (prevConfirmed != null && r.at - prevConfirmed > GAP_SLACK_S) {
+        gaps.push([prevConfirmed, r.at]);
+        if (cur.length) segs.push(cur);
+        cur = [];
+      }
+      prevConfirmed = confirmed;
+      lastConfirmed = confirmed;
+      cur.push({ x: X(r.at), y: Y(p), row: r, price: p });
+    });
+    if (cur.length) segs.push(cur);
+
+    /* Das letzte Intervall endet rechts, nicht in seinem Startpunkt: sonst
+       bräche die Kurve sichtbar vor dem Rand ab, obwohl der Preis dort noch
+       bestätigt war. Der Punkt wird nur angehängt, wenn dabei echte Breite
+       entsteht, und nur am letzten Segment. */
+    if (segs.length && lastConfirmed != null) {
+      const tail = segs[segs.length - 1];
+      const endX = X(lastConfirmed);
+      if (endX - tail[tail.length - 1].x > 1) {
+        const l = tail[tail.length - 1];
+        tail.push({ x: endX, y: l.y, row: l.row, price: l.price });
+      }
+    }
+    /* Für Extremwerte, Tooltips und den Endpunkt zählt die Gesamtheit der
+       Punkte, unabhängig davon, in welchem Segment sie liegen. */
+    const pts = segs.reduce((a, s) => a.concat(s), []);
+
+    const defs = el("defs");
+
+    /* Schraffur für Lücken. Weiter gestellt und dünner als in der
+       Stufenansicht: hier bricht die Kurve an der Lücke ohnehin sichtbar ab,
+       die Fläche muss den Befund also nur noch bestätigen, nicht allein tragen.
+       Mit dem dichten Raster der Stufenansicht legte sich eine halbe Nacht als
+       dunkles Feld über das halbe Diagramm und las sich als Störung, nicht als
+       Aussage über die Messung. */
+    const pat = el("pattern", {
+      id: "gap-hatch-flow", width: 9, height: 9,
+      patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)"
+    });
+    pat.appendChild(el("line", {
+      x1: 0, y1: 0, x2: 0, y2: 9, stroke: gapCol, "stroke-width": 1, opacity: .5
+    }));
+    defs.appendChild(pat);
+
+    /* Der Farbverlauf. Der Umschlagpunkt liegt auf dem STARTPREIS des
+       Ausschnitts, nicht auf der Mitte der Achse: die Leitfarbe heißt hier "über dem
+       Stand, mit dem dieser Ausschnitt begann" — eine Aussage, die der Leser
+       nachrechnen kann. Läge er auf der Achsenmitte, hinge die Farbe an der
+       Skalierung und änderte sich beim Fensterwechsel ohne jeden Anlass. */
+    const basePrice = pts.length ? pts[0].price : (pMin + pMax) / 2;
+    const baseY = Math.max(padT, Math.min(padT + plotH, Y(basePrice)));
+    const baseFrac = plotH > 0 ? (baseY - padT) / plotH : 0.5;
+
+    const lg = el("linearGradient", {
+      id: "flow-line-grad", x1: 0, y1: padT, x2: 0, y2: padT + plotH,
+      gradientUnits: "userSpaceOnUse"
+    });
+    lg.appendChild(el("stop", { offset: "0%", "stop-color": upCol }));
+    lg.appendChild(el("stop", { offset: (baseFrac * 100).toFixed(2) + "%", "stop-color": upCol }));
+    lg.appendChild(el("stop", { offset: (baseFrac * 100).toFixed(2) + "%", "stop-color": downCol }));
+    lg.appendChild(el("stop", { offset: "100%", "stop-color": downCol }));
+    defs.appendChild(lg);
+
+    /* Die Fläche nimmt denselben Umschlag, aber weich und stark ausgedünnt: sie
+       ist Untermalung, die Linie trägt die Aussage. */
+    const ag = el("linearGradient", {
+      id: "flow-area-grad", x1: 0, y1: padT, x2: 0, y2: padT + plotH,
+      gradientUnits: "userSpaceOnUse"
+    });
+    ag.appendChild(el("stop", { offset: "0%", "stop-color": upCol, "stop-opacity": .38 }));
+    ag.appendChild(el("stop", { offset: (baseFrac * 100).toFixed(2) + "%", "stop-color": upCol, "stop-opacity": .04 }));
+    ag.appendChild(el("stop", { offset: (baseFrac * 100).toFixed(2) + "%", "stop-color": downCol, "stop-opacity": .04 }));
+    ag.appendChild(el("stop", { offset: "100%", "stop-color": downCol, "stop-opacity": .38 }));
+    defs.appendChild(ag);
+
+    /* Ein weicher Schein unter der Linie. Sparsam dosiert: er soll Tiefe geben,
+       nicht die Kurve verwischen — und auf hellem Grund würde ein starker
+       Weichzeichner sie grau aussehen lassen. */
+    const blur = el("filter", {
+      id: "flow-glow", x: "-20%", y: "-20%", width: "140%", height: "140%"
+    });
+    blur.appendChild(el("feGaussianBlur", { stdDeviation: 4, result: "b" }));
+    const merge = el("feMerge");
+    merge.appendChild(el("feMergeNode", { in: "b" }));
+    merge.appendChild(el("feMergeNode", { in: "SourceGraphic" }));
+    blur.appendChild(merge);
+    defs.appendChild(blur);
+
+    chart.appendChild(defs);
+
+    /* Gitter und Preisachse — wörtlich wie in der Stufenansicht, damit sich
+       beim Umschalten nur die Kurve ändert und nicht das Ablesen. */
+    const TICKS = 4;
+    const tickVals = [];
+    for (let i = 0; i <= TICKS; i++) tickVals.push(pMin + (pMax - pMin) * i / TICKS);
+    const labels = tickVals.map(fmtPrice);
+    let prefix = "";
+    if (labels.length > 1) {
+      let k = 0;
+      while (k < labels[0].length && labels.every(s => s[k] === labels[0][k])) k++;
+      if (k >= 4 && labels.every(s => s.length - k >= 2)) prefix = labels[0].slice(0, k);
+    }
+    if (prefix) {
+      chart.appendChild(el("text", {
+        x: 2, y: 12, "text-anchor": "start", "font-size": 11, opacity: .75
+      }, prefix + "…"));
+    }
+    const AXIS_FS = narrow ? 12 : 14;
+    tickVals.forEach((p, i) => {
+      const y = Y(p);
+      chart.appendChild(el("line", {
+        x1: padL, y1: y, x2: W - padR, y2: y, stroke: gridCol, "stroke-width": 1
+      }));
+      chart.appendChild(el("text", {
+        class: "y-tick", x: padL - 9, y: y + AXIS_FS * 0.36, "text-anchor": "end",
+        "font-size": AXIS_FS, "font-weight": 600
+      }, prefix ? "…" + labels[i].slice(prefix.length) : labels[i]));
+    });
+
+    /* Die Nulllinie dieser Ansicht: der Startpreis des Ausschnitts. Ohne sie
+       bliebe der Farbumschlag eine Behauptung ohne Bezug — man sähe, dass die
+       Farbe wechselt, aber nicht, bei welchem Kurs. */
+    chart.appendChild(el("line", {
+      x1: padL, y1: baseY, x2: W - padR, y2: baseY,
+      stroke: cssVar("--muted") || "#9aa4b2", "stroke-width": 1,
+      "stroke-dasharray": "2 5", opacity: .55
+    }));
+
+    const probe = el("text", { "font-size": 11, opacity: 0 }, fmtClock(tMin));
+    chart.appendChild(probe);
+    let measured = 0;
+    try { measured = probe.getComputedTextLength(); } catch (e) { measured = 0; }
+    chart.removeChild(probe);
+    const labelW = measured > 0 ? measured : 78;
+    const tickCount = Math.max(1, Math.min(6, Math.floor(plotW / (labelW * 1.5 + 10))));
+    for (let i = 0; i <= tickCount; i++) {
+      const ts = tMin + tSpan * i / tickCount;
+      chart.appendChild(el("text", {
+        x: X(ts), y: H - padB + 20,
+        "text-anchor": i === 0 ? "start" : (i === tickCount ? "end" : "middle"),
+        "font-size": 11
+      }, fmtClock(ts)));
+    }
+
+    /* Je Segment eine Fläche und eine Kurve. Über eine Lücke hinweg wird
+       nichts verbunden. */
+    segs.forEach(seg => {
+      if (seg.length < 2) {
+        /* Ein einzelner Punkt ist keine Kurve. Er wird trotzdem gesetzt, damit
+           eine einzelne Messung zwischen zwei Lücken nicht verschwindet. */
+        if (seg.length === 1) {
+          chart.appendChild(el("circle", {
+            cx: seg[0].x, cy: seg[0].y, r: 3.5,
+            fill: seg[0].price >= basePrice ? upCol : downCol,
+            stroke: halo, "stroke-width": 1.5
+          }));
+        }
+        return;
+      }
+      const coords = seg.map(p => [p.x, p.y]);
+      const line = catmullRom(coords);
+      /* Die Fläche schließt über die Kurve, nicht über eine gerade Verbindung:
+         eine Gerade zurück würde am oberen Rand einen Keil stehen lassen. */
+      const area = line
+        + ` L ${coords[coords.length - 1][0].toFixed(2)} ${(padT + plotH).toFixed(2)}`
+        + ` L ${coords[0][0].toFixed(2)} ${(padT + plotH).toFixed(2)} Z`;
+
+      chart.appendChild(el("path", {
+        d: area, fill: "url(#flow-area-grad)", stroke: "none", class: "price-area"
+      }));
+      chart.appendChild(el("path", {
+        d: line, fill: "none", stroke: "url(#flow-line-grad)", "stroke-width": 2.8,
+        "stroke-linejoin": "round", "stroke-linecap": "round",
+        filter: REDUCED ? null : "url(#flow-glow)", class: "price-line"
+      }));
+    });
+
+    gaps.forEach(([a, b]) => {
+      const x = X(a), w = Math.max(2, X(b) - X(a));
+      chart.appendChild(el("rect", {
+        x: x, y: padT, width: w, height: plotH, fill: "url(#gap-hatch-flow)"
+      }));
+    });
+
+    const bounds = ((study && study.cases) || []).filter(c => c.at >= tMin && c.at <= tMax);
+    bounds.forEach(c => {
+      const x = X(c.at);
+      chart.appendChild(el("line", {
+        x1: x, y1: padT, x2: x, y2: padT + plotH,
+        stroke: epochCol, "stroke-width": 1.5, "stroke-dasharray": "5 4", opacity: .75
+      }));
+      chart.appendChild(el("text", {
+        x: x, y: padT - 5, "text-anchor": "middle", "font-size": 10, fill: epochCol
+      }, String(c.epoch)));
+      const hit = el("rect", { x: x - 7, y: padT, width: 14, height: plotH, fill: "transparent" });
+      hit.style.cursor = "pointer";
+      hit.addEventListener("mousemove", e => showBoundaryTip(e, c));
+      hit.addEventListener("mouseleave", hideTip);
+      chart.appendChild(hit);
+    });
+
+    /* Hoch und Tief, gleiche Regel und gleiche Farben wie in der Stufenansicht. */
+    let hasExtremes = false;
+    if (pts.length > 1) {
+      let hi = pts[0], lo = pts[0];
+      pts.forEach(s => {
+        if (s.price > hi.price) hi = s;
+        if (s.price < lo.price) lo = s;
+      });
+      if (hi.price !== lo.price) {
+        hasExtremes = true;
+        [[hi, "up"], [lo, "down"]].forEach(([s, dir]) => {
+          const col = dir === "up" ? upCol : downCol;
+          const above = dir === "up";
+          chart.appendChild(el("circle", {
+            cx: s.x, cy: s.y, r: 4, fill: col, stroke: halo, "stroke-width": 1.5
+          }));
+          const label = (above ? "▲ " : "▼ ") + fmtPrice(s.price);
+          const wantY = above ? s.y - 12 : s.y + 21;
+          const y = wantY < padT + 11 ? s.y + 21
+                  : (wantY > padT + plotH - 4 ? s.y - 12 : wantY);
+          const halfW = label.length * (narrow ? 3.4 : 3.9) + 4;
+          const x = Math.min(W - padR - halfW, Math.max(padL + halfW, s.x));
+          chart.appendChild(el("text", {
+            x: x, y: y, "text-anchor": "middle", class: "extreme-label " + dir,
+            "font-size": narrow ? 11 : 12.5, "font-weight": 700, fill: col,
+            "paint-order": "stroke", stroke: halo, "stroke-width": 2.5,
+            "stroke-opacity": .85, "stroke-linejoin": "round"
+          }, label));
+        });
+      }
+    }
+
+    /* Das "Jetzt"-Ende, wie in der Stufenansicht: ruhender Punkt, und bei einem
+       neuen Preis ein Ring, der einmal aufgeht. Er nimmt die Richtungsfarbe des
+       Punktes, damit dieselbe Bewegung im Hero und im Bild gleich aussieht. */
+    const lastPt = pts.length ? pts[pts.length - 1] : null;
+    if (lastPt && !isHour) {
+      const tipCol = lastPt.price >= basePrice ? upCol : downCol;
+      if (pulse && !REDUCED) {
+        chart.appendChild(el("circle", {
+          cx: lastPt.x, cy: lastPt.y, r: 3, fill: "none",
+          stroke: tipCol, "stroke-width": 2, class: "tip-pulse"
+        }));
+      }
+      chart.appendChild(el("circle", {
+        cx: lastPt.x, cy: lastPt.y, r: 3.5, fill: tipCol,
+        stroke: halo, "stroke-width": 1.5, class: "tip-dot"
+      }));
+    }
+
+    /* Trefffläche pro Punkt: ein Band bis zur Mitte des Abstands zum Nachbarn,
+       damit jeder Punkt der Kurve erreichbar bleibt, auch wo sie dicht liegt. */
+    pts.forEach((s, i) => {
+      const prevX = i > 0 ? pts[i - 1].x : s.x;
+      const nextX = i < pts.length - 1 ? pts[i + 1].x : s.x;
+      const x0 = i === 0 ? s.x : (prevX + s.x) / 2;
+      const x1 = i === pts.length - 1 ? s.x + 4 : (s.x + nextX) / 2;
+      const hit = el("rect", {
+        x: x0, y: padT, width: Math.max(6, x1 - x0), height: plotH, fill: "transparent"
+      });
+      hit.addEventListener("mousemove", e => showStepTip(e, { row: s.row }, isHour));
+      hit.addEventListener("mouseleave", hideTip);
+      chart.appendChild(hit);
+    });
+
+    const legEpoch = document.getElementById("leg-epoch");
+    const legGap = document.getElementById("leg-gap");
+    const legExtreme = document.getElementById("leg-extreme");
+    if (legEpoch) legEpoch.hidden = bounds.length === 0;
+    if (legGap) legGap.hidden = gaps.length === 0;
+    if (legExtreme) legExtreme.hidden = !hasExtremes;
+
+    chart.setAttribute("aria-label",
+      t("chartTitle") + ": " + fmtClock(tMin) + " – " + fmtClock(tMax));
+
+    if (pulse && !REDUCED) {
+      void chart.offsetWidth;
+      chart.classList.add("flash-line");
+    }
+  }
+
   function showBoundaryTip(evt, c) {
     const rows = [];
     rows.push(`<div class="tip-key">${escapeHtml(t("tipBoundary", { epoch: c.epoch }))}</div>`);
@@ -1397,18 +2114,87 @@
   }
 
   /* Ein Wert leuchtet auf. Die Klasse wird erst entfernt und nach einem Reflow
-     neu gesetzt, sonst startet die Animation beim zweiten Mal nicht neu. */
-  function flashEl(el) {
+     neu gesetzt, sonst startet die Animation beim zweiten Mal nicht neu.
+
+     `col` färbt das Leuchten: der Preis übergibt hier die Richtungsfarbe, alle
+     anderen Werte lassen es weg und bekommen die Serienfarbe. Die Variable wird
+     am Element selbst gesetzt, nicht global — sonst würden zwei gleichzeitig
+     blitzende Werte einander die Farbe umschreiben. */
+  function flashEl(el, col) {
     if (!el || REDUCED) return;
+    el.style.setProperty("--flash-col", col || "var(--price-line)");
     el.classList.remove("flash");
     void el.offsetWidth;
     el.classList.add("flash");
   }
 
+  /* ─── Der Preis zählt ─────────────────────────────────────────────────────
+     Wie animateTo() für den solution_count in mining.html: die Zahl läuft von
+     ihrem alten Wert zum neuen, statt umzuspringen.
+
+     Zwei Unterschiede zum Zähler dort, beide aus der Größenordnung des Preises:
+
+       1. Nicht runden. Der Zähler dort zählt ganze Lösungen; hier stünde nach
+          Math.round() konstant "0". Zwischenwerte laufen deshalb ungerundet
+          durch fmtPrice(), das ohnehin auf vier signifikante Stellen formatiert.
+
+       2. Nicht linear in der Zahl, sondern im Verhältnis. Der Preis bewegt sich
+          in Sprüngen von ~0,2 %; ein linearer Lauf über so eine Spanne zeigt
+          bei zehn Nachkommastellen fast nur die letzten beiden Ziffern in
+          Bewegung. Geometrisch interpoliert verteilt sich die Änderung über die
+          gesamte Ziffernfolge und liest sich als eine Zahl, die wandert.
+
+     Die Dauer ist kürzer als die 700 ms dort: der Preis wird minütlich gemessen,
+     und ein Zähler, der noch läuft, wenn man schon weiterliest, wirkt träge. */
+  let priceAnimFrame = null;
+  function animatePriceTo(el, fromVal, toVal, durationMs) {
+    if (!el) return;
+    if (priceAnimFrame) cancelAnimationFrame(priceAnimFrame);
+    if (REDUCED || fromVal == null || !isFinite(fromVal) || fromVal <= 0
+        || toVal == null || !isFinite(toVal) || toVal <= 0 || fromVal === toVal) {
+      el.textContent = fmtPrice(toVal);
+      return;
+    }
+    const start = performance.now();
+    const logFrom = Math.log(fromVal), logTo = Math.log(toVal);
+    function step(now) {
+      const p = Math.min(1, (now - start) / durationMs);
+      const ease = 1 - Math.pow(1 - p, 3);   /* cubic ease-out, wie in mining.html */
+      /* Am Ende exakt der Zielwert, nicht exp(log(x)) — das ließe die letzte
+         Ziffer gelegentlich um eins danebenstehen. */
+      el.textContent = fmtPrice(p >= 1 ? toVal : Math.exp(logFrom + (logTo - logFrom) * ease));
+      if (p < 1) priceAnimFrame = requestAnimationFrame(step);
+      else priceAnimFrame = null;
+    }
+    priceAnimFrame = requestAnimationFrame(step);
+  }
+
+  /* Die Richtungsfarbe liegt eine Weile auf Preis und Haltedauer-Pille und wird
+     dann zurückgenommen. Zurückgenommen, weil die Farbe die letzte BEWEGUNG
+     meint, nicht den Kurs selbst — bliebe sie stehen, läse sie sich nach ein
+     paar Minuten als Urteil über den Preis. */
+  let dirTimer = null;
+  const DIR_HOLD_MS = 6000;
+  function markDirection(dir) {
+    const price = document.getElementById("hero-price");
+    const held = document.getElementById("hero-held");
+    clearTimeout(dirTimer);
+    [price, held].forEach(n => { if (n) n.classList.remove("up", "down"); });
+    if (!dir) return;
+    [price, held].forEach(n => { if (n) n.classList.add(dir); });
+    dirTimer = setTimeout(() => {
+      [price, held].forEach(n => { if (n) n.classList.remove("up", "down"); });
+    }, DIR_HOLD_MS);
+  }
+
   /* ─── Hero ──────────────────────────────────────────────────────────────── */
-  function renderHero() {
+  /* `from` ist der Preis, von dem aus gezählt wird — null heißt "nicht zählen,
+     einfach hinschreiben". Ein Sprach- oder Themenwechsel ruft renderHero()
+     ebenfalls, und dabei darf die Zahl nicht loslaufen: dort hat sich kein
+     Preis geändert, nur seine Schreibweise. */
+  function renderHero(from) {
     if (!latest) return;
-    document.getElementById("hero-price").textContent = fmtPrice(latest.price);
+    animatePriceTo(document.getElementById("hero-price"), from, latest.price, 520);
 
     /* "Seit wann unverändert" ist die Angabe, die diese Datenform gegenüber
        einem Börsen-Chart voraus hat. Steht deshalb prominent, nicht im Tooltip. */
@@ -1589,17 +2375,25 @@
          ersten Laden bleibt es ruhig: da ist noch nichts, wogegen sich etwas
          geändert haben könnte. */
       changed = prevPrice !== null && latest.price !== prevPrice;
+      /* Der alte Preis wird gemerkt, BEVOR prevPrice weiterrückt: von ihm aus
+         zählt die Zahl hoch oder runter. */
+      const from = changed ? prevPrice : null;
+      const dir = changed ? (latest.price > prevPrice ? "up" : "down") : null;
       prevPrice = latest.price;
       lastFetchTs = latest.at != null ? latest.at : Math.round(Date.now() / 1000);
 
-      renderHero();
+      renderHero(from);
       if (changed) {
-        flashEl(document.getElementById("hero-price"));
+        /* Richtungsfarbe zuerst, dann das Aufleuchten in derselben Farbe: beides
+           meint dasselbe Ereignis und soll auch gleich aussehen. */
+        markDirection(dir);
+        const dirCol = dir === "up" ? "var(--price-up)" : "var(--price-down)";
+        flashEl(document.getElementById("hero-price"), dirCol);
         /* Marktkapitalisierung und 24-Stunden-Änderung folgen unmittelbar aus
            dem Preis, also leuchten sie mit. Umlauf und Epoche nicht: die
            bewegen sich nach eigener Uhr und hätten hier nichts zu melden. */
-        flashEl(document.getElementById("f-cap"));
-        flashEl(document.getElementById("f-change"));
+        flashEl(document.getElementById("f-cap"), dirCol);
+        flashEl(document.getElementById("f-change"), dirCol);
       }
       setRefreshState(latest.status === "stale" ? "stale" : "live");
     } catch (e) {
@@ -1626,14 +2420,10 @@
     }
     renderStudy();
     await loadSeries(changed);
-    /* Jetzt steht der Hero in seiner endgültigen Höhe — die Hintergrundspuren
-       richten sich danach aus und werden deshalb einmal neu gesetzt. Nur beim
-       ersten Durchlauf: später bliebe die Höhe ohnehin gleich, und ein Neusetzen
-       würde die Spur sichtbar zurückspringen lassen. */
-    if (!flowPlaced && window.qdrRelayoutFlow) {
-      flowPlaced = true;
-      window.qdrRelayoutFlow();
-    }
+    /* Früher wurde hier der Hintergrund neu ausgerichtet, sobald der Hero seine
+       endgültige Höhe hatte: die wandernde Stufenkurve suchte sich ihre Lage aus
+       dem Layout. Das Partikelnetz braucht das nicht — es liegt über dem ganzen
+       Viewport und hat keine Lage, die vom Inhalt abhinge. */
     scheduleNextPoll();
   }
 
@@ -1662,6 +2452,25 @@
     loadSeries();
   });
 
+  function syncStyleSeg() {
+    document.querySelectorAll("#style-seg button").forEach(b => {
+      b.classList.toggle("active", b.dataset.style === chartStyle);
+    });
+    /* Am <body>, damit CSS mitbekommt, welche Zeichenart gilt — die Legende
+       färbt ihr Plättchen daran. */
+    document.body.setAttribute("data-chart-style", chartStyle);
+  }
+  document.getElementById("style-seg").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b || b.dataset.style === chartStyle) return;
+    chartStyle = b.dataset.style;
+    safeSet(LS_STYLE, chartStyle);
+    syncStyleSeg();
+    /* Kein Nachladen: es sind dieselben Daten, nur anders gezeichnet. Ein
+       Abruf hier würde die Umschaltung von der Netzlatenz abhängig machen. */
+    if (series) drawChart(series);
+  });
+
   function applyLang() {
     root.setAttribute("lang", lang);
     renderI18nText();
@@ -1684,7 +2493,11 @@
     /* Das SVG liest seine Farben beim Zeichnen aus den CSS-Variablen, also muss
        ein Themenwechsel neu zeichnen — sonst behält es die alte Palette. */
     if (series) drawChart(series);
-    if (window.qdrRepaintFlow) window.qdrRepaintFlow();
+    /* Das Canvas backt die Palette in seine Pixel — CSS-Variablen reichen dort
+       nicht hinein, ein Themenwechsel muss es also neu aufsetzen. `drawColony`
+       ist eine Funktionsdeklaration und damit auch beim ersten Aufruf von
+       applyTheme() schon vorhanden, obwohl sie weiter unten steht. */
+    drawColony();
   }
   document.getElementById("theme-btn").addEventListener("click", () => {
     theme = theme === "dark" ? "light" : "dark";
@@ -1709,10 +2522,11 @@
   })();
 
   /* ─── Hintergrund-Canvas ──────────────────────────────────────────────────
-     Eine einzige, sehr langsam wandernde Stufenkurve.
+     Dasselbe Partikelnetz wie auf Mining Live: driftende Punkte, die eine Linie
+     zueinander ziehen, sobald sie nahe genug beieinander liegen.
 
-     Hier standen nacheinander zwei Fassungen, und beide sind an derselben
-     Stelle gescheitert — an der Frage, wie viel gleichzeitig passiert:
+     Hier standen vorher drei andere Fassungen, alle aus dem Motiv dieser Seite
+     heraus gebaut, und die Geschichte ist es wert, festgehalten zu werden:
 
        1. Stufenbänder aus dünnen Linien. Scharfe 1px-Kanten, waagerecht, in
           genau den Winkeln, in denen auch Panel- und Header-Ränder liegen —
@@ -1720,236 +2534,190 @@
        2. Ein Feld aus springenden Punkten, die bei jedem Sprung grün oder rot
           aufleuchteten. Die Richtung war ablesbar, aber es zuckte an vielen
           Stellen gleichzeitig; gemessen war fast die Hälfte des Feldes
-          dauernd farbig. Ruhe ließ sich daran nicht mehr nachregeln, weil das
-          Unruhige nicht die Helligkeit war, sondern die schiere Zahl
-          unabhängiger Ereignisse.
+          dauernd farbig.
+       3. Eine einzelne, sehr langsam nach links wandernde Stufenkurve. Die
+          war ruhig und thematisch am nächsten dran — und genau daran
+          gescheitert: seit das Diagramm eine weiche Kurve als Voreinstellung
+          zeigt, standen zwei Kurven übereinander, und die im Hintergrund war
+          die größere und ruhigere. Ein Hintergrund, der mit dem Vordergrund um
+          dieselbe Form konkurriert, verliert immer.
 
-     Deshalb jetzt genau ein bewegtes Objekt statt vieler: eine Stufenkurve,
-     die gleichmäßig nach links zieht. Nichts blinkt, nichts wechselt
-     sprunghaft seinen Zustand — die einzige Bewegung ist eine gleichförmige
-     Wanderung, und die nimmt das Auge als ruhig wahr, auch wenn sie nie
-     aufhört.
+     Das Netz hat diese Kollision nicht: es ist aus Punkten und geraden
+     Verbindungen gebaut, also aus einer Form, die im Diagramm nicht vorkommt.
+     Und es lässt die beiden Live-Seiten — Mining und Kurs — auf demselben Grund
+     stehen, was sie als zusammengehörig lesbar macht.
 
-     Die Regel der Seite bleibt sichtbar: waagerecht halten, senkrecht
-     springen, nie diagonal. Dass die Stufen weich und dick gezeichnet werden
-     statt als Haarlinien, ist die Lehre aus Fassung 1 — so entsteht keine
-     Kante, die mit dem Layout konkurriert.
+     Gelesen wird nichts davon: Lage und Bewegung sind gewürfelt und kodieren
+     keinen Kurs. Dass es rein atmosphärisch ist, hält es von den Messwerten
+     getrennt — dieselbe Trennung wie beim Glut-Canvas in burn.html.
 
-     Gelesen wird nichts davon: der Verlauf ist gewürfelt und kodiert keinen
-     Kurs. Dass er rein atmosphärisch ist, hält ihn von den Messwerten
-     getrennt — dieselbe Trennung wie beim Glut-Canvas in burn.html. */
-  (function ticker() {
-    const canvas = document.getElementById("flow-canvas");
-    if (!canvas || !canvas.getContext) return;
-    const ctx = canvas.getContext("2d");
-    const reduced = window.matchMedia
-      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+     Die Umsetzung folgt drawAntCanvas() in mining.html. Absichtlich eine Kopie
+     und kein geteiltes Modul: die Seiten teilen sich theme.css, aber keinen
+     Skript-Build, und ein zusätzliches script-Element wäre ein zweiter
+     Netzabruf für ~80 Zeilen. Wer hier etwas ändert, prüft die Kolonie dort
+     mit. */
+  let colonyFrame = null;
+  let colonyResize = null;
 
-    /* Zwei Linien: die vordere trägt die Form, die hintere läuft langsamer und
-       schwächer und gibt Tiefe. Mehr wären wieder ein Gitter. */
-    const LAYERS = 2;
-    let lines = [];
-    let raf = null;
-    let last = 0;
-
-    /* --bg steht als Hex in theme.css (#f2f4f9), nicht als rgb(). Eine frühere
-       Fassung suchte hier mit /\d+/ nach Dezimalzahlen und las aus "#f2f4f9"
-       die Ziffern 2, 4, 9 — Helligkeit 4, also "dunkel". Der Zuschlag für
-       hellen Grund hat dadurch nie gegriffen. Beide Schreibweisen werden
-       deshalb ausgewertet. */
-    function isLightGround() {
-      const s = (cssVar("--bg") || "").trim();
-      let r, g, b;
-      let m = s.match(/^#([0-9a-f]{6})$/i);
-      if (m) {
-        const v = parseInt(m[1], 16);
-        r = (v >> 16) & 255; g = (v >> 8) & 255; b = v & 255;
-      } else if ((m = s.match(/^#([0-9a-f]{3})$/i))) {
-        r = parseInt(m[1][0] + m[1][0], 16);
-        g = parseInt(m[1][1] + m[1][1], 16);
-        b = parseInt(m[1][2] + m[1][2], 16);
-      } else {
-        const n = s.match(/\d+(?:\.\d+)?/g);
-        if (!n || n.length < 3) return false;
-        r = +n[0]; g = +n[1]; b = +n[2];
-      }
-      return (0.299 * r + 0.587 * g + 0.114 * b) > 140;
+  /* --bg steht als Hex in theme.css (#f2f4f9), nicht als rgb(). Eine frühere
+     Fassung suchte hier nach Dezimalzahlen und las aus "#f2f4f9" die Ziffern
+     2, 4, 9 — Helligkeit 4, also "dunkel". Der Zuschlag für hellen Grund hat
+     dadurch nie gegriffen. Beide Schreibweisen werden deshalb ausgewertet.
+     (mining.html hat für dasselbe eine eigene Fassung, die nur Dezimalzahlen
+     kennt — dort steht derselbe Fehler noch drin.) */
+  function isLightGround() {
+    const s = (cssVar("--bg") || "").trim();
+    let r, g, b;
+    let m = s.match(/^#([0-9a-f]{6})$/i);
+    if (m) {
+      const v = parseInt(m[1], 16);
+      r = (v >> 16) & 255; g = (v >> 8) & 255; b = v & 255;
+    } else if ((m = s.match(/^#([0-9a-f]{3})$/i))) {
+      r = parseInt(m[1][0] + m[1][0], 16);
+      g = parseInt(m[1][1] + m[1][1], 16);
+      b = parseInt(m[1][2] + m[1][2], 16);
+    } else {
+      const n = s.match(/\d+(?:\.\d+)?/g);
+      if (!n || n.length < 3) return false;
+      r = +n[0]; g = +n[1]; b = +n[2];
     }
+    return (0.299 * r + 0.587 * g + 0.114 * b) > 140;
+  }
 
-    /* Höhenlage mit Bedacht: die Ränder sind verboten, die Mitte ist verdeckt.
+  function drawColony() {
+    const canvas = document.getElementById("colony-canvas");
+    if (!canvas) return;
+    if (colonyFrame) cancelAnimationFrame(colonyFrame);
 
-       Ganz oben lief eine Linie fast waagerecht dicht unter der Header-Kante
-       durch — parallel zu einer echten Layout-Kante, und genau so las sie sich
-       auch: wie ein verrutschter Rahmen. Ganz unten gilt dasselbe gegenüber der
-       Fußzeile. Die Seitenmitte wiederum verdecken die Panels.
+    const accent  = cssVar("--accent");
+    const accent2 = cssVar("--accent2");
 
-       Feste Prozentwerte lösen das nicht: 27 % der Höhe liegen auf einem hohen
-       Desktop im freien Band unter dem Hero, auf einem 780 px hohen Telefon
-       aber mitten in der Preiszahl. Deshalb wird die Lage aus dem Layout
-       gelesen — unter der Hero-Zahl und unter den Karten — und nur dort, wo es
-       nichts zu messen gibt, auf Anteile zurückgefallen. */
-    /* Der Hero ist dichter belegt, als er aussieht: zwischen Preiszahl,
-       Haltedauer-Pille und Kachelreihe blieben gemessen 18 px, und über dem
-       Label nur 41 px — beides zu wenig, und das obere säße obendrein parallel
-       zur Header-Kante, also genau dort, wo diese Seite schon einmal nach
-       kaputtem Layout aussah.
+    /* Heller Grund schluckt diese Farben deutlich stärker, also wird dort
+       kräftiger gezeichnet. Die Helligkeit wird aus dem gemalten Hintergrund
+       gelesen, nicht aus dem Theme-Attribut: das ist auf "dem System folgen"
+       gar nicht gesetzt. */
+    const light = isLightGround();
+    const LINK_BOOST = light ? 1.7 : 1;
+    const DOT_BOOST  = light ? 1.35 : 1;
 
-       Der großzügige Raum liegt unterhalb der Kacheln (gemessen 544 px). Beide
-       Spuren liegen deshalb dort, weit auseinander gezogen. Das Motiv wandert
-       damit aus dem Hero heraus — kein Verlust: dort steht die größte Zahl der
-       Seite, und die braucht keinen Hintergrund, der mit ihr konkurriert. */
-    function baseFor(i, H) {
-      const fallback = H * (i === 0 ? .46 : .78);
-      const facts = document.querySelector(".hero-facts");
-      if (!facts || !facts.getBoundingClientRect) return fallback;
-      const below = H - facts.getBoundingClientRect().bottom;
-      if (below < 150) return null;   /* zu flach für zwei Spuren */
-      const top = facts.getBoundingClientRect().bottom;
-      /* Auf 28 % und 68 % des freien Feldes: genug Abstand zur Kachelreihe
-         darüber, zum unteren Rand darunter und zwischen den beiden Spuren. */
-      return top + below * (i === 0 ? .28 : .68);
-    }
-
-    /* Eine Stufe ist ein Preis, der eine Weile stand: Breite = Haltedauer,
-       Höhe = Sprung. Viele kleine Sprünge, selten ein großer — im selben
-       Verhältnis wie echte Bewegung. */
-    function nextStep(prevY, band, base) {
-      const big = Math.random() < .14;
-      const jump = (Math.random() - .5) * band * (big ? 1.1 : .34);
-      const y = Math.max(base - band, Math.min(base + band, prevY + jump));
-      return { w: 70 + Math.random() * 190, y: y };
-    }
-
-    function makeLine(i) {
-      const W = canvas.width, H = canvas.height;
-      const base = baseFor(i, H);
-      if (base === null) return null;   /* keine Lage frei — Spur entfällt */
-      const line = {
-        base: base,
-        band: H * (i === 0 ? .075 : .085),
-        v: i === 0 ? 7 : 4.6,          /* px/s — bewusst sehr langsam */
-        width: i === 0 ? 2.6 : 2.0,
-        alpha: i === 0 ? .42 : .30,
-        x: 0,
-        steps: []
-      };
-      let y = base;
-      let filled = 0;
-      /* Über die Breite hinaus vorfüllen, damit rechts keine angeschnittene
-         Kante steht. */
-      while (filled < W + 400) {
-        const s = nextStep(y, line.band, base);
-        y = s.y;
-        line.steps.push(s);
-        filled += s.w;
-      }
-      return line;
-    }
-
-    function seed() {
-      canvas.width = canvas.offsetWidth;
+    function resize() {
+      canvas.width  = canvas.offsetWidth;
       canvas.height = canvas.offsetHeight;
-      lines = [];
-      for (let i = 0; i < LAYERS; i++) {
-        const L = makeLine(i);
-        if (L) lines.push(L);
-      }
     }
+    resize();
+    /* Ein Themenwechsel ruft diese Funktion erneut, also muss der alte
+       Resize-Listener weg — sonst stapelt jeder Wechsel einen weiteren. */
+    if (colonyResize) window.removeEventListener("resize", colonyResize);
+    colonyResize = () => { resize(); };
+    window.addEventListener("resize", colonyResize, { passive: true });
 
-    function advance(dt) {
-      const W = canvas.width;
-      for (const L of lines) {
-        L.x -= L.v * dt;
-        /* Links Herausgelaufenes verwerfen, rechts nachlegen: die Spur bleibt
-           endlos, das Array kurz — die Arbeit pro Bild bleibt konstant, egal
-           wie lange der Tab offen steht. */
-        while (L.steps.length && L.x + L.steps[0].w < -300) {
-          L.x += L.steps.shift().w;
-        }
-        let end = L.x;
-        for (const s of L.steps) end += s.w;
-        while (end < W + 400) {
-          const prev = L.steps.length ? L.steps[L.steps.length - 1].y : L.base;
-          const s = nextStep(prev, L.band, L.base);
-          L.steps.push(s);
-          end += s.w;
-        }
-      }
-    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-    function paint() {
+    /* Zahl der Punkte nach FLÄCHE, nicht nach Breite: das Canvas liegt über dem
+       ganzen Viewport, und eine reine Breitenrechnung ließ hohe Schirme leer
+       aussehen. Nach oben gedeckelt, damit ein großer Monitor kein Rauschen
+       bekommt. */
+    const N = Math.max(24, Math.min(90,
+      Math.round(Math.sqrt(canvas.width * canvas.height) / 16)));
+
+    if (REDUCED) {
+      /* Ohne Bewegung: ein stehendes Feld aus Punkten, keine Animation. */
       const W = canvas.width, H = canvas.height;
-      const col = cssVar("--price-line") || "#4ee0fc";
-      /* Auf hellem Grund verschluckt die Seite die Spur stärker — und theme.css
-         dimmt `.qs-canvas` dort zusätzlich von .9 auf .55. Gemessen hob das den
-         alten Faktor 1.5 exakt wieder auf: beide Themes landeten bei derselben
-         Deckkraft, obwohl das helle mehr braucht. Der Faktor gleicht jetzt
-         beides aus. */
-      const boost = isLightGround() ? 2.4 : 1;
       ctx.clearRect(0, 0, W, H);
-      /* Runde Enden und Ecken: eine Stufe bleibt als Stufe lesbar, bekommt
-         aber keine spitze Kante, die nach Layout aussieht. */
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = col;
-
-      for (const L of lines) {
-        /* Der Verlauf blendet die Spur an beiden Rändern aus, damit sie nirgends
-           angeschnitten beginnt oder endet. */
-        const grad = ctx.createLinearGradient(0, 0, W, 0);
-        const a = Math.min(1, L.alpha * boost);
-        grad.addColorStop(0, "rgba(0,0,0,0)");
-        grad.addColorStop(.16, col);
-        grad.addColorStop(.84, col);
-        grad.addColorStop(1, "rgba(0,0,0,0)");
-
-        ctx.globalAlpha = a;
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = L.width;
+      for (let i = 0; i < N; i++) {
         ctx.beginPath();
-        let x = L.x;
-        let prevY = null;
-        for (const s of L.steps) {
-          if (prevY === null) ctx.moveTo(x, s.y);
-          else { ctx.lineTo(x, prevY); ctx.lineTo(x, s.y); }  /* senkrechter Sprung */
-          ctx.lineTo(x + s.w, s.y);                            /* die Haltedauer */
-          prevY = s.y;
-          x += s.w;
-          if (x > W + 300) break;
-        }
-        ctx.stroke();
+        ctx.arc(Math.random() * W, Math.random() * H, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = Math.min(1, .55 * DOT_BOOST);
+        ctx.fill();
       }
       ctx.globalAlpha = 1;
+      return;
     }
 
-    function loop(now) {
-      const dt = Math.min(.05, (now - last) / 1000 || 0);
-      last = now;
-      advance(dt);
-      paint();
-      raf = requestAnimationFrame(loop);
+    const nodes = [];
+    for (let i = 0; i < N; i++) {
+      nodes.push({
+        x:  Math.random() * canvas.width,
+        y:  Math.random() * canvas.height,
+        vx: (Math.random() - .5) * .25,
+        vy: (Math.random() - .5) * .25,
+        r:  1 + Math.random() * 1.5,
+        phase: Math.random() * Math.PI * 2
+      });
     }
 
-    function start() {
-      if (raf) cancelAnimationFrame(raf);
-      seed();
-      if (reduced) { paint(); return; }   /* stehendes Bild, keine Bewegung */
-      last = performance.now();
-      raf = requestAnimationFrame(loop);
+    /* Verbindungsradius wächst mit dem Canvas: ein fester Wert ließ die Punkte
+       über einen vollen Viewport verteilt meist unverbunden, und die Linien
+       sind der Punkt der Sache. Ein Mindestwert hält kleine Schirme zusammen. */
+    const LINK_DIST = Math.max(110, Math.min(190,
+      Math.round(Math.sqrt(canvas.width * canvas.height) / 8)));
+
+    function step() {
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      const now = performance.now() / 1000;
+
+      for (const nd of nodes) {
+        nd.x += nd.vx;
+        nd.y += nd.vy;
+        if (nd.x < 0 || nd.x > W) nd.vx *= -1;
+        if (nd.y < 0 || nd.y > H) nd.vy *= -1;
+        nd.x = Math.max(0, Math.min(W, nd.x));
+        nd.y = Math.max(0, Math.min(H, nd.y));
+      }
+
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[j].x - nodes[i].x;
+          const dy = nodes[j].y - nodes[i].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < LINK_DIST) {
+            ctx.beginPath();
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            ctx.strokeStyle = accent2;
+            ctx.globalAlpha = (1 - dist / LINK_DIST) * .55 * LINK_BOOST;
+            ctx.lineWidth = 1.1;
+            ctx.stroke();
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+
+      /* Ein weicher Schein hinter jedem Punkt lässt ihn als leuchtenden Punkt
+         lesen statt als flachen Fleck — das hebt das Netz mehr aus dem Grund
+         als reine Deckkraft. */
+      for (const nd of nodes) {
+        const pulse = .5 + .5 * Math.sin(now * .8 + nd.phase);
+        const r = nd.r * (1 + pulse * .35);
+        ctx.beginPath();
+        ctx.arc(nd.x, nd.y, r * 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = (.10 + pulse * .10) * DOT_BOOST;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(nd.x, nd.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = Math.min(1, (.55 + pulse * .35) * DOT_BOOST);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      colonyFrame = requestAnimationFrame(step);
     }
-    /* Ein Themenwechsel ändert --price-line, also wird neu gezeichnet. */
-    window.qdrRepaintFlow = paint;
-    /* Die Lage der Spuren hängt am Layout des Heros, und der steht erst, wenn
-       die Zahl und die Haltedauer-Pille geladen sind. Deshalb kann der Aufrufer
-       nach dem ersten Laden einmal neu setzen lassen. */
-    window.qdrRelayoutFlow = start;
-    window.addEventListener("resize", start, { passive: true });
-    start();
-  })();
+    colonyFrame = requestAnimationFrame(step);
+  }
+  /* Gestartet wird nicht hier, sondern in applyTheme(): das läuft beim Aufbau
+     der Seite ohnehin und bei jedem Themenwechsel wieder. Ein zusätzlicher
+     Aufruf an dieser Stelle legte beim Start ein zweites Netz an. */
   /* ─── Start ─────────────────────────────────────────────────────────────── */
   applyTheme();
   applyLang();
   syncWindowSeg();
+  syncStyleSeg();
   /* Das Fußzeilenjahr steht nicht im Markup, damit die Seite am 1. Januar
      nicht das falsche Jahr behauptet. */
   var fy = document.getElementById("foot-year");

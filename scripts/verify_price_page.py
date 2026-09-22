@@ -8,8 +8,14 @@ Two things here are specific to this page and worth watching in the shots:
 
   * the price is ~4e-7 USD, so the axis labels carry many decimals — they are
     the most likely thing to collide or to be clipped by the left padding;
-  * the series is STEPS. A rendered curve would mean the path builder emitted
-    diagonals, which would be the page asserting movement it never measured.
+  * the STEPS view must stay steps. A curve command in that view would mean the
+    path builder smoothed the series, which would be the page asserting movement
+    it never measured.
+
+The page now opens in the "Flow" view, which smooths deliberately and says so
+under the chart. The steps check below therefore switches to Steps first rather
+than reading whatever happens to be on screen — checking the default would test
+the wrong view and pass for the wrong reason.
 
 Usage:
     python -m uvicorn api.server:app --port 8077        # with a filled store
@@ -72,6 +78,10 @@ with sync_playwright() as p:
     # The step path is the page's central honesty claim: horizontal runs joined
     # by vertical jumps, never a diagonal. A path command list containing an
     # unexpected curve operator would mean the builder smoothed the data.
+    #
+    # Switch to Steps first: the page opens in Flow, where a curve is the point.
+    pg.click("#style-seg button[data-style=steps]")
+    pg.wait_for_timeout(800)
     d = pg.evaluate(
         "() => { const ps = document.querySelectorAll('#chart path');"
         " return ps.length ? ps[ps.length-1].getAttribute('d') : ''; }"
@@ -80,7 +90,21 @@ with sync_playwright() as p:
         issues.append(("chart", "no path rendered — chart is empty"))
     elif any(c in d for c in ("C", "S", "Q", "T", "A")):
         issues.append(("honesty", "price path contains a curve command — "
-                                  "the series must be drawn as steps"))
+                                  "the steps view must be drawn as steps"))
+
+    # ...and the Flow view must actually smooth, otherwise the switch is a
+    # relabelled duplicate of the steps view.
+    pg.click("#style-seg button[data-style=flow]")
+    pg.wait_for_timeout(800)
+    df = pg.evaluate(
+        "() => { const ps = document.querySelectorAll('#chart path.price-line');"
+        " return ps.length ? ps[0].getAttribute('d') : ''; }"
+    )
+    if df and "C" not in df:
+        issues.append(("flow", "the flow view emitted no curve — it is not smoothing"))
+    # The smoothing has to be declared on the page, since it is the default view.
+    if not pg.locator("#flow-note").is_visible():
+        issues.append(("honesty", "the flow view does not state that it interpolates"))
 
     pg.click("#lang-seg button[data-lang=de]")
     pg.wait_for_timeout(600)
