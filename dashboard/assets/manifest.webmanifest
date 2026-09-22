@@ -1,0 +1,22 @@
+{
+  "name": "Qubic Report",
+  "short_name": "Qubic Report",
+  "description": "Dezentralisierung, verbrannte Supply, Kurs und Mining — gemessen aus der Kette.",
+  "lang": "de",
+  "start_url": "../",
+  "scope": "../",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "icons": [
+    { "src": "icon.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Burn-Report", "url": "../burn.html" },
+    { "name": "Kurs", "url": "../price.html" },
+    { "name": "Mining Live", "url": "../mining.html" }
+  ]
+}

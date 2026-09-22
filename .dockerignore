@@ -26,3 +26,7 @@ scripts/shot_*.png
 scripts/price_*.png
 scripts/burn_*.png
 scripts/hero_*.png
+scripts/live_*.png
+# Prüfbilder, nicht die ausgelieferten Icons: dashboard/assets/ MUSS mit ins
+# Image, weil das Laufzeit-Image kein Pillow hat und sie nicht erzeugen könnte.
+scripts/brand_*.png

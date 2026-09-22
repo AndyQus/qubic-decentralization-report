@@ -110,9 +110,68 @@ api/          The service that serves the computed report (JSON)
 analysis/     Revenue-metrics and clustering engines
 data/         Cached raw pulls (data/raw), the store (qdr.db) + the self-reporting registry
 dashboard/    Reference front-end: charts, animations, DE/EN i18n, dark/light
+dashboard/assets/  Logo, favicons, PWA icons, share card (committed, see below)
 scripts/      CLI: ingest worker, build reports, validate the registry, verify the dashboard
 tests/        Metric + report unit tests
 Dockerfile, docker-compose.yaml, .env.example
+```
+
+## Naming, logo and share cards
+
+The application is **Qubic Report** — that is the PWA name, the home-screen
+label and the `og:site_name` on every page. It has several pages, of which the
+decentralization report is one.
+
+**"Qubic Decentralization Report" is the name of that one page**, plus the
+`how-it-works` page that explains the concept by name. It is deliberately *not*
+in the header of `burn`, `price`, `mining` or `log`; those read
+"Verbrannte Supply · Qubic Report" and so on. `tests/test_branding.py` enforces
+this in both directions, so a rename cannot silently drift back.
+
+### The logo
+
+`dashboard/assets/icon.svg` is the Qubic logomark — literally the first path of
+Qubic's own wordmark, two bars in a 14.0035 × 24 box — cut out of the violet→cyan
+gradient (`--gradient` in `theme.css`) that the header already used as its icon
+tile. The gradient, not Qubic orange, is what makes it *this project's* mark:
+this is a community report, not an official Qubic product, and it should not
+present itself as one.
+
+In the header and footer the same shape is drawn with a CSS mask rather than an
+`<img>`, so it costs no request and inherits the gradient automatically.
+
+### Rebuilding the icons
+
+```bash
+python scripts/build_icons.py            # renders the PNGs + favicon.ico
+python scripts/build_icons.py --verify   # checks them without rebuilding
+```
+
+**The PNGs are committed on purpose.** The runtime image has neither Pillow nor
+an SVG renderer (`requirements.txt` is three packages), and the only deployment
+path is pushing an image to Docker Hub — so anything that must exist at runtime
+has to exist before the build. `scripts/build_icons.py` needs Pillow and is a
+development tool only.
+
+Rebuild them whenever `icon.svg` or `og-image.svg` changes, and commit the
+result.
+
+### Why sharing the bare domain works
+
+X, Telegram and Discord read the body they are served and do not reliably follow
+redirects. `https://report.qubic.tools/` answers `307 → /dashboard/` with an
+empty body, which previewed as a naked link. `api/server.py` therefore serves
+`index.html` directly at `/` **for known crawler user-agents** while humans still
+get the redirect (the dashboard's relative asset paths only resolve under
+`/dashboard/`). `og:url` points at `/dashboard/` either way, so there is still
+one canonical address.
+
+After changing a share card, re-scrape it — the platforms cache aggressively:
+<https://cards-dev.twitter.com/validator>, <https://developers.facebook.com/tools/debug/>.
+
+```bash
+python -m uvicorn api.server:app --port 8077
+python scripts/verify_branding.py http://127.0.0.1:8077
 ```
 
 ## Dashboard requirements (front-end)

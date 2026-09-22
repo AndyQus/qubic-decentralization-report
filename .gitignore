@@ -60,3 +60,9 @@ scripts/hero_*.png
 # entstehen gegen denselben Entwicklungs-Store und zeigen damit dieselben
 # simulierten Preise — sie gehören aus demselben Grund nicht ins Repo.
 scripts/live_*.png
+
+# Branding-Prüfbilder aus scripts/verify_branding.py. Dieselbe Begründung wie
+# oben: Sie entstehen gegen den laufenden Store. Die ausgelieferten Icons sind
+# etwas anderes — die liegen unter dashboard/assets/ und gehören ins Repo, weil
+# das Laufzeit-Image sie nicht erzeugen kann (kein Pillow, kein SVG-Renderer).
+scripts/brand_*.png

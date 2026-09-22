@@ -29,7 +29,7 @@ import tempfile
 from pathlib import Path
 
 try:
-    from fastapi import FastAPI, HTTPException, Query
+    from fastapi import FastAPI, HTTPException, Query, Request
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
     from fastapi.staticfiles import StaticFiles
@@ -43,6 +43,9 @@ from qdr.clustering import load_registry
 from qdr.store import STATUS_SEALED, Store
 
 ROOT = Path(__file__).resolve().parent.parent
+# Defined here rather than next to the static mount below: the "/" and icon
+# routes near the top of the file serve files out of it too.
+DASHBOARD_DIR = ROOT / "dashboard"
 
 # How stale the live epoch may get before a request triggers a recompute.
 LIVE_MAX_AGE_S = int(os.environ.get("QDR_LIVE_MAX_AGE", "300"))
@@ -135,10 +138,55 @@ def _close_store() -> None:
         _store = None
 
 
+# A link crawler reads the body it is given and does not reliably follow a
+# redirect. "/" answered 307 with an empty body, so a shared report.qubic.tools
+# previewed as a naked link on X while /dashboard/ previewed correctly.
+#
+# Serving the dashboard's own index at "/" fixes that without a second copy of
+# the meta tags: it is the same file, and its og:url points at /dashboard/, so
+# the canonical address stays one URL. Browsers still get the redirect, because
+# the dashboard's relative asset paths (./theme.css) only resolve under
+# /dashboard/ — a human served index.html at "/" would see an unstyled page.
+#
+# The crawlers are matched by User-Agent. That is a weak signal in general, but
+# the failure mode here is harmless in both directions: an unrecognised crawler
+# gets today's behaviour, and a human misread as a crawler gets a page whose
+# markup is correct and whose stylesheet 404s on one request.
+_CRAWLERS = (
+    "twitterbot", "facebookexternalhit", "telegrambot", "discordbot", "slackbot",
+    "whatsapp", "linkedinbot", "mastodon", "embedly", "redditbot", "skypeuripreview",
+    "bingbot", "googlebot", "applebot", "pinterest", "vkshare", "opengraph",
+)
+
+
 @app.get("/", include_in_schema=False)
-def root():
+def root(request: Request):
+    ua = request.headers.get("user-agent", "").lower()
+    if any(bot in ua for bot in _CRAWLERS):
+        page = DASHBOARD_DIR / "index.html"
+        if page.exists():
+            return FileResponse(page, media_type="text/html")
     # convenience: send humans to the bundled dashboard, which will fetch the API
     return RedirectResponse(url="/dashboard/")
+
+
+# The share card lives on the dashboard pages, but people paste the bare domain.
+# A 307 with an empty body is all a link crawler got from "/", and an empty body
+# has no meta tags — so X, Telegram and Discord rendered report.qubic.tools as a
+# naked link while /dashboard/ previewed correctly. These three paths are what
+# crawlers ask for before the page itself, and answering them from the root
+# means the card works whichever form of the URL someone shares.
+#
+# They are aliases, not copies: each returns the same file the dashboard serves.
+@app.get("/favicon.ico", include_in_schema=False)
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def _root_icon(request: Request):
+    name = request.url.path.lstrip("/")
+    asset = DASHBOARD_DIR / "assets" / name
+    if not asset.exists():
+        raise HTTPException(status_code=404, detail=f"{name} is not built; run scripts/build_icons.py")
+    return FileResponse(asset)
 
 
 @app.get("/how-it-works", include_in_schema=False)
@@ -1112,8 +1160,6 @@ def metrics_timeseries(
 def snapshot(epoch: int):
     return JSONResponse(report_epoch(epoch))
 
-
-DASHBOARD_DIR = ROOT / "dashboard"
 
 
 @app.get("/v1/dashboard-data", tags=["metrics"], summary="One bundle for the dashboard SPA")

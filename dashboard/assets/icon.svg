@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none" role="img" aria-label="Qubic Report">
+  <!--
+    dashboard/assets/icon.svg — das Logo dieses Reports.
+
+    Herkunft: Die Doppelbalken-Form IST die Qubic-Logomark, wörtlich der erste
+    Pfad aus Qubics eigener Wortmarke (viewBox 14.0035 × 24, linker Balken
+    18.0012 hoch, rechter volle 24). Sie wird hier unverändert übernommen und
+    nur skaliert — nicht nachgezeichnet, nicht "verbessert".
+
+    Was dieses Logo eigen macht, ist die Farbe: der Verlauf 135° von Violett
+    #7e6fff nach Cyan #4ee0fc. Das ist exakt --gradient aus theme.css, also die
+    Farbe, die der Header schon als Icon-Kachel trug. Damit ist das Logo keine
+    zweite Marke neben der Seite, sondern dieselbe Fläche, die dort immer war —
+    jetzt mit der Qubic-Form darin.
+
+    Warum nicht Qubic-Orange wie qubic-icon.svg im Spotlight-Projekt: Orange ist
+    die Farbe der Dachmarke Qubic. Dieses Projekt ist ein eigenständiger Report,
+    kein offizielles Qubic-Produkt, und darf sich nicht als eines ausgeben. Der
+    Verlauf sagt "aus dem Qubic-Ökosystem, aber eigenständig" — und er ist
+    zugleich die Farbe, die burn/price/mining bereits als Akzent teilen.
+
+    Eine Datei für alles: Favicon, PWA-Icon (via PNG-Export), Header und
+    Footer. Geometrie in einem 512er-Raster, damit die PNG-Exporte bei 192,
+    512 und 180 px auf ganzen Pixeln landen.
+
+    Die PNG-Varianten erzeugt: python scripts/build_icons.py
+  -->
+  <defs>
+    <linearGradient id="qr-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7e6fff"/>
+      <stop offset="100%" stop-color="#4ee0fc"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Abgerundetes Quadrat im Verlauf. Radius 114/512 ≈ 22 % entspricht der
+       Kachel, die der Header über border-radius:9px bei 32px zeigte. -->
+  <rect width="512" height="512" rx="114" fill="url(#qr-grad)"/>
+
+  <!-- Die Qubic-Logomark, ausgespart statt aufgemalt: Der dunkle Grund der
+       Seite (#0d1117) scheint durch die Balken. Aufgemalt in Weiß wäre die
+       Form auf dem hellen Cyan-Ende des Verlaufs fast verschwunden; als
+       dunkle Aussparung hat sie gegen beide Enden des Verlaufs Kontrast.
+       Skalierung: 24 Einheiten Höhe → 248 px (Faktor 10.3333), zentriert. -->
+  <g transform="translate(183.65, 132) scale(10.3333)" fill="#0d1117">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M0 0H6.01795V18.0012H0V0ZM8.02734 0H14.0035V24H8.02734V0Z"/>
+  </g>
+</svg>

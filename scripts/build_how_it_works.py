@@ -212,11 +212,38 @@ PAGE = """<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>How it works \u2014 Qubic Decentralization Report</title>
+<title>How it works \u2014 Qubic Report</title>
 <meta name="description" content="{desc}" />
 <!-- GENERATED FILE \u2014 do not edit.
      Source: docs/CONCEPT.md + docs/CONCEPT.de.md (concept-sha {digest})
      Regenerate: python scripts/build_how_it_works.py -->
+
+<!-- Icons, PWA und Link-Vorschau wie auf den \u00fcbrigen Seiten. Diese Seite
+     BEH\u00c4LT "Qubic Decentralization Report" als \u00dcberschrift, denn sie erkl\u00e4rt
+     genau dieses Konzept \u2014 anders als burn/price/mining, die nur Seiten der
+     Anwendung "Qubic Report" sind. -->
+<link rel="icon" type="image/svg+xml" href="./assets/icon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
+<link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
+<link rel="manifest" href="./assets/manifest.webmanifest" />
+<meta name="theme-color" content="#0d1117" />
+<meta name="apple-mobile-web-app-title" content="Qubic Report" />
+<meta name="application-name" content="Qubic Report" />
+
+<meta property="og:type" content="article" />
+<meta property="og:site_name" content="Qubic Report" />
+<meta property="og:title" content="How it works \u2014 Qubic Decentralization Report" />
+<meta property="og:description" content="{desc}" />
+<meta property="og:url" content="https://report.qubic.tools/how-it-works" />
+<meta property="og:image" content="https://report.qubic.tools/dashboard/assets/og-image.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Qubic Report \u2014 Dezentralisierung, verbrannte Supply, Kurs und Mining" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="How it works \u2014 Qubic Decentralization Report" />
+<meta name="twitter:description" content="{desc}" />
+<meta name="twitter:image" content="https://report.qubic.tools/dashboard/assets/og-image.png" />
 <style>
   :root{{
     --bg:#0c141b; --bg2:#101820; --surface:#16232e; --surface2:#1b2c38;

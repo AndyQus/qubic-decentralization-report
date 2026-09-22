@@ -3,7 +3,35 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Burn Report — Qubic Decentralization Report</title>
+<title>Burn-Report — Qubic Report</title>
+<meta name="description" content="Verbrannte Supply: die offizielle Gesamtsumme und die gemessene Tageskurve, aus den Events eines Bob-Nodes gezählt." />
+
+<!-- Icons, PWA und Link-Vorschau: identisch zu index.html, nur Titel und
+     Beschreibung sind die dieser Seite. Der volle Name "Qubic
+     Decentralization Report" gehört nur noch der Report-Startseite; diese
+     Seite läuft unter der Dachmarke "Qubic Report". -->
+<link rel="icon" type="image/svg+xml" href="./assets/icon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
+<link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
+<link rel="manifest" href="./assets/manifest.webmanifest" />
+<meta name="theme-color" content="#0d1117" />
+<meta name="apple-mobile-web-app-title" content="Qubic Report" />
+<meta name="application-name" content="Qubic Report" />
+
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Qubic Report" />
+<meta property="og:title" content="Burn-Report — verbrannte Supply" />
+<meta property="og:description" content="Die offizielle Gesamtsumme und die gemessene Tageskurve. Der Zähler burnedQus bewegt sich nur an Epochengrenzen — alles Feinere ist selbst gezählt." />
+<meta property="og:url" content="https://report.qubic.tools/dashboard/burn.html" />
+<meta property="og:image" content="https://report.qubic.tools/dashboard/assets/og-image.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Qubic Report — Dezentralisierung, verbrannte Supply, Kurs und Mining" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Burn-Report — verbrannte Supply" />
+<meta name="twitter:description" content="Offizielle Gesamtsumme und gemessene Tageskurve, nichts interpoliert." />
+<meta name="twitter:image" content="https://report.qubic.tools/dashboard/assets/og-image.png" />
 
 <!--
   dashboard/burn.html — Verbrannte Supply: Gesamtsumme und gemessene Tageskurve.
@@ -27,7 +55,7 @@
     4. Einordnung — was gemessen ist und was nicht
 -->
 
-<link rel="stylesheet" href="./theme.css?v=1f37ecee">
+<link rel="stylesheet" href="./theme.css?v=64afd02c">
 
 <style>
 /* ─── Page-specific tokens ──────────────────────────────────────────────────
@@ -320,7 +348,7 @@ table.data td:first-child { font-family: var(--sans); }
       <div class="logo qs-logo" aria-hidden="true"></div>
       <div>
         <h1 class="qs-title" data-i18n="pageTitle">Burn Report</h1>
-        <div class="sub qs-subtitle"><span data-i18n="subtitle">Burned supply · Qubic Decentralization Report</span></div>
+        <div class="sub qs-subtitle"><span data-i18n="subtitle">Burned supply · Qubic Report</span></div>
       </div>
     </div>
     <div class="spacer"></div>
@@ -510,7 +538,7 @@ table.data td:first-child { font-family: var(--sans); }
       miningLive: "Mining Live",
       howItWorks: "How it works",
       pageTitle: "Burn Report",
-      subtitle: "Burned supply · Qubic Decentralization Report",
+      subtitle: "Burned supply · Qubic Report",
       backToReport: "← Report",
       heroLabel: "Burned supply, total", quWord: "QU",
       shareLabel: "Share of supply", shareSub: "of ever-issued QU",
@@ -572,7 +600,7 @@ table.data td:first-child { font-family: var(--sans); }
       miningLive: "Mining Live",
       howItWorks: "Wie es funktioniert",
       pageTitle: "Burn-Report",
-      subtitle: "Verbrannte Supply · Qubic Decentralization Report",
+      subtitle: "Verbrannte Supply · Qubic Report",
       backToReport: "← Report",
       heroLabel: "Verbrannte Supply, gesamt", quWord: "QU",
       shareLabel: "Anteil an der Supply", shareSub: "der je ausgegebenen QU",

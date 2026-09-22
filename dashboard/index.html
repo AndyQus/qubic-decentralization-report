@@ -4,7 +4,43 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Qubic Decentralization Report</title>
-<link rel="stylesheet" href="./theme.css?v=1f37ecee">
+<meta name="description" content="Wie dezentral Qubic wirklich ist — Computor-Verteilung, Zuordnung und Cluster, gemessen aus der Kette und je Epoche versiegelt." />
+
+<!-- ── Identität, Icons, PWA ──────────────────────────────────────────────
+     Das Projekt heißt nach außen "Qubic Report" (so steht es im Manifest und
+     auf dem Homescreen); "Qubic Decentralization Report" ist der Name DIESER
+     Seite, nicht mehr der der ganzen Anwendung. Die übrigen Seiten führen ihn
+     deshalb nicht mehr im Untertitel.
+     Alle Pfade sind relativ: Das Dashboard liegt unter /dashboard/, ein
+     absolutes "/" würde den PWA-Scope auf den API-Root legen. -->
+<link rel="icon" type="image/svg+xml" href="./assets/icon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
+<link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
+<link rel="manifest" href="./assets/manifest.webmanifest" />
+<meta name="theme-color" content="#0d1117" />
+<meta name="apple-mobile-web-app-title" content="Qubic Report" />
+<meta name="application-name" content="Qubic Report" />
+
+<!-- ── Link-Vorschau (X, Telegram, Discord, Slack) ────────────────────────
+     og:image MUSS absolut sein — ein Crawler löst relative URLs nicht auf.
+     Und es muss PNG sein: X rendert kein SVG. Quelle beider Bilder ist
+     dashboard/assets/og-image.svg, gerendert von scripts/build_icons.py. -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Qubic Report" />
+<meta property="og:title" content="Qubic Decentralization Report" />
+<meta property="og:description" content="Wie dezentral Qubic wirklich ist — Computor-Verteilung, Zuordnung und Cluster, gemessen aus der Kette und je Epoche versiegelt." />
+<meta property="og:url" content="https://report.qubic.tools/dashboard/" />
+<meta property="og:image" content="https://report.qubic.tools/dashboard/assets/og-image.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Qubic Report — Dezentralisierung, verbrannte Supply, Kurs und Mining" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Qubic Decentralization Report" />
+<meta name="twitter:description" content="Wie dezentral Qubic wirklich ist — gemessen aus der Kette, je Epoche versiegelt." />
+<meta name="twitter:image" content="https://report.qubic.tools/dashboard/assets/og-image.png" />
+
+<link rel="stylesheet" href="./theme.css?v=64afd02c">
 
 <style>
   /* Surfaces, text, accents, the glass card and the header all come from

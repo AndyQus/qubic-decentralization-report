@@ -319,6 +319,28 @@ a:hover { text-decoration: underline; }
   width: 32px; height: 32px; border-radius: 9px; flex: 0 0 auto;
   background: var(--gradient);
 }
+/* The Qubic logomark, cut out of the gradient tile.
+   The tile itself was always this gradient; what is new is the mark inside it.
+   It is drawn with a mask rather than an <img>, so it needs no extra request,
+   inherits the tile's gradient automatically, and stays sharp at any size.
+   The two bars are the literal geometry of Qubic's own wordmark (14.0035 x 24,
+   left bar 18.0012 tall) — see dashboard/assets/icon.svg for the provenance.
+   mask-composite:exclude punches the mark out of the tile, so the page's dark
+   ground shows through; painted in white the mark would disappear against the
+   cyan end of the gradient. */
+.qs-header-inner .logo,
+.qs-header-inner .qs-logo,
+.fbar .flogo {
+  --qr-mark: url('data:image/svg+xml;utf8,\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14.0035 24">\
+<path fill-rule="evenodd" d="M0 0H6.01795V18.0012H0V0ZM8.02734 0H14.0035V24H8.02734V0Z"/></svg>');
+  -webkit-mask-image: linear-gradient(#000, #000), var(--qr-mark);
+  mask-image: linear-gradient(#000, #000), var(--qr-mark);
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center, center; mask-position: center, center;
+  -webkit-mask-size: 100% 100%, 48% 48%; mask-size: 100% 100%, 48% 48%;
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}
 .qs-link, .how-link {
   display: inline-flex; align-items: center; height: 32px;
   padding: 0 12px; white-space: nowrap;
@@ -509,7 +531,9 @@ a:hover { text-decoration: underline; }
 .fbar .fleft { display: flex; align-items: center; gap: 6px; }
 .fbar .flogo {
   width: 22px; height: 22px; border-radius: 6px;
-  background: var(--accent); flex: 0 0 auto;
+  /* was a flat --accent square; the gradient matches the header tile and the
+     app icon, so the same mark appears in the same colours everywhere */
+  background: var(--gradient); flex: 0 0 auto;
 }
 .flinks { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
 .fdisc {

@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <!--
+    dashboard/assets/og-image.svg — die Karte, die X, Telegram, Discord und
+    Slack zeigen, wenn jemand report.qubic.tools teilt.
+
+    Das ausgelieferte Bild ist die PNG-Variante daneben: X rendert kein SVG.
+    Diese Datei ist die Quelle, das PNG das Artefakt (scripts/build_icons.py).
+
+    1200 × 630 ist das Format für twitter:card=summary_large_image. Alles
+    Wesentliche bleibt weg von den Rändern, weil Telegram und Discord die
+    Karte unterschiedlich beschneiden.
+
+    Der Text ist bewusst knapp: In der Vorschau steht daneben schon der
+    Meta-Titel. Die Karte muss nur sagen, was das ist — nicht es erklären.
+  -->
+  <defs>
+    <linearGradient id="og-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7e6fff"/>
+      <stop offset="100%" stop-color="#4ee0fc"/>
+    </linearGradient>
+    <!-- Derselbe Schimmer, den die Seiten als Hintergrund tragen, damit die
+         Karte und die Seite dahinter wie dasselbe Produkt aussehen. -->
+    <radialGradient id="og-glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#7e6fff" stop-opacity="0.30"/>
+      <stop offset="100%" stop-color="#7e6fff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="og-glow2" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#4ee0fc" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#4ee0fc" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="#0d1117"/>
+  <ellipse cx="980" cy="120" rx="520" ry="380" fill="url(#og-glow)"/>
+  <ellipse cx="180" cy="600" rx="460" ry="340" fill="url(#og-glow2)"/>
+
+  <!-- Logo, 132 px, gleiche Geometrie wie icon.svg (Radius 22 %). -->
+  <g transform="translate(96, 150)">
+    <rect width="132" height="132" rx="29.4" fill="url(#og-grad)"/>
+    <g transform="translate(47.36, 34.03) scale(2.6646)" fill="#0d1117">
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M0 0H6.01795V18.0012H0V0ZM8.02734 0H14.0035V24H8.02734V0Z"/>
+    </g>
+  </g>
+
+  <!-- Wortmarke. system-ui ist hier nicht verfügbar (das PNG wird gerendert,
+       nicht im Browser gezeichnet), daher generische Familien mit Fallback. -->
+  <text x="262" y="212" font-family="Segoe UI, DejaVu Sans, Helvetica, Arial, sans-serif"
+        font-size="64" font-weight="700" fill="#f2f5fa" letter-spacing="-0.5">Qubic Report</text>
+  <text x="264" y="262" font-family="Segoe UI, DejaVu Sans, Helvetica, Arial, sans-serif"
+        font-size="27" font-weight="500" fill="#8aa0ab">report.qubic.tools</text>
+
+  <!-- Was der Report misst, in der Reihenfolge der Navigation. Die Punkte
+       tragen die Akzentfarben der jeweiligen Seite. -->
+  <g font-family="Segoe UI, DejaVu Sans, Helvetica, Arial, sans-serif" font-size="29" font-weight="600">
+    <circle cx="110" cy="386" r="7" fill="#4ee0fc"/>
+    <text x="132" y="396" fill="#c9d4e0">Dezentralisierung</text>
+
+    <circle cx="420" cy="386" r="7" fill="#f59e0b"/>
+    <text x="442" y="396" fill="#c9d4e0">Verbrannte Supply</text>
+
+    <circle cx="784" cy="386" r="7" fill="#7e6fff"/>
+    <text x="806" y="396" fill="#c9d4e0">Kurs</text>
+
+    <circle cx="110" cy="452" r="7" fill="#22c55e"/>
+    <text x="132" y="462" fill="#c9d4e0">Mining Live</text>
+  </g>
+
+  <!-- Die Zeile, die den Report von einem Blog-Post unterscheidet. -->
+  <text x="96" y="548" font-family="Segoe UI, DejaVu Sans, Helvetica, Arial, sans-serif"
+        font-size="25" font-weight="400" fill="#8aa0ab">Gemessen aus der Kette. Offene API, versiegelte Epochen, nichts interpoliert.</text>
+
+  <rect x="0" y="618" width="1200" height="12" fill="url(#og-grad)"/>
+</svg>
