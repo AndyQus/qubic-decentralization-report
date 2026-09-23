@@ -42,6 +42,7 @@ def _client(store_path: Path) -> TestClient:
     server._store = Store(store_path)
     server._price_cache.update(at=0.0, data=None)
     server._price_series_cache.clear()
+    server._price_avg_cache.clear()
     return TestClient(server.app)
 
 
@@ -426,3 +427,103 @@ def test_study_endpoint_carries_source_and_no_volume():
     assert body["source"]["provider"] == "Qubic RPC"
     names = _field_names(body)
     assert not [n for n in names if "volume" in n.lower()]
+
+
+# -- the moving average ------------------------------------------------------
+#
+# The 50-day average is the one figure on this page that cannot be measured into
+# existence on demand: it needs 50 days to have PASSED. Everything here pins the
+# same rule from a different side -- the endpoint must never dress a shorter
+# window in the longer name, because a chart cannot tell the difference and a
+# reader trusting the label would be reading a number that does not exist yet.
+
+def _store_with_hours(days: int, price: float = 4.0e-7,
+                      hours_per_day: int = 24) -> Path:
+    """A store holding `days` complete days of hourly summaries, ending yesterday.
+
+    Hours rather than points on purpose: the average is built on the permanent
+    hourly table, and a test seeded with points would pass even if the endpoint
+    read the pruned one.
+    """
+    d = Path(tempfile.mkdtemp(prefix="qdr_price_avg_"))
+    s = Store(d / "qdr.db")
+    today = (int(time.time()) // 86400) * 86400
+    start = today - days * 86400
+    with s._tx() as c:
+        for i in range(days):
+            day = start + i * 86400
+            for h in range(hours_per_day):
+                at = day + h * 3600
+                c.execute(
+                    "INSERT OR REPLACE INTO price_hours (at,open,high,low,close,"
+                    "avg_price,market_cap,moves,polls,updated_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (at, price, price, price, price, price, 600_000_000, 1, 60, at))
+    s.close()
+    return d / "qdr.db"
+
+
+def test_a_short_record_refuses_to_call_itself_a_fifty_day_average():
+    """The failure this guards against is silent: with seven days on record, a
+    mean of those seven is a perfectly computable number, and labelling it
+    "50-day average" is the lie. `ready` is what a caller branches on."""
+    db = _store_with_hours(days=7)
+    r = _client(db).get("/v1/price/average?days=50")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ready"] is False
+    assert body["days_on_record"] == 7
+    assert body["days_needed"] == 43
+    # Every point says how many days actually stand behind it.
+    assert all(p["window_days"] <= 7 for p in body["series"])
+    assert all(p["complete"] == 0 for p in body["series"])
+
+
+def test_a_full_record_reports_ready_and_a_full_window():
+    db = _store_with_hours(days=60)
+    body = _client(db).get("/v1/price/average?days=50").json()
+    assert body["ready"] is True
+    assert body["days_on_record"] == 60
+    assert body["days_needed"] == 0
+    assert body["series"][-1]["window_days"] == 50
+    assert body["series"][-1]["complete"] == 1
+
+
+def test_the_average_is_the_mean_of_the_days_in_its_window():
+    """A flat price must average to itself -- the arithmetic check that the
+    window is neither short by one nor padded with days outside it."""
+    db = _store_with_hours(days=60, price=4.0e-7)
+    body = _client(db).get("/v1/price/average?days=50").json()
+    assert abs(body["series"][-1]["sma"] - 4.0e-7) < 1e-18
+
+
+def test_a_thinly_observed_day_does_not_count_as_a_day():
+    """Six hours of readings is not a day's price. Counting it would let a
+    deployment that was down most of the time reach "50 days" early, with a
+    number built from whatever hours happened to be watched."""
+    db = _store_with_hours(days=60, hours_per_day=6)
+    body = _client(db).get("/v1/price/average?days=50").json()
+    assert body["days_on_record"] == 0
+    assert body["ready"] is False
+
+
+def test_the_average_never_publishes_trading_volume():
+    """Same rule as every other price endpoint: the RPC publishes no volume,
+    and one sourced elsewhere would breach the terms this project stays inside."""
+    db = _store_with_hours(days=60)
+    body = _client(db).get("/v1/price/average?days=50").json()
+    assert "volume" not in _field_names(body)
+
+
+def test_the_average_names_its_source_and_carries_coverage():
+    db = _store_with_hours(days=60)
+    body = _client(db).get("/v1/price/average?days=50").json()
+    assert body["source"]["provider"] == "Qubic RPC"
+    assert "coverage" in body
+    assert body["measured"] is True
+
+
+def test_an_empty_store_answers_503_rather_than_a_flat_line():
+    d = Path(tempfile.mkdtemp(prefix="qdr_price_avg_"))
+    Store(d / "qdr.db").close()
+    assert _client(d / "qdr.db").get("/v1/price/average?days=50").status_code == 503

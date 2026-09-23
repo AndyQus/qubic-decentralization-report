@@ -8,7 +8,7 @@
     nur skaliert — nicht nachgezeichnet, nicht "verbessert".
 
     Was dieses Logo eigen macht, ist die Farbe: der Verlauf 135° von Violett
-    #7e6fff nach Cyan #4ee0fc. Das ist exakt --gradient aus theme.css, also die
+    #7e6fff nach Cyan #4ee0fc. Das ist exakt die Variable `gradient` aus theme.css, also die
     Farbe, die der Header schon als Icon-Kachel trug. Damit ist das Logo keine
     zweite Marke neben der Seite, sondern dieselbe Fläche, die dort immer war —
     jetzt mit der Qubic-Form darin.
@@ -24,6 +24,13 @@
     512 und 180 px auf ganzen Pixeln landen.
 
     Die PNG-Varianten erzeugt: python scripts/build_icons.py
+
+    ACHTUNG beim Bearbeiten dieser Kommentare: Ein doppelter Bindestrich ist
+    in einem XML-Kommentar nicht erlaubt. Chrome überliest das, Firefox nicht
+    — dort scheitert dann das GANZE Dokument am Parser, und weil Firefox als
+    einzige Variante das SVG anfordert (die 32er-PNG holt es gar nicht erst),
+    stand im Tab überhaupt kein Icon. Eine CSS-Variable gehört hier also als
+    `gradient` in den Text, nie mit den zwei führenden Strichen.
   -->
   <defs>
     <linearGradient id="qr-grad" x1="0" y1="0" x2="1" y2="1">

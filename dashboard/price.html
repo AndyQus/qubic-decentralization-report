@@ -8,8 +8,17 @@
 
 <!-- Icons, PWA und Link-Vorschau wie auf den übrigen Seiten. Der volle Name
      "Qubic Decentralization Report" bleibt der Report-Startseite vorbehalten. -->
+<!-- Reihenfolge und Vollständigkeit sind hier nicht Geschmack: Firefox fordert
+     von diesen Zeilen NUR das SVG an und fällt von sich aus auf nichts zurück.
+     Scheitert das SVG, bleibt der Tab leer — genau das war der Fall, solange
+     icon.svg einen doppelten Bindestrich im Kommentar trug und damit als XML
+     unlesbar war. Die .ico steht deshalb ausdrücklich dabei: sie ist das
+     Format, das jeder Browser lesen kann, und /dashboard/favicon.ico gibt es
+     nicht — der automatische Griff ans Wurzelverzeichnis läuft von einer Seite
+     unter /dashboard/ ins Leere. -->
 <link rel="icon" type="image/svg+xml" href="./assets/icon.svg" />
 <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
+<link rel="icon" type="image/x-icon" href="./assets/favicon.ico" sizes="48x48" />
 <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
 <link rel="manifest" href="./assets/manifest.webmanifest" />
 <meta name="theme-color" content="#0d1117" />
@@ -132,6 +141,11 @@
   --price-up:   var(--accent);
   --price-down: #dc2626;
   --chart-halo: #ffffff;
+  /* Der gleitende Durchschnitt braucht eine Farbe, die keine der vier belegten
+     Bedeutungen trägt: nicht die Kurslinie, nicht hoch, nicht tief, nicht die
+     Epochenmarke. Bernstein ist auf beiden Untergründen lesbar und steht auf
+     dieser Seite sonst für nichts. */
+  --sma-line:   #b45309;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -143,6 +157,7 @@
     --price-up:   var(--accent);
     --price-down: #fb7185;
     --chart-halo: #0b0f14;
+    --sma-line:   #f0b429;
   }
 }
 :root[data-theme="dark"] {
@@ -154,6 +169,7 @@
   --price-up:   var(--accent);
   --price-down: #fb7185;
   --chart-halo: #0b0f14;
+  --sma-line:   #f0b429;
 }
 
 /* ─── Hero ─────────────────────────────────────────────────────────────────
@@ -331,6 +347,31 @@
    aussehende Schaltergruppen direkt nebeneinander läsen sich als eine. */
 #style-seg { margin-left: auto; }
 @media (max-width: 620px) { #style-seg { margin-left: 0; } }
+
+/* Schalter für den gleitenden Durchschnitt. Er gehört nicht in die
+   segmentierte Gruppe daneben: die wählt EINE aus mehreren Zeichenarten, dieser
+   legt eine zweite Linie über die gewählte. Ein Kippschalter sagt das, ein
+   drittes Segment hätte behauptet, er stünde zur Zeichenart in Konkurrenz. */
+.sma-toggle {
+  border: 1px solid var(--border); border-radius: 9px; background: var(--surface);
+  color: var(--muted); font: inherit; font-size: 12.5px; padding: 6px 11px;
+  cursor: pointer; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+/* Das Plättchen im Schalter zeigt dieselbe gestrichelte Linie wie im Bild. */
+.sma-toggle::before {
+  content: ""; width: 14px; height: 0; flex: none;
+  border-top: 2px dashed currentColor; opacity: .8;
+}
+.sma-toggle:hover { color: var(--text); border-color: var(--accent); }
+.sma-toggle[aria-pressed="true"] {
+  color: var(--sma-line, #f0b429); border-color: currentColor;
+  background: color-mix(in srgb, var(--sma-line, #f0b429) 12%, transparent);
+}
+/* Ohne genug Aufzeichnung ist der Schalter sinnlos: er bleibt sichtbar, damit
+   die Legende der Seite vollständig ist, nimmt aber keine Klicks mehr an. */
+.sma-toggle[disabled] { opacity: .45; cursor: not-allowed; }
+.sma-toggle[disabled]:hover { color: var(--muted); border-color: var(--border); }
 .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .chart-svg { display: block; width: 100%; min-width: 320px; height: 360px; }
 .chart-svg[hidden] { display: none; }
@@ -371,6 +412,12 @@ body[data-chart-style="flow"] .leg-swatch.price {
   background: linear-gradient(90deg, var(--price-up), var(--price-down));
 }
 .leg-swatch.epoch { background: var(--epoch-mark); height: 12px; width: 2px; }
+/* Gestrichelt wie im Bild: der Durchschnitt ist eine abgeleitete Linie, keine
+   Messreihe, und die Strichelung ist genau dieser Unterschied. */
+.leg-swatch.sma {
+  background: none; height: 0; border-top: 2px dashed var(--sma-line, #f0b429);
+  border-radius: 0;
+}
 /* Zwei Punkte nebeneinander statt einem: der Legendeneintrag nennt Hoch UND
    Tief, und ein einfarbiger Punkt davor könnte nur eins von beiden zeigen. */
 .leg-swatch.extreme {
@@ -652,6 +699,12 @@ body[data-chart-style="flow"] .leg-swatch.price {
         <button data-style="flow" data-i18n="styleFlow">Flow</button
         ><button data-style="steps" data-i18n="styleSteps">Steps</button>
       </div>
+      <!-- Der gleitende Durchschnitt. Eigener Schalter statt fester Linie: er
+           beantwortet eine andere Frage als der Kurs selbst ("wo steht er
+           gegenüber den letzten 50 Tagen?"), und auf einem Ein-Stunden-Fenster
+           ist diese Frage sinnlos. Die Wahl bleibt in localStorage. -->
+      <button class="sma-toggle" id="sma-btn" type="button"
+              aria-pressed="false" data-i18n="smaToggle">50-day average</button>
     </div>
 
     <!-- Sagt, wenn die Ansicht auf Stundenzusammenfassungen umgeschaltet hat:
@@ -670,6 +723,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       <span class="leg-item" id="leg-epoch" hidden><span class="leg-swatch epoch" aria-hidden="true"></span><span data-i18n="legEpoch">Epoch boundary</span></span>
       <span class="leg-item" id="leg-gap" hidden><span class="leg-swatch gap" aria-hidden="true"></span><span data-i18n="legGap">Not observed</span></span>
       <span class="leg-item" id="leg-extreme" hidden><span class="leg-swatch extreme" aria-hidden="true"></span><span data-i18n="legExtreme">High and low in view</span></span>
+      <span class="leg-item" id="leg-sma" hidden><span class="leg-swatch sma" aria-hidden="true"></span><span id="leg-sma-text">50-day average</span></span>
     </div>
 
     <!-- Die Haltedauer steht jetzt hier, direkt unter dem Diagramm, statt im
@@ -687,6 +741,12 @@ body[data-chart-style="flow"] .leg-swatch.price {
          und zeigt damit eine Bewegung, die so nicht gemessen wurde. Das muss
          dabeistehen, sonst nimmt die zweite Variante der ersten ihre Aussage. -->
     <p class="agg-locked" id="flow-note" hidden></p>
+
+    <!-- Warum der Durchschnitt fehlt oder kürzer ist als sein Name. Diese
+         Seite hat keine Rückfüllung: die Aufzeichnung beginnt beim ersten Lauf
+         des Workers. Ein 50-Tage-Schnitt aus sieben Tagen wäre eine erfundene
+         Zahl, also steht hier stattdessen, wie weit die Aufzeichnung ist. -->
+    <p class="agg-locked" id="sma-note" hidden></p>
   </section>
 
   <!-- Ehrlichkeitshinweis: steht direkt UNTER dem Diagramm, als Fußnote zu dem,
@@ -826,6 +886,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
   const LS_LANG = "qdr.lang";
   const LS_THEME = "qdr.theme";
   const LS_STYLE = "qdr.price.chartStyle";
+  const LS_SMA = "qdr.price.sma";
   const root = document.documentElement;
 
   /* ─── i18n ──────────────────────────────────────────────────────────────
@@ -871,6 +932,12 @@ body[data-chart-style="flow"] .leg-swatch.price {
       legEpoch: "Epoch boundary",
       legGap: "Not observed",
       legExtreme: "High and low in view",
+      legSma: "{days}-day average",
+      smaToggle: "50-day average",
+      smaNotReady: "A {days}-day average needs {days} days of readings; {have} are on record. This page has no backfill — the RPC serves only “now”, so the record begins when the worker first ran. The line appears in {need} more days.",
+      smaShort: "The average is drawn over {have} days, not {days}: that is the whole record so far. It carries the name it will have once {days} days are on record.",
+      smaOffscale: "The {days}-day average lies outside this window’s price range and is drawn at the edge. Choose a wider range to see it in place.",
+      tipSma: "{days}-day avg.",
 
       studyTitle: "Around the computor payouts",
       studyDesc: "Every ~4.4 days the protocol pays 676 computors at once. Those payouts are emission, not transfers — the public RPC does not carry them at all, so this comparison exists nowhere else. The table reports what the price did; it does not claim the payout caused it.",
@@ -970,6 +1037,12 @@ body[data-chart-style="flow"] .leg-swatch.price {
       legEpoch: "Epochengrenze",
       legGap: "Nicht beobachtet",
       legExtreme: "Hoch und Tief im Ausschnitt",
+      legSma: "{days}-Tage-Durchschnitt",
+      smaToggle: "50-Tage-Schnitt",
+      smaNotReady: "Ein {days}-Tage-Durchschnitt braucht {days} Tage Messungen; aufgezeichnet sind {have}. Diese Seite füllt nichts zurück — die RPC liefert nur „jetzt“, die Aufzeichnung beginnt also beim ersten Lauf des Workers. In {need} Tagen erscheint die Linie.",
+      smaShort: "Der Durchschnitt läuft über {have} Tage, nicht über {days}: mehr ist bisher nicht aufgezeichnet. Er trägt den Namen, den er hat, sobald {days} Tage vorliegen.",
+      smaOffscale: "Der {days}-Tage-Durchschnitt liegt außerhalb der Preisspanne dieses Ausschnitts und wird am Rand gezeichnet. Ein weiteres Zeitfenster zeigt ihn an seinem Platz.",
+      tipSma: "{days}-Tage-Schnitt",
 
       studyTitle: "Rund um die Computor-Auszahlungen",
       studyDesc: "Alle ~4,4 Tage zahlt das Protokoll 676 Computors auf einmal aus. Diese Auszahlungen sind Emission, keine Überweisungen — die öffentliche RPC führt sie gar nicht, deshalb gibt es diesen Vergleich sonst nirgends. Die Tabelle berichtet, was der Kurs tat; sie behauptet nicht, die Auszahlung habe es verursacht.",
@@ -1150,6 +1223,15 @@ body[data-chart-style="flow"] .leg-swatch.price {
      entfernt. */
   let chartStyle = safeGet(LS_STYLE) === "steps" ? "steps" : "flow";
 
+  /* Der gleitende Durchschnitt: Länge des Fensters in Tagen, der Schalterstand,
+     und die zuletzt geladene Reihe. Voreinstellung ist AN — wer die Seite
+     öffnet, soll die Linie sehen, sobald es sie gibt; solange die Aufzeichnung
+     zu kurz ist, sagt `sma-note` in Worten, warum sie fehlt, und der Schalter
+     ist stumm geschaltet statt heimlich wirkungslos. */
+  const SMA_DAYS = 50;
+  let showSma = safeGet(LS_SMA) !== "0";
+  let smaData = null;
+
   /* Wer Bewegung abbestellt hat, bekommt keine. Das CSS hält das ohnehin über
      die Media Query; die Konstante verhindert zusätzlich, dass Klassen gesetzt
      und Knoten angelegt werden, die dann nichts tun. */
@@ -1213,6 +1295,150 @@ body[data-chart-style="flow"] .leg-swatch.price {
     }
     if (chartStyle === "flow") return drawFlow(payload, pulse);
     return drawSteps(payload, pulse);
+  }
+
+  /* ─── Gleitender Durchschnitt ──────────────────────────────────────────────
+     Eine zweite Linie über beiden Zeichenarten: der Mittelwert der letzten
+     SMA_DAYS Tagespreise, gestrichelt gezeichnet.
+
+     Sie kommt aus einem EIGENEN Abruf (/v1/price/average) und nicht aus den
+     Chart-Daten. Der Grund ist der Ausschnitt: wer 1 Stunde gewählt hat, hat
+     eine Stunde Messwerte im Bild — ein 50-Tage-Schnitt daraus wäre schlicht
+     der Stundendurchschnitt unter falschem Namen. Der Durchschnitt muss über
+     die ganze Aufzeichnung laufen, unabhängig davon, welches Fenster gerade
+     gezeigt wird, sonst ist er keine Bezugsgröße mehr, sondern eine zweite
+     Ansicht derselben Stunde.
+
+     Gestrichelt, nicht durchgezogen: der Kurs ist gemessen, der Durchschnitt
+     ist gerechnet. Dieselbe Regel, nach der die Fluss-Ansicht "interpoliert"
+     heißt — wo die Seite etwas ableitet, sieht man es der Linie an.
+
+     Die Tagespunkte liegen weit auseinander, oft weiter als das Fenster breit
+     ist. Gezeichnet wird deshalb, was in den Ausschnitt fällt, plus je ein
+     Punkt links und rechts davon: ohne die liefe die Linie am Rand ins Leere,
+     obwohl der Durchschnitt dort einen Wert hat. Liegt gar kein Punkt im
+     Fenster — bei einer Stunde der Normalfall —, wird der jüngste gültige
+     Wert als waagerechte Linie durchgezogen: über eine Stunde bewegt sich ein
+     50-Tage-Schnitt ohnehin nicht sichtbar, und eine Bezugslinie ist genau
+     das, was er dort sein soll. */
+  function drawSma(ctx) {
+    const note = document.getElementById("sma-note");
+    const leg = document.getElementById("leg-sma");
+    const legText = document.getElementById("leg-sma-text");
+    const btn = document.getElementById("sma-btn");
+    const days = (smaData && smaData.days) || SMA_DAYS;
+
+    if (leg) leg.hidden = true;
+    if (note) { note.hidden = true; note.textContent = ""; }
+    if (legText) legText.textContent = t("legSma", { days: days });
+
+    /* Ohne Antwort ist nichts zu sagen: ein Abruf kann auch schlicht noch
+       laufen, und eine Meldung darüber wäre Lärm. */
+    if (!smaData) return;
+
+    const rows = (smaData.series || []).filter(
+      r => r && r.sma != null && isFinite(r.sma) && r.sma > 0);
+
+    /* Zu junge Aufzeichnung. Der Schalter wird stumm geschaltet und die Seite
+       sagt, wie lange es noch dauert — statt eine Linie zu zeigen, die den
+       Namen "50 Tage" trägt und aus sieben gerechnet ist. */
+    if (!smaData.ready && !rows.length) {
+      if (btn) { btn.disabled = true; btn.setAttribute("aria-pressed", "false"); }
+      if (note && showSma) {
+        note.hidden = false;
+        note.textContent = t("smaNotReady", {
+          days: days,
+          have: smaData.days_on_record != null ? smaData.days_on_record : 0,
+          need: smaData.days_needed != null ? smaData.days_needed : days
+        });
+      }
+      return;
+    }
+    if (btn) btn.disabled = false;
+    if (!showSma || !rows.length) return;
+
+    const { chart, X, Y, padL, padR, padT, plotH, tMin, tMax, pMin, pMax, narrow } = ctx;
+    const col = cssVar("--sma-line") || "#f0b429";
+
+    /* Die Punkte im Ausschnitt, plus je einer davor und dahinter, damit die
+       Linie an beiden Rändern angeschnitten statt abgeschnitten wirkt. */
+    let lo = -1, hi = -1;
+    rows.forEach((r, i) => {
+      if (r.at <= tMin) lo = i;
+      if (hi < 0 && r.at >= tMax) hi = i;
+    });
+    const from = lo >= 0 ? lo : 0;
+    const to = hi >= 0 ? hi : rows.length - 1;
+    const span = rows.slice(from, to + 1);
+
+    /* Werte, die im Bild landen würden. Der Durchschnitt kann weit neben der
+       Preisspanne des Ausschnitts liegen — auf einer Stunde ist das sogar
+       wahrscheinlich —, und eine Linie, die dann am oberen Rand klebt, sähe
+       wie ein Zeichenfehler aus. Deshalb wird sie in diesem Fall am Rand
+       gezeichnet UND darunter gesagt, dass sie dort nicht hingehört. */
+    const clampY = p => Math.max(padT + 1, Math.min(padT + plotH - 1, Y(p)));
+    const inRange = p => p >= pMin && p <= pMax;
+
+    let pts;
+    if (span.length >= 2) {
+      pts = span.map(r => ({ x: X(r.at), y: clampY(r.sma), row: r }));
+    } else {
+      /* Kein Punkt im Fenster: der jüngste Wert als waagerechte Bezugslinie. */
+      const r = span.length ? span[0] : rows[rows.length - 1];
+      pts = [{ x: padL, y: clampY(r.sma), row: r },
+             { x: ctx.W - padR, y: clampY(r.sma), row: r }];
+    }
+
+    const d = pts.map((pt, i) => `${i ? "L" : "M"} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`).join(" ");
+    chart.appendChild(el("path", {
+      d: d, fill: "none", stroke: col, "stroke-width": narrow ? 1.8 : 2,
+      "stroke-dasharray": "7 5", "stroke-linecap": "round",
+      "stroke-linejoin": "round", opacity: .95, class: "sma-line"
+    }));
+
+    /* Trefffläche: ein Band entlang der Linie, damit der Tooltip sagen kann,
+       welcher Wert das ist und über wie viele Tage er tatsächlich läuft. */
+    pts.forEach((pt, i) => {
+      const prevX = i > 0 ? pts[i - 1].x : pt.x;
+      const nextX = i < pts.length - 1 ? pts[i + 1].x : pt.x;
+      const x0 = i === 0 ? pt.x - 4 : (prevX + pt.x) / 2;
+      const x1 = i === pts.length - 1 ? pt.x + 4 : (pt.x + nextX) / 2;
+      const hit = el("rect", {
+        x: x0, y: pt.y - 9, width: Math.max(8, x1 - x0), height: 18,
+        fill: "transparent"
+      });
+      hit.style.cursor = "pointer";
+      hit.addEventListener("mousemove", e => showSmaTip(e, pt.row, days));
+      hit.addEventListener("mouseleave", hideTip);
+      chart.appendChild(hit);
+    });
+
+    if (leg) leg.hidden = false;
+
+    /* Zwei Dinge, die dabeistehen müssen, wenn sie zutreffen: ein Fenster, das
+       kürzer ist als sein Name, und eine Linie, die außerhalb der Spanne liegt
+       und deshalb am Rand klebt. */
+    const last = pts[pts.length - 1].row;
+    const msgs = [];
+    if (last && last.window_days != null && last.window_days < days) {
+      msgs.push(t("smaShort", { days: days, have: last.window_days }));
+    }
+    if (pts.every(pt => !inRange(pt.row.sma))) {
+      msgs.push(t("smaOffscale", { days: days }));
+    }
+    if (note && msgs.length) { note.hidden = false; note.textContent = msgs.join(" "); }
+  }
+
+  function showSmaTip(evt, r, days) {
+    const rows = [];
+    rows.push(`<div class="tip-key">${escapeHtml(fmtClock(r.at))}</div>`);
+    rows.push(`<div class="tip-row"><span>${escapeHtml(t("tipSma", { days: days }))}</span><span>${escapeHtml(fmtPrice(r.sma))}</span></div>`);
+    if (r.window_days != null && r.window_days < days) {
+      rows.push(`<div class="tip-note">${escapeHtml(t("smaShort", { days: days, have: r.window_days }))}</div>`);
+    }
+    tip.innerHTML = rows.join("");
+    tip.classList.add("show");
+    positionTip(evt);
   }
 
   function drawSteps(payload, pulse) {
@@ -1508,6 +1734,11 @@ body[data-chart-style="flow"] .leg-swatch.price {
       hit.addEventListener("mouseleave", hideTip);
       chart.appendChild(hit);
     });
+
+    /* Der gleitende Durchschnitt liegt ÜBER der Kurve, aber UNTER den Marken
+       für Hoch, Tief und "jetzt": er ist Bezug, nicht Messwert, und darf die
+       Punkte nicht verdecken, die es sind. */
+    drawSma({ chart, X, Y, W, padL, padR, padT, plotH, tMin, tMax, pMin, pMax, narrow });
 
     /* Hoch und Tief des SICHTBAREN Ausschnitts, jeweils mit dem Kurs
        beschriftet. Bezugsgröße sind die gezeichneten Stufen, nicht `valid`:
@@ -1975,6 +2206,9 @@ body[data-chart-style="flow"] .leg-swatch.price {
       chart.appendChild(hit);
     });
 
+    /* Gleiche Lage wie in der Stufenansicht: über der Kurve, unter den Marken. */
+    drawSma({ chart, X, Y, W, padL, padR, padT, plotH, tMin, tMax, pMin, pMax, narrow });
+
     /* Hoch und Tief, gleiche Regel und gleiche Farben wie in der Stufenansicht. */
     let hasExtremes = false;
     if (pts.length > 1) {
@@ -2345,6 +2579,22 @@ body[data-chart-style="flow"] .leg-swatch.price {
     chart.hidden = true;
   }
 
+  /* Der Durchschnitt hängt NICHT am gewählten Fenster: er läuft über die ganze
+     Aufzeichnung, und ein Fensterwechsel ändert an ihm nichts. Deshalb wird er
+     in loadAll geholt und nicht in loadSeries — sonst lüde jeder Klick auf
+     "1 h" dieselben Tagesdaten neu.
+
+     Ein 503 ist hier der normale Zustand einer jungen Installation und kein
+     Fehler: dann gibt es noch keine Kurshistorie. `smaData` bleibt null, das
+     Diagramm zeichnet einfach keine zweite Linie. */
+  async function loadSma() {
+    try {
+      smaData = await getJSON(`/v1/price/average?days=${SMA_DAYS}`);
+    } catch (e) {
+      smaData = null;
+    }
+  }
+
   async function loadSeries(pulse) {
     /* Unter 24 Stunden lohnt die Intervall-Auflösung, darüber wird die
        Stundenzusammenfassung geladen — sonst liefert ein Jahresfenster
@@ -2419,6 +2669,9 @@ body[data-chart-style="flow"] .leg-swatch.price {
       study = null;
     }
     renderStudy();
+    /* Vor loadSeries: das Diagramm zeichnet die Durchschnittslinie mit, und ein
+       Abruf danach hätte sie erst beim nächsten Zeichnen im Bild. */
+    await loadSma();
     await loadSeries(changed);
     /* Früher wurde hier der Hintergrund neu ausgerichtet, sobald der Hero seine
        endgültige Höhe hatte: die wandernde Stufenkurve suchte sich ihre Lage aus
@@ -2471,9 +2724,28 @@ body[data-chart-style="flow"] .leg-swatch.price {
     if (series) drawChart(series);
   });
 
+  /* Der Schalter zeichnet nur neu — die Tagesdaten sind schon da, und ein
+     Abruf hier machte das Umschalten von der Netzlatenz abhängig. */
+  function syncSmaBtn() {
+    const btn = document.getElementById("sma-btn");
+    if (!btn) return;
+    btn.setAttribute("aria-pressed", showSma ? "true" : "false");
+    btn.textContent = t("smaToggle");
+  }
+  const smaBtn = document.getElementById("sma-btn");
+  if (smaBtn) {
+    smaBtn.addEventListener("click", () => {
+      showSma = !showSma;
+      safeSet(LS_SMA, showSma ? "1" : "0");
+      syncSmaBtn();
+      if (series) drawChart(series);
+    });
+  }
+
   function applyLang() {
     root.setAttribute("lang", lang);
     renderI18nText();
+    syncSmaBtn();
     document.querySelectorAll("#lang-seg button").forEach(b => {
       b.classList.toggle("active", b.dataset.lang === lang);
     });

@@ -10,8 +10,17 @@
      Beschreibung sind die dieser Seite. Der volle Name "Qubic
      Decentralization Report" gehört nur noch der Report-Startseite; diese
      Seite läuft unter der Dachmarke "Qubic Report". -->
+<!-- Reihenfolge und Vollständigkeit sind hier nicht Geschmack: Firefox fordert
+     von diesen Zeilen NUR das SVG an und fällt von sich aus auf nichts zurück.
+     Scheitert das SVG, bleibt der Tab leer — genau das war der Fall, solange
+     icon.svg einen doppelten Bindestrich im Kommentar trug und damit als XML
+     unlesbar war. Die .ico steht deshalb ausdrücklich dabei: sie ist das
+     Format, das jeder Browser lesen kann, und /dashboard/favicon.ico gibt es
+     nicht — der automatische Griff ans Wurzelverzeichnis läuft von einer Seite
+     unter /dashboard/ ins Leere. -->
 <link rel="icon" type="image/svg+xml" href="./assets/icon.svg" />
 <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
+<link rel="icon" type="image/x-icon" href="./assets/favicon.ico" sizes="48x48" />
 <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
 <link rel="manifest" href="./assets/manifest.webmanifest" />
 <meta name="theme-color" content="#0d1117" />

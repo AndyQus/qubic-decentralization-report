@@ -1354,6 +1354,79 @@ class Store:
         t = int(t)
         return self.price_series(since=t - int(before_s), until=t + int(after_s))
 
+    def price_days(self, days: Optional[int] = None,
+                   until: Optional[int] = None) -> list[dict]:
+        """One row per UTC day, folded from the permanent hourly summary.
+
+        Built from `price_hours` rather than `price_points` on purpose: points
+        are pruned to a rolling window, hours are not. A moving average over
+        tens of days has to survive that pruning, or it would quietly shorten
+        its own reach as history ages.
+
+        Each day's price is the mean of its hourly time-weighted averages,
+        weighted by nothing further: an hour is an hour. `hours` says how many
+        of the day's 24 are actually on record, which is what separates a day
+        we watched from one we only caught the end of. The caller decides what
+        to do with a thin day -- this method does not silently drop it, because
+        a gap in the record is information.
+
+        The newest day is normally still running and therefore incomplete;
+        `complete` marks it, the same distinction burn_days draws.
+        """
+        where, args = [], []
+        if until is not None:
+            where.append("at<=?")
+            args.append(int(until))
+        if days is not None:
+            # Reach back a little further than asked: the oldest day in range
+            # would otherwise be cut mid-day by the cutoff and report a price
+            # built from a handful of hours.
+            cutoff = int(until if until is not None else time.time()) - (int(days) + 1) * 86400
+            where.append("at>=?")
+            args.append(cutoff)
+        sql = "SELECT at, avg_price, close, high, low FROM price_hours"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY at ASC"
+        with self._lock:
+            rows = self._conn.execute(sql, args).fetchall()
+
+        buckets: dict[int, dict] = {}
+        for r in rows:
+            price = r["avg_price"] if r["avg_price"] is not None else r["close"]
+            if price is None or price <= 0:
+                continue
+            day = (int(r["at"]) // 86400) * 86400
+            b = buckets.setdefault(day, {"at": day, "sum": 0.0, "hours": 0,
+                                         "high": price, "low": price,
+                                         "close": price, "close_at": int(r["at"])})
+            b["sum"] += float(price)
+            b["hours"] += 1
+            if r["high"] is not None and r["high"] > b["high"]:
+                b["high"] = float(r["high"])
+            if r["low"] is not None and 0 < r["low"] < b["low"]:
+                b["low"] = float(r["low"])
+            if int(r["at"]) >= b["close_at"]:
+                b["close"] = float(price)
+                b["close_at"] = int(r["at"])
+
+        today = (int(time.time()) // 86400) * 86400
+        out = []
+        for day in sorted(buckets):
+            b = buckets[day]
+            out.append({
+                "at": day,
+                "avg_price": b["sum"] / b["hours"],
+                "close": b["close"],
+                "high": b["high"],
+                "low": b["low"],
+                "hours": b["hours"],
+                "complete": 1 if (day < today and b["hours"] >= 24) else 0,
+            })
+        if days is not None:
+            out = out[-int(days):]
+        return out
+
     def price_coverage(self) -> dict:
         """What the price store holds, and how continuously it was observed.
 

@@ -230,6 +230,7 @@ def api_index():
             "/v1/price/series",
             "/v1/price/change",
             "/v1/price/at",
+            "/v1/price/average",
             "/v1/price/coverage",
             "/v1/price/epochs",
             "/health",
@@ -895,6 +896,96 @@ def price_coverage():
     if not cov["point"]["points"] and not cov["hour"]["hours"]:
         raise _no_data("price coverage")
     return {**cov, "source": pipeline.price_source(), "measured": True}
+
+
+_price_avg_cache: dict = {}
+PRICE_AVG_TTL_S = float(os.environ.get("QDR_PRICE_AVG_TTL", "300"))
+
+
+@app.get("/v1/price/average", tags=["price"],
+         summary="Moving average over daily prices")
+def price_average(
+    days: int = Query(50, ge=2, le=365,
+                      description="Length of the moving-average window, in "
+                                  "UTC days. 50 is the default the chart draws."),
+    span: int = Query(120, ge=2, le=800,
+                      description="How many days of output to return, each "
+                                  "carrying the average ending on that day."),
+):
+    """A simple moving average of the daily price, and how much of it is real.
+
+    Built on the permanent hourly summary rather than on price points: points
+    are pruned to a rolling window, so an average over tens of days would
+    otherwise shorten its own reach as history aged.
+
+    **This data has no backfill.** The RPC serves only "now", so the record
+    begins when the worker first ran. A 50-day average therefore does not exist
+    on a young deployment, and this endpoint will not manufacture one from the
+    seven days it happens to have: `ready` is false until a full window is on
+    record, `days_on_record` says how far it has got, and every point carries
+    the `window_days` actually behind it. A consumer that ignores all three and
+    plots the series anyway is plotting an average of whatever was available,
+    which is not the average it asked for.
+
+    A day needs a majority of its 24 hours on record to count toward a window.
+    Days below that are skipped rather than averaged in at a price built from a
+    handful of hours -- a thinly observed day is not a cheap day.
+    """
+    import time as _t
+
+    store = get_store()
+    key = (days, span)
+    now = _t.time()
+    hit = _price_avg_cache.get(key)
+    if hit and now - hit["at"] < PRICE_AVG_TTL_S:
+        return hit["data"]
+
+    # Enough days to produce `span` outputs, each needing `days` of lookback.
+    rows = store.price_days(days=span + days)
+    if not rows:
+        raise _no_data("price history")
+
+    # A day counts toward a window only if most of it was watched. The newest
+    # day is still running and is excluded for the same reason -- a half day
+    # would drag the average toward whatever the morning did.
+    MIN_HOURS = 12
+    usable = [r for r in rows if r["hours"] >= MIN_HOURS]
+    today = (int(now) // 86400) * 86400
+    usable = [r for r in usable if r["at"] < today]
+
+    series = []
+    for i, r in enumerate(usable):
+        window = usable[max(0, i - days + 1):i + 1]
+        series.append({
+            "at": r["at"],
+            "price": r["avg_price"],
+            "sma": sum(w["avg_price"] for w in window) / len(window),
+            # How many days actually stand behind this point. Below `days` it is
+            # a shorter average wearing the same name, and saying so is the only
+            # way a chart can draw it differently or not at all.
+            "window_days": len(window),
+            "complete": 1 if len(window) >= days else 0,
+        })
+    series = series[-span:]
+
+    on_record = len(usable)
+    return_data = {
+        "days": days,
+        "series": series,
+        "points": len(series),
+        "days_on_record": on_record,
+        "days_needed": max(0, days - on_record),
+        # The one flag a caller should branch on before drawing anything.
+        "ready": on_record >= days,
+        "min_hours_per_day": MIN_HOURS,
+        "coverage": store.price_coverage(),
+        "source": pipeline.price_source(),
+        "draw": "line",
+        "measured": True,
+    }
+    _price_avg_cache.clear()
+    _price_avg_cache[key] = {"at": now, "data": return_data}
+    return return_data
 
 
 _payout_study_cache: dict = {"at": 0.0, "key": None, "data": None}
