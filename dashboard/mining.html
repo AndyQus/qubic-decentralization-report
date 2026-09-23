@@ -365,6 +365,16 @@ html { scroll-behavior: smooth; }
   margin-top: 10px; font-size: 11.5px; color: var(--muted);
 }
 .hist-legend { display: inline-flex; align-items: center; gap: 7px; }
+/* Der Ticker sitzt rechts, unter der Zeitraum-Angabe, und trägt keinen Kasten:
+   er steht zwischen Fußnoten zum Diagramm und nicht zwischen Bedienelementen.
+   Nur die Umrandung fällt weg — der Zustandspunkt bleibt, damit "wird geladen"
+   und "veraltet" erkennbar bleiben. */
+.hist-ticker { display: flex; justify-content: flex-end; margin-top: 6px; }
+.refresh-bar.is-inline {
+  display: inline-flex; padding: 0; border: 0; background: none;
+  border-radius: 0; font-size: 11.5px;
+}
+@media (max-width: 600px) { .hist-ticker { justify-content: flex-start; } }
 .hist-legend i {
   width: 10px; height: 10px; border-radius: 3px;
   background: var(--accent); display: inline-block;
@@ -695,14 +705,20 @@ html { scroll-behavior: smooth; }
         <span id="hist-range"></span>
       </div>
 
-      <!-- Der Refresh-Ticker steht unter dem Diagramm, nicht mehr im Kopf: er
-           sagt, wie alt die gezeigten Zahlen sind und wann die nächste Messung
-           kommt — eine Auskunft über die Daten, nicht über die Seite. -->
-      <div class="refresh-bar" id="refresh-bar" aria-live="polite">
-        <span class="r-dot" id="r-dot"></span>
-        <span id="r-ago">–</span>
-        <span style="color:var(--faint)">·</span>
-        <span><span data-i18n="inWord">in</span> <span id="r-countdown">–</span>s</span>
+      <!-- Der Refresh-Ticker steht rechts neben dem Zeitraum der Kurve, ohne
+           eigenen Rahmen: beides sind Angaben ÜBER das Diagramm darüber — seit
+           wann es reicht und wie frisch es ist.
+
+           Eigene Zeile statt in `hist-foot`: die Fußzeile bleibt verborgen, bis
+           die Verlaufsdaten da sind, und der Ticker muss gerade dann sichtbar
+           sein, wenn noch nichts geladen ist ("wird geladen · in –s"). -->
+      <div class="hist-ticker">
+        <span class="refresh-bar is-inline" id="refresh-bar" aria-live="polite">
+          <span class="r-dot" id="r-dot"></span>
+          <span id="r-ago">–</span>
+          <span style="color:var(--faint)">·</span>
+          <span><span data-i18n="inWord">in</span> <span id="r-countdown">–</span>s</span>
+        </span>
       </div>
     </div>
   </section>
@@ -1243,7 +1259,10 @@ html { scroll-behavior: smooth; }
   function setRefreshState(state) {
     const bar = document.getElementById("refresh-bar");
     const dot = document.getElementById("r-dot");
-    bar.className = "refresh-bar " + (state || "");
+    /* Nur die Zustandsklasse tauschen: `bar.className = ...` nähme dem Ticker
+       auch `is-inline` und gäbe ihm beim ersten Abruf seinen Rahmen zurück. */
+    bar.classList.remove("loading", "live", "stale", "error");
+    if (state) bar.classList.add(state);
     dot.className = "r-dot";
     if (state === "stale" || state === "error") dot.className = "r-dot " + state;
   }

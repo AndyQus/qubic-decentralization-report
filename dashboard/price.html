@@ -307,6 +307,14 @@
   border: 1px solid var(--border); background: var(--surface);
   white-space: nowrap;
 }
+/* In der Legendenzeile ohne Kasten: dort steht der Ticker zwischen den
+   Legendeneinträgen und ist wie sie eine Fußnote zum Bild, kein Bedienelement.
+   Nur die Umrandung fällt weg — Schriftgröße, Farbe und der Zustandspunkt
+   bleiben, damit "gerade geladen" und "veraltet" weiter erkennbar sind. */
+.refresh-bar.is-inline {
+  display: inline-flex; padding: 0; border: 0; background: none;
+  border-radius: 0; font-size: 12px;
+}
 .refresh-bar .r-dot {
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--price-line); flex: 0 0 auto;
@@ -936,19 +944,18 @@ body[data-chart-style="flow"] .leg-swatch.price {
       <span class="leg-item" id="leg-gap" hidden><span class="leg-swatch gap" aria-hidden="true"></span><span data-i18n="legGap">Not observed</span></span>
       <span class="leg-item" id="leg-extreme" hidden><span class="leg-swatch extreme" aria-hidden="true"></span><span data-i18n="legExtreme">High and low in view</span></span>
       <span class="leg-item" id="leg-sma" hidden><span class="leg-swatch sma" aria-hidden="true"></span><span id="leg-sma-text">50-day average</span></span>
-    </div>
 
-    <!-- Der Refresh-Ticker steht unter dem Diagramm, nicht mehr im Kopf.
-
-         Er sagt, wie alt die gezeigte Kurve ist und wann die nächste Messung
-         kommt — beides Auskünfte ÜBER das Bild darüber. Im Kopf stand er neben
-         der Navigation und las sich wie ein Zustand der Seite; hier steht er
-         neben dem, worauf er sich bezieht. -->
-    <div class="refresh-bar loading" id="refresh-bar" aria-live="polite">
-      <span class="r-dot" id="r-dot"></span>
-      <span id="r-ago">–</span>
-      <span style="color:var(--faint)">·</span>
-      <span><span data-i18n="inWord">in</span> <span id="r-countdown">–</span>s</span>
+      <!-- Der Refresh-Ticker läuft in der Legendenzeile mit, ohne eigenen
+           Rahmen: er ist wie die Legende eine Fußnote zum Bild darüber, und
+           eine gerahmte Pille daneben machte daraus ein zweites Bedienelement.
+           Die Klasse `refresh-bar` bleibt — Skript und Zustandsfarben hängen
+           daran —, `is-inline` nimmt ihr nur das Kastenaussehen. -->
+      <span class="refresh-bar is-inline loading" id="refresh-bar" aria-live="polite">
+        <span class="r-dot" id="r-dot"></span>
+        <span id="r-ago">–</span>
+        <span style="color:var(--faint)">·</span>
+        <span><span data-i18n="inWord">in</span> <span id="r-countdown">–</span>s</span>
+      </span>
     </div>
 
     <!-- Die Haltedauer steht jetzt hier, direkt unter dem Diagramm, statt im
@@ -1511,6 +1518,32 @@ body[data-chart-style="flow"] .leg-swatch.price {
       if (t.length >= 2 && !fallback) fallback = t;
     }
     return fallback;
+  }
+
+  /* Wie breit der rechte Rand wirklich sein muss.
+
+     Er war fest auf 98 px (74 auf schmalen Karten) — bemessen für die alten
+     Beschriftungen mit zehn Nachkommastellen. Seit die Achse nur noch drei
+     Ziffern trägt, standen davon rund 60 px leer: Platz, den die Kurve
+     gebrauchen kann, und auf einem Telefon ist das ein Sechstel der Breite.
+
+     Gemessen statt geschätzt, aus demselben Grund wie bei der Zeitachse: eine
+     feste Zahl stimmt genau so lange, wie sich an Schriftgröße und
+     Beschriftung nichts ändert. Die Tausendertrennung kann die Marken später
+     auf "407.150" verbreitern, und dann muss der Rand von selbst mitwachsen,
+     statt die Ziffern abzuschneiden. */
+  function measureAxisW(labels, fontSize) {
+    let w = 0;
+    const probe = el("text", { "font-size": fontSize, "font-weight": 600, opacity: 0 });
+    chart.appendChild(probe);
+    try {
+      labels.forEach(t => {
+        probe.textContent = t;
+        w = Math.max(w, probe.getComputedTextLength());
+      });
+    } catch (e) { w = 0; }
+    chart.removeChild(probe);
+    return w;
   }
 
   function axisLabels(vals) {
@@ -2103,12 +2136,15 @@ body[data-chart-style="flow"] .leg-swatch.price {
        am rechten Ende der Kurve, und die Achse steht damit neben der Zahl, um
        die es geht, statt am anderen Ende des Bildes. Alles Übrige rechnet
        ohnehin in padL…W-padR und folgt der Vertauschung von selbst. */
-    const padL = narrow ? 10 : 14, padR = narrow ? 74 : 98;
+    /* padR wird unten gemessen, sobald die Achsenbeschriftung feststeht —
+       sie ist das Einzige, was rechts Platz braucht. Der Startwert ist nur
+       eine Obergrenze für den Fall, dass die Messung nicht gelingt. */
+    const padL = narrow ? 10 : 14;
+    let padR = narrow ? 74 : 98;
     /* Oben etwas mehr Luft, wenn ein gemeinsamer Vorsatz über der Achse steht:
        er sitzt jetzt in derselben Spalte wie die Achsenwerte (rechts), und auf
        gleicher Höhe mit der obersten Marke stieße er mit ihr zusammen. */
     const padT = 26, padB = narrow ? 38 : 44;
-    const plotW = W - padL - padR;
     const plotH = H - padT - padB;
     chart.setAttribute("viewBox", `0 0 ${W} ${H}`);
 
@@ -2136,6 +2172,27 @@ body[data-chart-style="flow"] .leg-swatch.price {
     if (pMax - pMin < pMax * 1e-9) { pMin = pMin * 0.999; pMax = pMax * 1.001; }
     const pad = (pMax - pMin) * 0.12;
     pMin -= pad; pMax += pad;
+
+    /* Die Achse zuerst, dann die Geometrie: der rechte Rand ist genau so breit,
+       wie die breiteste Beschriftung ihn braucht, und alles, was in
+       padL…W-padR rechnet, bekommt dadurch die freigewordene Breite. */
+    const TICKS = 4;
+    let tickVals = pickTicks(pMin, pMax);
+    if (!tickVals || tickVals.length < 2) {
+      tickVals = [];
+      for (let i = 0; i <= TICKS; i++) tickVals.push(pMin + (pMax - pMin) * i / TICKS);
+    }
+    const axis = axisLabels(tickVals);
+    const labels = axis.labels;
+    const prefix = axis.prefix;
+    const AXIS_FS = narrow ? 12 : 14;
+    const AXIS_GAP = 8;          /* Luft zwischen Plotkante und Ziffern */
+    const AXIS_EDGE = narrow ? 2 : 4;   /* Rest bis zum Bildrand */
+    const axisTextW = measureAxisW(labels, AXIS_FS);
+    if (axisTextW > 0) {
+      padR = Math.min(padR, Math.ceil(axisTextW) + AXIS_GAP + AXIS_EDGE);
+    }
+    const plotW = W - padL - padR;
 
     const X = ts => padL + (ts - tMin) / tSpan * plotW;
     const Y = p => padT + (1 - (p - pMin) / (pMax - pMin)) * plotH;
@@ -2165,19 +2222,8 @@ body[data-chart-style="flow"] .leg-swatch.price {
        Telefon zu einem unlesbaren Ziffernband. Deshalb steht dort nur, was sich
        zwischen den Marken UNTERSCHEIDET: ein gemeinsamer Vorsatz wird einmal
        oben genannt, die Marken tragen nur noch die abweichenden Endziffern. */
-    /* Runde Marken, wenn die Spanne welche hergibt — sonst wie bisher gleichmäßig
-       geteilt. Das Gitter folgt den Marken, also ändert sich mit ihnen auch, wo
-       die waagerechten Linien liegen; sie sitzen dann auf runden Werten statt
-       auf Fünfteln der Spanne. */
-    const TICKS = 4;
-    let tickVals = pickTicks(pMin, pMax);
-    if (!tickVals || tickVals.length < 2) {
-      tickVals = [];
-      for (let i = 0; i <= TICKS; i++) tickVals.push(pMin + (pMax - pMin) * i / TICKS);
-    }
-    const axis = axisLabels(tickVals);
-    const labels = axis.labels;
-    const prefix = axis.prefix;
+    /* Marken, Beschriftung und der daraus gemessene rechte Rand stehen weiter
+       oben — sie mussten vor der Geometrie feststehen. */
     /* Der Faktor über der Achse ist auf Wunsch abgeschaltet, aber absichtlich
        stehengelassen: die Zeile nannte die weggelassenen führenden Nullen
        (z. B. "0,0000000…") und machte aus "408" wieder eine vollständige Zahl.
@@ -2195,10 +2241,6 @@ body[data-chart-style="flow"] .leg-swatch.price {
     //     "font-size": 11, opacity: .75
     //   }, prefix + "…"));
     // }
-    /* Die Preisachse steht größer und kräftiger als die Zeitachse: sie trägt
-       die Größe, um die es geht, und musste bisher mit 11px gegen zehn
-       Nachkommastellen antreten. */
-    const AXIS_FS = narrow ? 12 : 14;
     tickVals.forEach((p, i) => {
       const y = Y(p);
       chart.appendChild(el("line", {
@@ -2206,7 +2248,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       }));
       chart.appendChild(el("text", {
         class: "y-tick",
-        x: W - padR + 9, y: y + AXIS_FS * 0.36, "text-anchor": "start",
+        x: W - padR + AXIS_GAP, y: y + AXIS_FS * 0.36, "text-anchor": "start",
         "font-size": AXIS_FS, "font-weight": 600
       }, labels[i]));
     });
@@ -2589,12 +2631,15 @@ body[data-chart-style="flow"] .leg-swatch.price {
        am rechten Ende der Kurve, und die Achse steht damit neben der Zahl, um
        die es geht, statt am anderen Ende des Bildes. Alles Übrige rechnet
        ohnehin in padL…W-padR und folgt der Vertauschung von selbst. */
-    const padL = narrow ? 10 : 14, padR = narrow ? 74 : 98;
+    /* padR wird unten gemessen, sobald die Achsenbeschriftung feststeht —
+       sie ist das Einzige, was rechts Platz braucht. Der Startwert ist nur
+       eine Obergrenze für den Fall, dass die Messung nicht gelingt. */
+    const padL = narrow ? 10 : 14;
+    let padR = narrow ? 74 : 98;
     /* Oben etwas mehr Luft, wenn ein gemeinsamer Vorsatz über der Achse steht:
        er sitzt jetzt in derselben Spalte wie die Achsenwerte (rechts), und auf
        gleicher Höhe mit der obersten Marke stieße er mit ihr zusammen. */
     const padT = 26, padB = narrow ? 38 : 44;
-    const plotW = W - padL - padR;
     const plotH = H - padT - padB;
     chart.setAttribute("viewBox", `0 0 ${W} ${H}`);
 
@@ -2614,6 +2659,27 @@ body[data-chart-style="flow"] .leg-swatch.price {
     if (pMax - pMin < pMax * 1e-9) { pMin = pMin * 0.999; pMax = pMax * 1.001; }
     const pad = (pMax - pMin) * 0.12;
     pMin -= pad; pMax += pad;
+
+    /* Die Achse zuerst, dann die Geometrie: der rechte Rand ist genau so breit,
+       wie die breiteste Beschriftung ihn braucht, und alles, was in
+       padL…W-padR rechnet, bekommt dadurch die freigewordene Breite. */
+    const TICKS = 4;
+    let tickVals = pickTicks(pMin, pMax);
+    if (!tickVals || tickVals.length < 2) {
+      tickVals = [];
+      for (let i = 0; i <= TICKS; i++) tickVals.push(pMin + (pMax - pMin) * i / TICKS);
+    }
+    const axis = axisLabels(tickVals);
+    const labels = axis.labels;
+    const prefix = axis.prefix;
+    const AXIS_FS = narrow ? 12 : 14;
+    const AXIS_GAP = 8;          /* Luft zwischen Plotkante und Ziffern */
+    const AXIS_EDGE = narrow ? 2 : 4;   /* Rest bis zum Bildrand */
+    const axisTextW = measureAxisW(labels, AXIS_FS);
+    if (axisTextW > 0) {
+      padR = Math.min(padR, Math.ceil(axisTextW) + AXIS_GAP + AXIS_EDGE);
+    }
+    const plotW = W - padL - padR;
 
     const X = ts => padL + (ts - tMin) / tSpan * plotW;
     const Y = p => padT + (1 - (p - pMin) / (pMax - pMin)) * plotH;
@@ -2747,33 +2813,21 @@ body[data-chart-style="flow"] .leg-swatch.price {
 
     /* Gitter und Preisachse — wörtlich wie in der Stufenansicht, damit sich
        beim Umschalten nur die Kurve ändert und nicht das Ablesen. */
-    /* Runde Marken, wenn die Spanne welche hergibt — sonst wie bisher gleichmäßig
-       geteilt. Das Gitter folgt den Marken, also ändert sich mit ihnen auch, wo
-       die waagerechten Linien liegen; sie sitzen dann auf runden Werten statt
-       auf Fünfteln der Spanne. */
-    const TICKS = 4;
-    let tickVals = pickTicks(pMin, pMax);
-    if (!tickVals || tickVals.length < 2) {
-      tickVals = [];
-      for (let i = 0; i <= TICKS; i++) tickVals.push(pMin + (pMax - pMin) * i / TICKS);
-    }
-    const axis = axisLabels(tickVals);
-    const labels = axis.labels;
-    const prefix = axis.prefix;
+    /* Marken, Beschriftung und der daraus gemessene rechte Rand stehen weiter
+       oben — sie mussten vor der Geometrie feststehen. */
     /* Abgeschaltet wie in drawSteps — siehe die Begründung dort. */
     // if (prefix) {
     //   chart.appendChild(el("text", {
     //     x: W - padR + 9, y: 12, "text-anchor": "start", "font-size": 11, opacity: .75
     //   }, prefix + "…"));
     // }
-    const AXIS_FS = narrow ? 12 : 14;
     tickVals.forEach((p, i) => {
       const y = Y(p);
       chart.appendChild(el("line", {
         x1: padL, y1: y, x2: W - padR, y2: y, stroke: gridCol, "stroke-width": 1
       }));
       chart.appendChild(el("text", {
-        class: "y-tick", x: W - padR + 9, y: y + AXIS_FS * 0.36, "text-anchor": "start",
+        class: "y-tick", x: W - padR + AXIS_GAP, y: y + AXIS_FS * 0.36, "text-anchor": "start",
         "font-size": AXIS_FS, "font-weight": 600
       }, labels[i]));
     });
@@ -2984,7 +3038,12 @@ body[data-chart-style="flow"] .leg-swatch.price {
 
   function setRefreshState(state) {
     const bar = document.getElementById("refresh-bar");
-    if (bar) bar.className = "refresh-bar " + (state || "");
+    if (!bar) return;
+    /* Nur die Zustandsklasse tauschen, nicht die ganze className überschreiben:
+       das nähme dem Ticker auch `is-inline` und gäbe ihm mitten im Betrieb
+       seinen Rahmen zurück — beim ersten Datenabruf, also sofort. */
+    bar.classList.remove("loading", "live", "stale", "error");
+    if (state) bar.classList.add(state);
   }
 
   function startCountdown(seconds) {
