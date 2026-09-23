@@ -77,10 +77,19 @@
            zeigt die Seite in ihrer Voreinstellung eine Bewegung, die sie
            nirgends belegt.
 
-    2. Eine Lücke bleibt eine Lücke. Wo nicht gemessen wurde, wird nichts
-       gezeichnet; `polls` je Intervall unterscheidet "Preis stand still" von
-       "niemand hat hingesehen". Die Fluss-Ansicht verbindet über eine Lücke
-       hinweg NICHT — dort bricht die Kurve ab und setzt dahinter neu an.
+    2. Eine Lücke bleibt eine Lücke — in der Stufenansicht. Wo nicht gemessen
+       wurde, zeichnet drawSteps() nichts als Preis, sondern eine Schraffur
+       über die volle Höhe; `polls` je Intervall unterscheidet "Preis stand
+       still" von "niemand hat hingesehen".
+
+       Die Fluss-Ansicht verbindet dagegen durch: sie interpoliert ohnehin
+       zwischen den Messpunkten, sagt das in der Legende ("interpoliert"), und
+       ein Sprung über eine unbeobachtete Stelle ist dieselbe Interpolation wie
+       jeder andere Abschnitt. Vorher brach sie dort ab — bei einer Lücke von
+       Minuten blieb davon im Tagesfenster nur ein paar Pixel breiter Schlitz,
+       der wie ein Zeichenfehler aussah statt wie ein Befund. Wer die Lücken
+       sehen will, schaltet auf "Stufen"; das ist die Ansicht, die behauptet
+       zu zeigen, was gemessen wurde.
 
   Kein Handelsvolumen: die RPC veröffentlicht keins, und es von einer Börse zu
   holen verstieße gegen deren AGB (siehe qdr/market-Historie im Git-Log).
@@ -2700,7 +2709,6 @@ body[data-chart-style="flow"] .leg-swatch.price {
 
     const gridCol = cssVar("--grid") || "rgba(255,255,255,.1)";
     const epochCol = cssVar("--epoch-mark") || "#7e6fff";
-    const gapCol = cssVar("--gap-hatch") || "rgba(185,194,207,.35)";
     /* Notfarbe ist die Leitfarbe, nicht mehr Grün: --price-up ist inzwischen
        als var(--accent) definiert, und ein grüner Rückfall wäre die einzige
        Stelle der Seite, an der doch wieder Grün erschiene. */
@@ -2713,35 +2721,31 @@ body[data-chart-style="flow"] .leg-swatch.price {
        zeichnet; hier ist die Breite die Interpolation, und ein zweiter Punkt am
        Intervallende würde die Kurve dort flach ziehen und den Sprung danach
        steiler machen, als er war. */
-    /* Die Punkte, in Segmente zerlegt.
+    /* Die Punkte als EIN Zug, ohne Schnitt.
 
-       Ein Segment endet, wo eine Lücke beginnt. Das ist hier nicht Kosmetik,
-       sondern dieselbe Regel wie in der Stufenansicht, nur strenger nötig: eine
-       Stufe über eine unbeobachtete Nacht ist eine flache Linie und fällt kaum
-       auf, eine interpolierte Kurve darüber ist eine lange, selbstbewusste
-       Diagonale — also genau die Behauptung einer Bewegung, die niemand gemessen
-       hat. Die Kurve setzt hinter der Lücke deshalb neu an, und die Schraffur
-       steht dazwischen.
+       Früher brach die Kurve an jeder Lücke ab und setzte dahinter neu an, mit
+       einer Schraffur dazwischen. Das war als Befund gemeint — hier wurde nicht
+       gemessen —, kam aber nicht so an: eine Lücke von wenigen Minuten ist in
+       einem Tagesfenster nur ein paar Pixel breit, und in dieser Breite blieb
+       vom Befund nur ein Schlitz übrig, in dem die Linie ohne erkennbaren Grund
+       fehlte. Es sah nach Fehler aus, nicht nach Aussage.
 
-       Geprüft wird gegen die letzte BESTÄTIGUNG (`prevConfirmed`), nicht gegen
-       das nach vorn gezogene Intervallende — siehe die längere Begründung in
-       drawSteps. */
+       Die Fluss-Ansicht interpoliert ohnehin zwischen allen Messpunkten — das
+       ist ihr ganzer Zweck und steht als "interpoliert" an der Ansicht dran. Ein
+       Sprung über eine unbeobachtete Stelle ist genau dieselbe Interpolation wie
+       jeder andere Abschnitt dieser Kurve, also wird er auch so gezeichnet: der
+       letzte gemessene Kurs hängt am nächsten gemessenen.
+
+       Wer die Lücken sehen will, schaltet auf "Stufen". Dort steht die
+       Schraffur weiterhin, und dort ist sie auch die richtige Aussage, weil
+       jene Ansicht behauptet zu zeigen, was gemessen wurde. */
     const segs = [];
     let cur = [];
-    const gaps = [];
-    let prevConfirmed = null;
     let lastConfirmed = null;
     rows.forEach(r => {
       const p = isHour ? (r.avg != null ? r.avg : r.c) : r.price;
       if (p == null || !isFinite(p) || p <= 0) return;
-      const confirmed = isHour ? r.at + 3600 : (r.until != null ? r.until : r.at);
-      if (prevConfirmed != null && r.at - prevConfirmed > GAP_SLACK_S) {
-        gaps.push([prevConfirmed, r.at]);
-        if (cur.length) segs.push(cur);
-        cur = [];
-      }
-      prevConfirmed = confirmed;
-      lastConfirmed = confirmed;
+      lastConfirmed = isHour ? r.at + 3600 : (r.until != null ? r.until : r.at);
       cur.push({ x: X(r.at), y: Y(p), row: r, price: p });
     });
     if (cur.length) segs.push(cur);
@@ -2763,21 +2767,6 @@ body[data-chart-style="flow"] .leg-swatch.price {
     const pts = segs.reduce((a, s) => a.concat(s), []);
 
     const defs = el("defs");
-
-    /* Schraffur für Lücken. Weiter gestellt und dünner als in der
-       Stufenansicht: hier bricht die Kurve an der Lücke ohnehin sichtbar ab,
-       die Fläche muss den Befund also nur noch bestätigen, nicht allein tragen.
-       Mit dem dichten Raster der Stufenansicht legte sich eine halbe Nacht als
-       dunkles Feld über das halbe Diagramm und las sich als Störung, nicht als
-       Aussage über die Messung. */
-    const pat = el("pattern", {
-      id: "gap-hatch-flow", width: 9, height: 9,
-      patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)"
-    });
-    pat.appendChild(el("line", {
-      x1: 0, y1: 0, x2: 0, y2: 9, stroke: gapCol, "stroke-width": 1, opacity: .5
-    }));
-    defs.appendChild(pat);
 
     /* Der Farbverlauf. Der Umschlagpunkt liegt auf dem STARTPREIS des
        Ausschnitts, nicht auf der Mitte der Achse: die Leitfarbe heißt hier "über dem
@@ -2904,42 +2893,9 @@ body[data-chart-style="flow"] .leg-swatch.price {
       }));
     });
 
-    /* Eine Lücke von wenigen Minuten ist in einem Tagesfenster nur ein paar
-       Pixel breit, und in diese Breite passt die Schraffur nicht: das Raster
-       ist 9px weit, ein 4px-Streifen erwischt also höchstens einen einzigen
-       Strich, oft keinen. Übrig blieb ein leerer Schlitz — die Kurve bricht
-       ab, und nichts sagt warum. Das liest sich als Zeichenfehler, nicht als
-       Befund, und war genau die falsche Aussage: die Seite will zeigen, DASS
-       hier nicht gemessen wurde.
-
-       Unter MIN_HATCH_W trägt deshalb eine deckende Fläche denselben Befund,
-       mit zwei Kanten als Begrenzung; darüber bleibt es bei der Schraffur,
-       die auf Breite ruhiger wirkt als ein Block. Die Fläche bekommt eine
-       Mindestbreite, damit auch eine Lücke von einer Minute sichtbar bleibt —
-       sie wird dabei um ihre Mitte aufgezogen, sonst wanderte der Befund von
-       der Stelle weg, an der er gilt. */
-    const MIN_HATCH_W = 14;
-    gaps.forEach(([a, b]) => {
-      const x0 = X(a), x1 = X(b), raw = x1 - x0;
-      if (raw < MIN_HATCH_W) {
-        const w = Math.max(3, raw);
-        const mid = (x0 + x1) / 2;
-        const gx = Math.max(padL, Math.min(W - padR - w, mid - w / 2));
-        chart.appendChild(el("rect", {
-          x: gx, y: padT, width: w, height: plotH, fill: gapCol, opacity: .5
-        }));
-        [gx, gx + w].forEach(ex => {
-          chart.appendChild(el("line", {
-            x1: ex, y1: padT, x2: ex, y2: padT + plotH,
-            stroke: gapCol, "stroke-width": 1, opacity: .9
-          }));
-        });
-        return;
-      }
-      chart.appendChild(el("rect", {
-        x: x0, y: padT, width: raw, height: plotH, fill: "url(#gap-hatch-flow)"
-      }));
-    });
+    /* Hier standen die Lückenflächen. Sie sind weg, zusammen mit dem Schnitt
+       in der Kurve — die Begründung steht oben bei den Punkten. In der
+       Stufenansicht bleiben sie. */
 
     const bounds = ((study && study.cases) || []).filter(c => c.at >= tMin && c.at <= tMax);
     bounds.forEach(c => {
@@ -3030,7 +2986,10 @@ body[data-chart-style="flow"] .leg-swatch.price {
     const legGap = document.getElementById("leg-gap");
     const legExtreme = document.getElementById("leg-extreme");
     if (legEpoch) legEpoch.hidden = bounds.length === 0;
-    if (legGap) legGap.hidden = gaps.length === 0;
+    /* Diese Ansicht zeichnet keine Lücken mehr, also darf die Legende auch
+       keine ankündigen — sonst suchte man nach einer Schraffur, die es hier
+       nicht gibt. */
+    if (legGap) legGap.hidden = true;
     if (legExtreme) legExtreme.hidden = !hasExtremes;
 
     chart.setAttribute("aria-label",
