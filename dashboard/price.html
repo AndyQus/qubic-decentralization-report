@@ -1445,7 +1445,51 @@ body[data-chart-style="flow"] .leg-swatch.price {
      abgetrennt: 0,123 bleibt 0,123. Eine gekürzte Schreibweise ist dort
      länger als das Original und nur noch Umweg. */
   const AXIS_MAX_DEC = 5;   // ab hier lohnt das Abtrennen nicht mehr
-  const AXIS_SIG = 4;       // Ziffern, die stehenbleiben: 3234
+  /* Drei Ziffern, wie im Hero: Qubics RPC liefert nicht mehr, und eine vierte
+     wäre auch hier erfundene Genauigkeit. Untergrenze, keine feste Breite —
+     liegen zwei Marken so eng, dass drei Ziffern sie nicht trennen, werden es
+     mehr, sonst stünde dieselbe Zahl zweimal untereinander. */
+  const AXIS_SIG = 3;
+
+  /* Marken auf RUNDEN Werten statt auf gleichmäßigen Scheiben der Spanne.
+
+     Das ist die Voraussetzung dafür, dass drei Ziffern überhaupt reichen. Eine
+     interpolierte Marke wie 4,019e-7 HAT eine vierte Ziffer — sie entsteht aus
+     der Division der Spanne, nicht aus einer Messung, und auf drei Stellen
+     gekürzt kollidierte sie mit ihrer Nachbarin. Ein Schritt von 0,05e-7
+     dagegen trifft Werte, die die Quelle auch gemeldet haben könnte.
+
+     Schrittweite ist 1, 2 oder 5 mal einer Zehnerpotenz — die Staffelung, die
+     gedruckte Achsen seit jeher benutzen, weil sie im Kopf teilbar ist. */
+  function niceTicks(lo, hi, want) {
+    const span = hi - lo;
+    if (!(span > 0) || !isFinite(span)) return null;
+    const raw = span / want;
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const n = raw / mag;
+    const step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * mag;
+    const out = [];
+    for (let i = Math.ceil(lo / step); i * step <= hi * (1 + 1e-12); i++) {
+      out.push(Number((i * step).toPrecision(12)));
+      if (out.length > 12) break;       /* Notbremse gegen Endlosschleifen */
+    }
+    return out;
+  }
+
+  /* Vier Marken sind das Ziel; ergibt die runde Staffelung dabei zu wenige oder
+     zu viele, wird die nächste Zielzahl probiert. Bleibt gar nichts übrig —
+     etwa bei einer völlig flachen Reihe —, meldet die Funktion null und der
+     Aufrufer teilt wie bisher gleichmäßig. */
+  function pickTicks(lo, hi) {
+    let fallback = null;
+    for (const want of [4, 5, 3, 6]) {
+      const t = niceTicks(lo, hi, want);
+      if (!t) continue;
+      if (t.length >= 3 && t.length <= 7) return t;
+      if (t.length >= 2 && !fallback) fallback = t;
+    }
+    return fallback;
+  }
 
   function axisLabels(vals) {
     const sep = (1.1).toLocaleString(locale()).indexOf(",") >= 0 ? "," : ".";
@@ -1484,10 +1528,24 @@ body[data-chart-style="flow"] .leg-swatch.price {
     }
 
     const scale = Math.pow(10, zeros + sig);
+    let digits = vals.map(v => (v == null || !isFinite(v)) ? null
+                             : String(Math.round(v * scale)).padStart(sig, "0"));
+
+    /* Endnullen, die ALLE Marken teilen, wandern in den Faktor. Eine Spalte
+       4000 / 4050 / 4100 sagt nichts mehr als 400 / 405 / 410 — die letzte
+       Null steht im Bezug, nicht in der Messung. Nie unter AXIS_SIG Ziffern,
+       sonst verlöre eine Reihe wie 400/500/600 ihre Aussage. */
+    let drop = 0;
+    const real = digits.filter(d => d !== null);
+    while (real.length
+           && real.every(d => d.length - drop > AXIS_SIG && d[d.length - 1 - drop] === "0")) {
+      drop++;
+    }
+    if (drop) digits = digits.map(d => d === null ? null : d.slice(0, d.length - drop));
+
     return {
-      prefix: "0" + sep + "0".repeat(zeros),
-      labels: vals.map(v => (v == null || !isFinite(v)) ? "–"
-                          : String(Math.round(v * scale)).padStart(sig, "0"))
+      prefix: "0" + sep + "0".repeat(zeros + drop),
+      labels: digits.map(d => d === null ? "–" : d)
     };
   }
 
@@ -2065,9 +2123,16 @@ body[data-chart-style="flow"] .leg-swatch.price {
        Telefon zu einem unlesbaren Ziffernband. Deshalb steht dort nur, was sich
        zwischen den Marken UNTERSCHEIDET: ein gemeinsamer Vorsatz wird einmal
        oben genannt, die Marken tragen nur noch die abweichenden Endziffern. */
+    /* Runde Marken, wenn die Spanne welche hergibt — sonst wie bisher gleichmäßig
+       geteilt. Das Gitter folgt den Marken, also ändert sich mit ihnen auch, wo
+       die waagerechten Linien liegen; sie sitzen dann auf runden Werten statt
+       auf Fünfteln der Spanne. */
     const TICKS = 4;
-    const tickVals = [];
-    for (let i = 0; i <= TICKS; i++) tickVals.push(pMin + (pMax - pMin) * i / TICKS);
+    let tickVals = pickTicks(pMin, pMax);
+    if (!tickVals || tickVals.length < 2) {
+      tickVals = [];
+      for (let i = 0; i <= TICKS; i++) tickVals.push(pMin + (pMax - pMin) * i / TICKS);
+    }
     const axis = axisLabels(tickVals);
     const labels = axis.labels;
     const prefix = axis.prefix;
@@ -2632,9 +2697,16 @@ body[data-chart-style="flow"] .leg-swatch.price {
 
     /* Gitter und Preisachse — wörtlich wie in der Stufenansicht, damit sich
        beim Umschalten nur die Kurve ändert und nicht das Ablesen. */
+    /* Runde Marken, wenn die Spanne welche hergibt — sonst wie bisher gleichmäßig
+       geteilt. Das Gitter folgt den Marken, also ändert sich mit ihnen auch, wo
+       die waagerechten Linien liegen; sie sitzen dann auf runden Werten statt
+       auf Fünfteln der Spanne. */
     const TICKS = 4;
-    const tickVals = [];
-    for (let i = 0; i <= TICKS; i++) tickVals.push(pMin + (pMax - pMin) * i / TICKS);
+    let tickVals = pickTicks(pMin, pMax);
+    if (!tickVals || tickVals.length < 2) {
+      tickVals = [];
+      for (let i = 0; i <= TICKS; i++) tickVals.push(pMin + (pMax - pMin) * i / TICKS);
+    }
     const axis = axisLabels(tickVals);
     const labels = axis.labels;
     const prefix = axis.prefix;
