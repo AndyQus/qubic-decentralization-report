@@ -241,16 +241,17 @@ PAGE = """<!doctype html>
 
 <meta property="og:type" content="article" />
 <meta property="og:site_name" content="Qubic Report" />
-<meta property="og:title" content="How it works \u2014 Qubic Decentralization Report" />
+<meta property="og:locale" content="en_US" />
+<meta property="og:title" content="How it works \u2014 Qubic Report" />
 <meta property="og:description" content="{desc}" />
 <meta property="og:url" content="https://report.qubic.tools/how-it-works" />
 <meta property="og:image" content="https://report.qubic.tools/dashboard/assets/og-image.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="Qubic Report \u2014 Dezentralisierung, verbrannte Supply, Kurs und Mining" />
+<meta property="og:image:alt" content="Qubic Report \u2014 decentralization, burned supply, price and mining" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="How it works \u2014 Qubic Decentralization Report" />
+<meta name="twitter:title" content="How it works \u2014 Qubic Report" />
 <meta name="twitter:description" content="{desc}" />
 <meta name="twitter:image" content="https://report.qubic.tools/dashboard/assets/og-image.png" />
 <style>

@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Kurs — Qubic Report</title>
-<meta name="description" content="Der Marktpreis von QU als Stufenreihe, und was er rund um die Computor-Auszahlungen an den Epochengrenzen tut. Per API abrufbar." />
+<meta name="description" content="The market price of QU as a step series, and what it does around the computor payouts at the epoch boundaries. Available over the API." />
 
 <!-- Icons, PWA und Link-Vorschau wie auf den übrigen Seiten. Der volle Name
      "Qubic Decentralization Report" bleibt der Report-Startseite vorbehalten. -->
@@ -27,17 +27,18 @@
 
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Qubic Report" />
-<meta property="og:title" content="Kurs — QU und die Epochengrenzen" />
-<meta property="og:description" content="Gemessene Kursreihe in Stufen, dazu die Auswertung rund um die Computor-Auszahlungen. Lücken bleiben Lücken." />
+<meta property="og:locale" content="en_US" />
+<meta property="og:title" content="Price — QU and the epoch boundaries" />
+<meta property="og:description" content="The measured price series in steps, plus the study around the computor payouts. Gaps stay gaps." />
 <meta property="og:url" content="https://report.qubic.tools/dashboard/price.html" />
 <meta property="og:image" content="https://report.qubic.tools/dashboard/assets/og-image.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="Qubic Report — Dezentralisierung, verbrannte Supply, Kurs und Mining" />
+<meta property="og:image:alt" content="Qubic Report — decentralization, burned supply, price and mining" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Kurs — QU und die Epochengrenzen" />
-<meta name="twitter:description" content="Gemessene Kursreihe in Stufen, dazu die Auswertung rund um die Auszahlungen." />
+<meta name="twitter:title" content="Price — QU and the epoch boundaries" />
+<meta name="twitter:description" content="The measured price series in steps, plus the study around the payouts." />
 <meta name="twitter:image" content="https://report.qubic.tools/dashboard/assets/og-image.png" />
 
 <!--
@@ -71,10 +72,10 @@
          * "Fluss" glättet dieselben Messungen zu einer Kurve, weil sich die
            Richtung so über längere Strecken schneller liest. Das ist die
            Voreinstellung — und weil eine Kurve mehr behauptet als gemessen
-           wurde, trägt die Ansicht ihre Einschränkung mit sich: `flowNote`
-           unter dem Diagramm und "interpoliert" in der Legende. Beides darf
-           nicht wegfallen, sonst zeigt die Seite in ihrer Voreinstellung eine
-           Bewegung, die sie nirgends belegt.
+           wurde, trägt die Ansicht ihre Einschränkung mit sich: die Legende
+           sagt "interpoliert" statt "Stufen". Das darf nicht wegfallen, sonst
+           zeigt die Seite in ihrer Voreinstellung eine Bewegung, die sie
+           nirgends belegt.
 
     2. Eine Lücke bleibt eine Lücke. Wo nicht gemessen wurde, wird nichts
        gezeichnet; `polls` je Intervall unterscheidet "Preis stand still" von
@@ -94,7 +95,7 @@
     4. Einordnung    — Quelle, Lizenz, was fehlt
 -->
 
-<link rel="stylesheet" href="./theme.css?v=5340bd1f">
+<link rel="stylesheet" href="./theme.css?v=27fb4845">
 
 <style>
 /* ─── Page-specific tokens ──────────────────────────────────────────────────
@@ -279,12 +280,18 @@
 
 .hero-held {
   display: inline-flex; align-items: center; gap: 8px;
-  margin-top: 12px; padding: 6px 12px;
+  /* Sitzt in der Legendenzeile (siehe Markup): kein eigener Abstand nach oben,
+     und `margin-left:auto` stellt es rechts neben den Refresh-Ticker. */
+  margin-left: auto; padding: 4px 10px;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--price-line) 10%, transparent);
   border: 1px solid color-mix(in srgb, var(--price-line) 30%, transparent);
   font-size: 13px; color: var(--muted);
 }
+/* `display: inline-flex` oben schlägt das hidden-Attribut, genau wie bei
+   .leg-item. Ohne diese Zeile stünde die leere Pille schon vor der ersten
+   Messung in der Zeile. */
+.hero-held[hidden] { display: none; }
 .held-dot {
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--price-line); flex: none;
@@ -956,23 +963,18 @@ body[data-chart-style="flow"] .leg-swatch.price {
         <span style="color:var(--faint)">·</span>
         <span><span data-i18n="inWord">in</span> <span id="r-countdown">–</span>s</span>
       </span>
-    </div>
 
-    <!-- Die Haltedauer steht jetzt hier, direkt unter dem Diagramm, statt im
-         Hero. Grund: sie beantwortet genau die Frage, die das Bild aufwirft —
-         "die Linie ist rechts flach, sieht da überhaupt noch jemand hin?".
-         Neben der Kurve gelesen ist sie eine Auskunft über das, was man gerade
-         sieht; oben unter der Preiszahl war sie eine Behauptung über eine Zahl,
-         die selbst noch keinen Verlauf hatte. -->
-    <div class="hero-held" id="hero-held" hidden>
-      <span class="held-dot" aria-hidden="true"></span>
-      <span id="held-text">–</span>
+      <!-- Haltedauer und Refresh-Ticker stehen in EINER Zeile: beide sind
+           Fußnoten zum Bild darüber und beantworten dieselbe Frage — sieht noch
+           jemand hin, und hat sich gerade etwas bewegt. Untereinander lasen sie
+           sich wie zwei getrennte Bemerkungen. `margin-left:auto` schiebt das
+           Paar an den rechten Rand; bricht die Zeile auf schmalen Geräten um,
+           fällt die Ausrichtung von selbst weg (siehe .chart-legend). -->
+      <div class="hero-held" id="hero-held" hidden>
+        <span class="held-dot" aria-hidden="true"></span>
+        <span id="held-text">–</span>
+      </div>
     </div>
-
-    <!-- Nur in der weichen Ansicht sichtbar: sie glättet zwischen den Messungen
-         und zeigt damit eine Bewegung, die so nicht gemessen wurde. Das muss
-         dabeistehen, sonst nimmt die zweite Variante der ersten ihre Aussage. -->
-    <p class="agg-locked" id="flow-note" hidden></p>
 
     <!-- Warum der Durchschnitt fehlt oder kürzer ist als sein Name. Diese
          Seite hat keine Rückfüllung: die Aufzeichnung beginnt beim ersten Lauf
@@ -1215,7 +1217,6 @@ body[data-chart-style="flow"] .leg-swatch.price {
       resNote: "Showing hourly summaries — each step is an hour's time-weighted average, not a single reading.",
       styleSteps: "Steps",
       styleFlow: "Flow",
-      flowNote: "Flow view: the same readings, drawn as a smooth curve. The curve between two readings is interpolation, not measurement — the price stood still and then jumped. Switch to Steps to see what was actually measured.",
       legPrice: "Price (steps)",
       legPriceFlow: "Price (interpolated)",
       legEpoch: "Epoch boundary",
@@ -1338,7 +1339,6 @@ body[data-chart-style="flow"] .leg-swatch.price {
       resNote: "Zeigt Stundenzusammenfassungen — jede Stufe ist der zeitgewichtete Mittelwert einer Stunde, keine einzelne Messung.",
       styleSteps: "Stufen",
       styleFlow: "Fluss",
-      flowNote: "Fluss-Ansicht: dieselben Messungen, als weiche Kurve gezeichnet. Der Verlauf zwischen zwei Messungen ist Interpolation, keine Messung — der Preis stand still und sprang dann. Für das tatsächlich Gemessene auf Stufen umschalten.",
       legPrice: "Kurs (Stufen)",
       legPriceFlow: "Kurs (interpoliert)",
       legEpoch: "Epochengrenze",
@@ -1739,10 +1739,8 @@ body[data-chart-style="flow"] .leg-swatch.price {
      Damit trägt die Seite aber eine Bringschuld, die sie vorher nicht hatte:
      die Voreinstellung zeigt jetzt eine interpolierte Linie, also eine
      Darstellung, die zwischen zwei Messungen mehr behauptet, als gemessen
-     wurde. Beides hängt deshalb daran und darf nicht wegfallen:
-
-       * `flowNote` steht unter dem Diagramm und sagt es in Worten;
-       * die Legende sagt "interpoliert" statt "Stufen".
+     wurde. Die Legende hängt deshalb daran und darf nicht wegfallen: sie
+     sagt "interpoliert" statt "Stufen".
 
      Der Umschalter steht direkt daneben, und "Stufen" ist von dort einen Klick
      entfernt. */
@@ -1939,11 +1937,6 @@ body[data-chart-style="flow"] .leg-swatch.price {
        Linie interpoliert, und "Kurs (Stufen)" darunter wäre schlicht falsch. */
     const legText = document.getElementById("leg-price-text");
     if (legText) legText.textContent = t(chartStyle === "flow" ? "legPriceFlow" : "legPrice");
-    const flowNote = document.getElementById("flow-note");
-    if (flowNote) {
-      flowNote.hidden = chartStyle !== "flow";
-      if (chartStyle === "flow") flowNote.textContent = t("flowNote");
-    }
     if (chartStyle === "flow") { drawFlow(payload, pulse); runWelcomeDraw(); return; }
     drawSteps(payload, pulse);
     runWelcomeDraw();
@@ -2568,9 +2561,8 @@ body[data-chart-style="flow"] .leg-swatch.price {
      sie ersetzt sie nicht als Voreinstellung. Der Grund ist derselbe, aus dem
      die Stufen überhaupt existieren: zwischen zwei Messungen bewegte sich der
      Preis nicht allmählich. Eine Kurve behauptet genau das. Weil das eine echte
-     Aussage über die Daten ist und keine Geschmacksfrage, steht unter dem
-     Diagramm ein Satz, der sie zurücknimmt (`flowNote`), und die Legende sagt
-     "interpoliert" statt "Stufen".
+     Aussage über die Daten ist und keine Geschmacksfrage, nimmt die Legende
+     sie zurück: sie sagt "interpoliert" statt "Stufen".
 
      Was die Ansicht dafür kann: sie macht die RICHTUNG über längere Strecken
      lesbar. Die Fläche ist zweifarbig — Leitfarbe, wo der Ausschnitt über seinem

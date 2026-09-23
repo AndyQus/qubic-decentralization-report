@@ -353,12 +353,6 @@ a:hover { text-decoration: underline; }
 .qs-link:hover, .how-link:hover {
   color: var(--text); border-color: var(--border-strong); text-decoration: none;
 }
-@media (max-width: 560px) {
-  /* Wrapped onto a second line, the spacer would push the controls off the
-     right edge; collapsing it lets them sit under the brand instead. */
-  .qs-header-inner .spacer { flex-basis: 100%; height: 0; }
-  .qs-header-inner .controls { flex-wrap: wrap; }
-}
 
 /* ── Controls ───────────────────────────────────────────────────────────── */
 /* ── Site navigation ────────────────────────────────────────────────────────
@@ -386,12 +380,41 @@ a:hover { text-decoration: underline; }
 .qs-icon-btn.qs-burger { display: none; }
 
 @media (max-width: 860px) {
-  .qs-icon-btn.qs-burger { display: inline-flex; }
-  /* Collapsed by default; .open is toggled by the page's script. */
-  .qs-nav {
+  /* The panel is positioned against this, and the padding reserves the room
+     the absolutely-positioned burger occupies, so a long title cannot slide
+     under it at any width below the breakpoint. */
+  .qs-header-inner {
+    position: relative;
+    padding-right: calc(var(--gutter) + 44px);
+  }
+
+  /* The bar carries ONE control: the burger, at the right edge of the first
+     row. Everything else lives in the panel it opens — the nav links, the
+     language switch and the theme button.
+
+     Before this, .controls wrapped and the segmented switch plus the theme
+     button dropped onto a second row under the brand: a two-storey header on
+     the smallest screens, with the burger stranded in the middle of it. And
+     once the bar had collapsed, EN/DE and the theme toggle were the two
+     controls a reader still expected to find behind the menu, not beside it.
+
+     The trick is that .controls itself becomes the panel. The burger is taken
+     out of the flow and pinned to the header's right edge; its three siblings
+     then stack down the panel in source order, so the language switch and the
+     theme button need no placement rules of their own and the panel sizes
+     itself around them. The burger stays put in the DOM next to the nav it
+     names with aria-controls. */
+  .qs-icon-btn.qs-burger {
+    display: inline-flex;
+    position: absolute; top: 50%; right: var(--gutter-mobile);
+    transform: translateY(-50%);
+    z-index: 41;
+  }
+
+  .qs-header-inner .controls {
     display: none;
     position: absolute; top: 100%; right: var(--gutter-mobile);
-    flex-direction: column; align-items: stretch; gap: 4px;
+    flex-direction: column; align-items: stretch; gap: 6px;
     min-width: 190px; padding: 8px;
     background: var(--bg2);
     border: 1px solid var(--border);
@@ -404,14 +427,39 @@ a:hover { text-decoration: underline; }
        a moving canvas makes the links unreadable. */
     z-index: 40;
   }
-  .qs-nav.open { display: flex; }
-  .qs-nav a {
+  /* The script toggles .open on the nav, which is the panel's first child, so
+     :has lifts that state to the panel. Browsers without :has fall back to a
+     header whose controls are simply always visible — usable, just not
+     collapsed — rather than to a menu that cannot be opened. */
+  .qs-header-inner .controls:has(> .qs-nav.open) { display: flex; }
+  @supports not selector(:has(*)) {
+    .qs-header-inner .controls { display: flex; }
+  }
+
+  /* Inside the panel the nav is a plain stack; the panel supplies the frame. */
+  .qs-header-inner .qs-nav {
+    display: flex; flex-direction: column; align-items: stretch; gap: 4px;
+  }
+  .qs-header-inner .qs-nav a {
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
     padding: 10px 12px;       /* >= 44px touch target with the font metrics */
     text-align: left;
   }
-  .qs-header-inner { position: relative; }
+
+  /* A hairline sets the two switches apart from the destinations above them:
+     the links navigate, these two change how the page looks. */
+  .qs-header-inner .controls > .qs-seg#lang-seg {
+    margin-top: 6px; padding-top: 10px;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    align-self: stretch;
+  }
+  .qs-header-inner .controls > .qs-seg#lang-seg button { flex: 1; min-height: 40px; }
+  .qs-header-inner .controls > .qs-icon-btn#theme-btn {
+    width: auto; min-height: 40px; align-self: stretch;
+  }
 }
 
 .qs-seg {
@@ -437,8 +485,17 @@ a:hover { text-decoration: underline; }
 .qs-icon-btn:hover { border-color: var(--border-strong); }
 
 @media (max-width: 560px) {
-  .qs-wrap, .qs-header-inner { padding-left: var(--gutter-mobile); padding-right: var(--gutter-mobile); }
-  .qs-header-inner { flex-wrap: wrap; gap: 8px; }
+  .qs-wrap { padding-left: var(--gutter-mobile); padding-right: var(--gutter-mobile); }
+  /* One row, always. The burger is pinned to its right edge and the rest of
+     the controls live in the panel behind it, so there is nothing to wrap;
+     `flex-wrap: wrap` here used to give the header a second storey. The
+     right-hand padding still holds the burger's room (set at 860px), now
+     measured from the narrower gutter. */
+  .qs-header-inner {
+    flex-wrap: nowrap; gap: 8px;
+    padding-left: var(--gutter-mobile);
+    padding-right: calc(var(--gutter-mobile) + 44px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
