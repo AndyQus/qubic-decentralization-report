@@ -137,6 +137,21 @@ def test_log_page_is_served_and_self_contained():
     )
 
 
+def test_the_log_pages_inlined_wake_script_matches_the_shared_one():
+    """log.html carries a COPY of dashboard/wake.js, because it may not link it.
+
+    A copy is a thing that drifts. This pins the two together, so a fix to the
+    shared file cannot quietly leave the one page that runs when everything else
+    is broken on an older version of it.
+    """
+    shared = (ROOT / "dashboard" / "wake.js").read_text(encoding="utf-8").strip()
+    html = LOG_PAGE.read_text(encoding="utf-8")
+    assert shared in html, (
+        "dashboard/log.html no longer contains dashboard/wake.js verbatim -- "
+        "re-inline it after editing the shared file"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Degraded-but-serving: the deployment we cannot administer
 # ---------------------------------------------------------------------------

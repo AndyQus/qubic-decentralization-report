@@ -544,9 +544,51 @@ a:hover { text-decoration: underline; }
 }
 .fdisc a { color: var(--warn-link); }
 .fdisc a:hover { color: var(--text); }
+/* ── Wachhalten ─────────────────────────────────────────────────────────────
+   Ein Schalter, der den Bildschirm wach hält, solange die Seite offen und
+   sichtbar ist (Screen Wake Lock API).
+
+   Er steht in der Fußzeile, weil er zur Seite gehört und nicht zu den Daten:
+   wer eine Kurs- oder Mining-Ansicht nebenher laufen lässt, will nicht alle
+   30 Sekunden das Display antippen. Er steht rechts neben der Version, damit
+   die Zeile ihre drei Bereiche behält.
+
+   Ausgeblendet, wo der Browser die API nicht kennt (`hidden` setzt das Skript):
+   ein Schalter, der nichts tut, ist schlimmer als keiner. */
+.fwake {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--border); border-radius: var(--radius-pill);
+  background: var(--surface); color: var(--muted);
+  font: inherit; font-size: 11.5px; line-height: 1;
+  padding: 5px 10px; cursor: pointer; white-space: nowrap;
+}
+.fwake[hidden] { display: none; }
+.fwake:hover { color: var(--text); border-color: var(--accent); }
+/* Der Punkt ist der Zustand: gefüllt und in der Leitfarbe, wenn die Sperre
+   wirklich gehalten wird — nicht schon dann, wenn sie angefordert wurde. Das
+   System kann sie jederzeit entziehen, und der Schalter darf dann nicht
+   weiter behaupten, der Bildschirm bliebe an. */
+.fwake .wdot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--faint); flex: none;
+}
+.fwake[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.fwake[aria-pressed="true"] .wdot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 @media (max-width: 720px) {
   .fbar { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: 8px; }
   .fbar .fright { text-align: center; }
+  /* Auf dem Telefon rutscht der Schalter unter die Version statt daneben —
+     dort ist er auch am nötigsten. */
+  .fright-wrap { flex-direction: column; gap: 8px; align-items: center; }
+}
+
+/* Version und Schalter teilen sich die rechte Spalte. */
+.fright-wrap {
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
 }
 
 /* ── Stat tile ──────────────────────────────────────────────────────────────

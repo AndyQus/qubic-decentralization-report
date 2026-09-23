@@ -64,7 +64,7 @@
     4. Einordnung — was gemessen ist und was nicht
 -->
 
-<link rel="stylesheet" href="./theme.css?v=64afd02c">
+<link rel="stylesheet" href="./theme.css?v=5340bd1f">
 
 <style>
 /* ─── Page-specific tokens ──────────────────────────────────────────────────
@@ -366,8 +366,7 @@ table.data td:first-child { font-family: var(--sans); }
         <a class="how-link qs-link" href="./" data-i18n="navReport">Report</a>
         <a class="how-link qs-link" href="./burn.html" aria-current="page" data-i18n="burnReport">Burn</a>
         <a class="how-link qs-link" href="./price.html" data-i18n="priceReport">Price</a>
-        <a class="how-link qs-link" href="./mining.html" data-i18n="miningLive">Mining Live</a>
-        <a class="how-link qs-link" href="./how-it-works.html" data-i18n="howItWorks">How it works</a>
+        <a class="how-link qs-link" href="./mining.html" data-i18n="miningLive">Mining</a>
       </nav>
       <button class="qs-icon-btn qs-burger" id="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">☰</button>
       <div class="seg qs-seg" id="lang-seg">
@@ -510,6 +509,11 @@ table.data td:first-child { font-family: var(--sans); }
       <span>&copy; <span id="foot-year">2026</span> <span data-i18n="sponsored">Qubic – Sponsored by AndyQus</span></span>
     </div>
     <div class="flinks">
+      <!-- "Wie es funktioniert" steht jetzt hier statt in der Navigation oben:
+           die Erklaerseite liest man einmal, nicht bei jedem Besuch, und die
+           Navigation traegt damit nur noch die vier Ansichten mit Daten. -->
+      <a href="./how-it-works.html" data-i18n="howItWorks">How it works</a>
+      <span class="fsep">&#x2022;</span>
       <a href="https://qubic.org" target="_blank" rel="noreferrer">Qubic.org</a>
       <span class="fsep">&#x2022;</span>
       <a href="https://github.com/AndyQus/qubic-decentralization-report" target="_blank" rel="noreferrer">GitHub</a>
@@ -524,7 +528,12 @@ table.data td:first-child { font-family: var(--sans); }
          allen Seiten zu finden. Die Version gehört hierher, weil sie die
          Fußzeile beantwortet, was die Seite IST; die Navigation dorthin steht
          im Kopf. -->
-    <div class="fright"><span data-i18n="codeVersion">code</span> v.<code id="code-ver">–</code> (BETA)</div>
+    <!-- Rechte Spalte: Version, daneben der Schalter fürs Wachhalten. Der
+         Schalter blendet sich selbst aus, wo der Browser die API nicht kennt. -->
+    <div class="fright fright-wrap">
+      <span><span data-i18n="codeVersion">code</span> v.<code id="code-ver">–</code> (BETA)</span>
+      <button class="fwake" id="wake-btn" type="button" aria-pressed="false" hidden><span class="wdot" aria-hidden="true"></span><span class="wtext">Screen stays on</span></button>
+    </div>
   </div>
 </footer>
 
@@ -550,7 +559,7 @@ table.data td:first-child { font-family: var(--sans); }
       navReport: "Report",
       burnReport: "Burn",
       priceReport: "Price",
-      miningLive: "Mining Live",
+      miningLive: "Mining",
       howItWorks: "How it works",
       pageTitle: "Burn Report",
       subtitle: "Burned supply · Qubic Report",
@@ -613,7 +622,7 @@ table.data td:first-child { font-family: var(--sans); }
       navReport: "Report",
       burnReport: "Burn",
       priceReport: "Kurs",
-      miningLive: "Mining Live",
+      miningLive: "Mining",
       howItWorks: "Wie es funktioniert",
       pageTitle: "Burn-Report",
       subtitle: "Verbrannte Supply · Qubic Report",
@@ -1584,5 +1593,9 @@ table.data td:first-child { font-family: var(--sans); }
   loadAll();
 })();
 </script>
+<!-- Wachhalten-Schalter in der Fusszeile. Eigene Datei, weil er auf allen
+     Seiten derselbe ist; sechs Kopien waeren sechs Gelegenheiten, dass eine
+     davon zurueckbleibt. -->
+<script src="./wake.js"></script>
 </body>
 </html>

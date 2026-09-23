@@ -49,7 +49,7 @@
 <meta name="twitter:description" content="Wie dezentral Qubic wirklich ist — gemessen aus der Kette, je Epoche versiegelt." />
 <meta name="twitter:image" content="https://report.qubic.tools/dashboard/assets/og-image.png" />
 
-<link rel="stylesheet" href="./theme.css?v=64afd02c">
+<link rel="stylesheet" href="./theme.css?v=5340bd1f">
 
 <style>
   /* Surfaces, text, accents, the glass card and the header all come from
@@ -320,8 +320,7 @@
         <a class="how-link qs-link" href="./" aria-current="page" data-i18n="navReport">Report</a>
         <a class="how-link qs-link" href="./burn.html" data-i18n="burnReport">Burn</a>
         <a class="how-link qs-link" href="./price.html" data-i18n="priceReport">Price</a>
-        <a class="how-link qs-link" href="./mining.html" data-i18n="miningLive">Mining Live</a>
-        <a class="how-link qs-link" href="./how-it-works.html" data-i18n="howItWorks">How it works</a>
+        <a class="how-link qs-link" href="./mining.html" data-i18n="miningLive">Mining</a>
       </nav>
       <button class="qs-icon-btn qs-burger" id="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">☰</button>
       <div class="qs-seg" id="lang-seg">
@@ -470,7 +469,12 @@
         <span>&copy; <span id="foot-year">2026</span> <span data-i18n="sponsored">Qubic – Sponsored by AndyQus</span></span>
       </div>
       <div class="flinks">
-        <a href="https://qubic.org" target="_blank" rel="noreferrer">Qubic.org</a>
+        <!-- "Wie es funktioniert" steht jetzt hier statt in der Navigation oben:
+           die Erklaerseite liest man einmal, nicht bei jedem Besuch, und die
+           Navigation traegt damit nur noch die vier Ansichten mit Daten. -->
+      <a href="./how-it-works.html" data-i18n="howItWorks">How it works</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://qubic.org" target="_blank" rel="noreferrer">Qubic.org</a>
         <span class="fsep">&#x2022;</span>
         <a href="https://github.com/AndyQus/qubic-decentralization-report" id="repo-link" target="_blank" rel="noreferrer">GitHub</a>
         <span class="fsep">&#x2022;</span>
@@ -478,7 +482,10 @@
         <span class="fsep">&#x2022;</span>
         <a href="https://qubic.org/privacy-policy" target="_blank" rel="noreferrer" data-i18n="privacy">Privacy Policy</a>
       </div>
-      <div class="fright"><span data-i18n="codeVersion">code</span> v.<code id="code-ver">–</code> (BETA)</div>
+      <div class="fright fright-wrap">
+        <span><span data-i18n="codeVersion">code</span> v.<code id="code-ver">–</code> (BETA)</span>
+        <button class="fwake" id="wake-btn" type="button" aria-pressed="false" hidden><span class="wdot" aria-hidden="true"></span><span class="wtext">Screen stays on</span></button>
+      </div>
     </div>
   </footer>
 </div>
@@ -495,7 +502,7 @@
     en:{
       navReport: "Report",
       title:"Qubic Decentralization Report", tagline:"how decentralized Qubic really is",
-      miningLive:"Mining Live", burnReport:"Burn",
+      miningLive:"Mining", burnReport:"Burn",
       priceReport:"Price",
       epochLabel:"Epoch",
       buildingTitle:"Building the report.",
@@ -563,7 +570,7 @@
     de:{
       navReport: "Report",
       title:"Qubic Dezentralisierungs-Report", tagline:"wie dezentral Qubic wirklich ist",
-      miningLive:"Mining Live", burnReport:"Burn",
+      miningLive:"Mining", burnReport:"Burn",
       priceReport:"Kurs",
       epochLabel:"Epoche",
       buildingTitle:"Report wird aufgebaut.",
@@ -1412,5 +1419,9 @@
   })();
 
 </script>
+<!-- Wachhalten-Schalter in der Fusszeile. Eigene Datei, weil er auf allen
+     Seiten derselbe ist; sechs Kopien waeren sechs Gelegenheiten, dass eine
+     davon zurueckbleibt. -->
+<script src="./wake.js"></script>
 </body>
 </html>

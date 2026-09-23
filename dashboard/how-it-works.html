@@ -145,9 +145,21 @@
   footer .flinks{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
   footer .fsep{color:var(--faint)}
   footer .fright{text-align:right}
+  /* Wachhalten-Schalter. Diese Seite laedt theme.css nicht (eigene Palette),
+     also stehen die Regeln hier noch einmal -- gleiche Optik, eigene Variablen. */
+  .fright-wrap{display:flex;align-items:center;justify-content:flex-end;gap:10px}
+  .fwake{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);
+    border-radius:999px;background:var(--surface);color:var(--muted);font:inherit;
+    font-size:11.5px;line-height:1;padding:5px 10px;cursor:pointer;white-space:nowrap}
+  .fwake[hidden]{display:none}
+  .fwake:hover{color:var(--text);border-color:var(--accent)}
+  .fwake .wdot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
+  .fwake[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
+  .fwake[aria-pressed="true"] .wdot{background:var(--accent)}
   @media (max-width:720px){
     footer .fbar{grid-template-columns:1fr;justify-items:center;text-align:center;gap:8px}
     footer .fright{text-align:center}
+    .fright-wrap{flex-direction:column;gap:8px;align-items:center}
   }
 
   @media (max-width:640px){
@@ -534,7 +546,10 @@ GET /report/{epoch}/snapshot.json → eingefrorener, archivierbarer Snapshot</co
       </div>
       <!-- Wie auf allen anderen Seiten: rechts die laufende Code-Version.
            Der Weg zurueck zum Report steht im Kopf dieser Seite. -->
-      <div class="fright"><span id="foot-ver-label">code</span> v.<code id="code-ver">–</code> (BETA)</div>
+      <div class="fright fright-wrap">
+        <span><span id="foot-ver-label">code</span> v.<code id="code-ver">–</code> (BETA)</span>
+        <button class="fwake" id="wake-btn" type="button" aria-pressed="false" hidden><span class="wdot" aria-hidden="true"></span><span class="wtext">Screen stays on</span></button>
+      </div>
     </div>
   </footer>
 </div>
@@ -605,5 +620,6 @@ GET /report/{epoch}/snapshot.json → eingefrorener, archivierbarer Snapshot</co
   applyTheme(); applyLang();
 })();
 </script>
+<script src="./wake.js"></script>
 </body>
 </html>

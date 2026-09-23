@@ -94,7 +94,7 @@
     4. Einordnung    — Quelle, Lizenz, was fehlt
 -->
 
-<link rel="stylesheet" href="./theme.css?v=64afd02c">
+<link rel="stylesheet" href="./theme.css?v=5340bd1f">
 
 <style>
 /* ─── Page-specific tokens ──────────────────────────────────────────────────
@@ -733,8 +733,15 @@ body[data-chart-style="flow"] .leg-swatch.price {
   #sources-card { order: 9; }
 
   /* Der Hero brachte seinen Abstand als Karte mit; aufgelöst tragen ihn die
-     Kinder selbst. */
+     Kinder selbst. Unter dem Preis steht dabei mehr Luft als darüber: dort
+     stößt die große Zahl sonst direkt an die Kante der Diagrammkarte, und
+     beide lesen sich als ein Block statt als zwei Dinge. */
   .hero-label { margin-top: 4px; }
+  .hero-price { margin-bottom: 20px; }
+  /* Steht der Blick-zurück-Satz dazwischen, trägt ER den Abstand nach unten —
+     sonst summierten sich beide Ränder zu einer Lücke. */
+  .welcome-note:not([hidden]) { margin-top: 0; margin-bottom: 18px; }
+  .hero-price:has(+ .welcome-note:not([hidden])) { margin-bottom: 10px; }
   .hero-facts { margin-top: 0; margin-bottom: 18px; }
 
   /* Zwei Spalten statt einer: fünf gestapelte Kacheln sind auf einem Telefon
@@ -827,19 +834,11 @@ body[data-chart-style="flow"] .leg-swatch.price {
     </div>
     <div class="spacer"></div>
     <div class="controls">
-      <!-- Refresh-Ticker: Alter der letzten Messung + Countdown auf die nächste -->
-      <div class="refresh-bar loading" id="refresh-bar" aria-live="polite">
-        <span class="r-dot" id="r-dot"></span>
-        <span id="r-ago">–</span>
-        <span style="color:var(--faint)">·</span>
-        <span><span data-i18n="inWord">in</span> <span id="r-countdown">–</span>s</span>
-      </div>
       <nav class="qs-nav" id="site-nav" aria-label="Sections">
         <a class="how-link qs-link" href="./" data-i18n="navReport">Report</a>
         <a class="how-link qs-link" href="./burn.html" data-i18n="burnReport">Burn</a>
         <a class="how-link qs-link" href="./price.html" aria-current="page" data-i18n="priceReport">Price</a>
-        <a class="how-link qs-link" href="./mining.html" data-i18n="miningLive">Mining Live</a>
-        <a class="how-link qs-link" href="./how-it-works.html" data-i18n="howItWorks">How it works</a>
+        <a class="how-link qs-link" href="./mining.html" data-i18n="miningLive">Mining</a>
       </nav>
       <button class="qs-icon-btn qs-burger" id="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">☰</button>
       <div class="seg qs-seg" id="lang-seg">
@@ -895,7 +894,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
   <!-- 2 — CHART ------------------------------------------------------------ -->
   <section class="qs-card qs-card--translucent" id="chart-card">
     <h2 data-i18n="chartTitle">Price over time</h2>
-    <p class="desc" data-i18n="chartDesc">Every reading is a price that stood for a measured stretch of time. Vertical marks are epoch boundaries, where the protocol pays its 676 computors.</p>
+    <p class="desc" data-i18n="chartDesc">Every reading is a price that stood for a measured stretch of time.</p>
 
     <div class="chart-controls">
       <div class="seg qs-seg" id="window-seg" role="group" aria-label="Range">
@@ -937,6 +936,19 @@ body[data-chart-style="flow"] .leg-swatch.price {
       <span class="leg-item" id="leg-gap" hidden><span class="leg-swatch gap" aria-hidden="true"></span><span data-i18n="legGap">Not observed</span></span>
       <span class="leg-item" id="leg-extreme" hidden><span class="leg-swatch extreme" aria-hidden="true"></span><span data-i18n="legExtreme">High and low in view</span></span>
       <span class="leg-item" id="leg-sma" hidden><span class="leg-swatch sma" aria-hidden="true"></span><span id="leg-sma-text">50-day average</span></span>
+    </div>
+
+    <!-- Der Refresh-Ticker steht unter dem Diagramm, nicht mehr im Kopf.
+
+         Er sagt, wie alt die gezeigte Kurve ist und wann die nächste Messung
+         kommt — beides Auskünfte ÜBER das Bild darüber. Im Kopf stand er neben
+         der Navigation und las sich wie ein Zustand der Seite; hier steht er
+         neben dem, worauf er sich bezieht. -->
+    <div class="refresh-bar loading" id="refresh-bar" aria-live="polite">
+      <span class="r-dot" id="r-dot"></span>
+      <span id="r-ago">–</span>
+      <span style="color:var(--faint)">·</span>
+      <span><span data-i18n="inWord">in</span> <span id="r-countdown">–</span>s</span>
     </div>
 
     <!-- Die Haltedauer steht jetzt hier, direkt unter dem Diagramm, statt im
@@ -1113,6 +1125,11 @@ body[data-chart-style="flow"] .leg-swatch.price {
       <span>&copy; <span id="foot-year">2026</span> <span data-i18n="sponsored">Qubic – Sponsored by AndyQus</span></span>
     </div>
     <div class="flinks">
+      <!-- "Wie es funktioniert" steht jetzt hier statt in der Navigation oben:
+           die Erklaerseite liest man einmal, nicht bei jedem Besuch, und die
+           Navigation traegt damit nur noch die vier Ansichten mit Daten. -->
+      <a href="./how-it-works.html" data-i18n="howItWorks">How it works</a>
+      <span class="fsep">&#x2022;</span>
       <a href="https://qubic.org" target="_blank" rel="noreferrer">Qubic.org</a>
       <span class="fsep">&#x2022;</span>
       <a href="https://github.com/AndyQus/qubic-decentralization-report" target="_blank" rel="noreferrer">GitHub</a>
@@ -1127,7 +1144,12 @@ body[data-chart-style="flow"] .leg-swatch.price {
          allen Seiten zu finden. Die Version gehört hierher, weil sie die
          Fußzeile beantwortet, was die Seite IST; die Navigation dorthin steht
          im Kopf. -->
-    <div class="fright"><span data-i18n="codeVersion">code</span> v.<code id="code-ver">–</code> (BETA)</div>
+    <!-- Rechte Spalte: Version, daneben der Schalter fürs Wachhalten. Der
+         Schalter blendet sich selbst aus, wo der Browser die API nicht kennt. -->
+    <div class="fright fright-wrap">
+      <span><span data-i18n="codeVersion">code</span> v.<code id="code-ver">–</code> (BETA)</span>
+      <button class="fwake" id="wake-btn" type="button" aria-pressed="false" hidden><span class="wdot" aria-hidden="true"></span><span class="wtext">Screen stays on</span></button>
+    </div>
   </div>
 </footer>
 
@@ -1157,7 +1179,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       navReport: "Report",
       burnReport: "Burn",
       priceReport: "Price",
-      miningLive: "Mining Live",
+      miningLive: "Mining",
       howItWorks: "How it works",
       pageTitle: "Price",
       subtitle: "Market price · Qubic Report",
@@ -1181,7 +1203,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       noteBody: "The price is read once a minute from Qubic's own RPC and stored when it changes, together with how long it held. Between two readings the price did not move gradually — it stood still and then jumped. The Flow view smooths that into a curve because the direction reads faster that way; switch to Steps to see the readings themselves, unsmoothed. There is no trading volume on this page: the RPC publishes none.",
 
       chartTitle: "Price over time",
-      chartDesc: "Every reading is a price that stood for a measured stretch of time. Vertical marks are epoch boundaries, where the protocol pays its 676 computors.",
+      chartDesc: "Every reading is a price that stood for a measured stretch of time.",
       win1h: "1 h", win6h: "6 h", win24h: "24 h", win7d: "7 d", winAll: "All",
       resNote: "Showing hourly summaries — each step is an hour's time-weighted average, not a single reading.",
       styleSteps: "Steps",
@@ -1280,7 +1302,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       navReport: "Report",
       burnReport: "Burn",
       priceReport: "Kurs",
-      miningLive: "Mining Live",
+      miningLive: "Mining",
       howItWorks: "Wie es funktioniert",
       pageTitle: "Kurs",
       subtitle: "Marktpreis · Qubic Report",
@@ -1304,7 +1326,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       noteBody: "Der Preis wird jede Minute von Qubics eigener RPC gelesen und gespeichert, wenn er sich ändert — zusammen mit der Dauer, die er stand. Zwischen zwei Messungen bewegte sich der Preis nicht allmählich: er stand still und sprang dann. Die Fluss-Ansicht glättet das zu einer Kurve, weil sich die Richtung so schneller liest; auf Stufen umschalten zeigt die Messungen selbst, ungeglättet. Handelsvolumen gibt es hier nicht, die RPC veröffentlicht keins.",
 
       chartTitle: "Kursverlauf",
-      chartDesc: "Jede Messung ist ein Preis, der eine gemessene Zeit lang stand. Die senkrechten Marken sind Epochengrenzen — dort zahlt das Protokoll seine 676 Computors aus.",
+      chartDesc: "Jede Messung ist ein Preis, der eine gemessene Zeit lang stand.",
       win1h: "1 Std", win6h: "6 Std", win24h: "24 Std", win7d: "7 Tage", winAll: "Alles",
       resNote: "Zeigt Stundenzusammenfassungen — jede Stufe ist der zeitgewichtete Mittelwert einer Stunde, keine einzelne Messung.",
       styleSteps: "Stufen",
@@ -2136,15 +2158,23 @@ body[data-chart-style="flow"] .leg-swatch.price {
     const axis = axisLabels(tickVals);
     const labels = axis.labels;
     const prefix = axis.prefix;
-    if (prefix) {
-      /* Der Faktor erklärt die Achsenwerte und steht deshalb über ihnen —
-         seit die Achse rechts liegt, also rechts, in derselben Spalte wie die
-         Marken. */
-      chart.appendChild(el("text", {
-        x: W - padR + 9, y: 12, "text-anchor": "start",
-        "font-size": 11, opacity: .75
-      }, prefix + "…"));
-    }
+    /* Der Faktor über der Achse ist auf Wunsch abgeschaltet, aber absichtlich
+       stehengelassen: die Zeile nannte die weggelassenen führenden Nullen
+       (z. B. "0,0000000…") und machte aus "408" wieder eine vollständige Zahl.
+
+       Wer sie zurückholt, entfernt nur die Kommentarzeichen unten — `axisLabels`
+       liefert `prefix` weiterhin, es wird nur nicht gezeichnet. Der obere Rand
+       (`padT`) hält den Platz dafür ohnehin frei.
+
+       Was ohne sie gilt: die Achse zeigt drei Ziffern OHNE Maßstab. Die volle
+       Zahl steht im Hero darüber und in jedem Tooltip, also bleibt sie
+       erreichbar — sie steht nur nicht mehr am Diagramm selbst. */
+    // if (prefix) {
+    //   chart.appendChild(el("text", {
+    //     x: W - padR + 9, y: 12, "text-anchor": "start",
+    //     "font-size": 11, opacity: .75
+    //   }, prefix + "…"));
+    // }
     /* Die Preisachse steht größer und kräftiger als die Zeitachse: sie trägt
        die Größe, um die es geht, und musste bisher mit 11px gegen zehn
        Nachkommastellen antreten. */
@@ -2710,11 +2740,12 @@ body[data-chart-style="flow"] .leg-swatch.price {
     const axis = axisLabels(tickVals);
     const labels = axis.labels;
     const prefix = axis.prefix;
-    if (prefix) {
-      chart.appendChild(el("text", {
-        x: W - padR + 9, y: 12, "text-anchor": "start", "font-size": 11, opacity: .75
-      }, prefix + "…"));
-    }
+    /* Abgeschaltet wie in drawSteps — siehe die Begründung dort. */
+    // if (prefix) {
+    //   chart.appendChild(el("text", {
+    //     x: W - padR + 9, y: 12, "text-anchor": "start", "font-size": 11, opacity: .75
+    //   }, prefix + "…"));
+    // }
     const AXIS_FS = narrow ? 12 : 14;
     tickVals.forEach((p, i) => {
       const y = Y(p);
@@ -3774,5 +3805,9 @@ body[data-chart-style="flow"] .leg-swatch.price {
   });
 })();
 </script>
+<!-- Wachhalten-Schalter in der Fusszeile. Eigene Datei, weil er auf allen
+     Seiten derselbe ist; sechs Kopien waeren sechs Gelegenheiten, dass eine
+     davon zurueckbleibt. -->
+<script src="./wake.js"></script>
 </body>
 </html>
