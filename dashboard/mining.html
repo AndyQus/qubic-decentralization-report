@@ -557,12 +557,14 @@ html { scroll-behavior: smooth; }
 .unavailable p { font-size: 13.5px; margin: 0; line-height: 1.6; }
 [hidden] { display: none !important; }
 
-/* ─── Footer ─────────────────────────────────────────────────────────────────  */
-footer { flex-direction: column; align-items: stretch; gap: 14px; }
-.flinks { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+/* ─── Footer ─────────────────────────────────────────────────────────────────
+   Bauart und Aufteilung kommen aus theme.css (.fbar als Raster mit fleft /
+   flinks / fright). Die frühere Sonderbehandlung hier — footer als Spalte —
+   stammt aus der Zeit, als diese Seite eine eigene Fußzeile hatte; sie würde
+   das gemeinsame Raster jetzt wieder auseinanderziehen. Übrig bleiben nur die
+   Farben der Links. */
 .flinks a { color: var(--accent); }
 .flinks a:hover { text-decoration: underline; }
-.fsep { color: var(--faint); }
 
 /* ─── Responsive ─────────────────────────────────────────────────────────────  */
 @media (max-width: 600px) {
@@ -575,7 +577,6 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
   .task-params { grid-template-columns: 1fr; }
   .node-grid { grid-template-columns: 1fr; }
   .rev-kpis { grid-template-columns: 1fr 1fr; }
-  footer { flex-direction: column; text-align: center; }
 }
 </style>
 </head>
@@ -885,24 +886,27 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
     <b data-i18n="discDemo">Use it for analysis purposes only — not as a basis for investment decisions.</b>
   </div>
 
+  <!-- Dieselbe Fußzeile wie auf allen anderen Seiten: links das Copyright,
+       mittig die Links, rechts die Code-Version. Diese Seite hatte vorher eine
+       eigene Bauart — Copyright ganz rechts, dazu eine Seitenkennung links und
+       "Status & Log" zwischen den Rechtstexten. Wer zwischen den Seiten
+       wechselte, fand dieselben Angaben jedes Mal woanders. -->
   <div class="fbar">
-    <span>
-      Mining Live · <a href="./">Qubic Decentralization Report</a>
-      &nbsp;·&nbsp; <span data-i18n="dataWord">Daten:</span> <code>/v1/mining</code>
-    </span>
+    <div class="fleft">
+      <span class="flogo" aria-hidden="true"></span>
+      <span>&copy; <span id="foot-year">2026</span> <span data-i18n="sponsored">Qubic – Sponsored by AndyQus</span></span>
+    </div>
     <div class="flinks">
       <a href="https://qubic.org" target="_blank" rel="noreferrer">Qubic.org</a>
-      <span class="fsep">·</span>
+      <span class="fsep">&#x2022;</span>
       <a href="https://github.com/AndyQus/qubic-decentralization-report"
          target="_blank" rel="noreferrer">GitHub</a>
-      <span class="fsep">·</span>
+      <span class="fsep">&#x2022;</span>
       <a href="https://qubic.org/terms-of-service" target="_blank" rel="noreferrer" data-i18n="tos">Terms of Service</a>
-      <span class="fsep">·</span>
+      <span class="fsep">&#x2022;</span>
       <a href="https://qubic.org/privacy-policy" target="_blank" rel="noreferrer" data-i18n="privacy">Privacy Policy</a>
-      <span class="fsep">·</span>
-      <a href="./log.html">Status &amp; Log</a>
     </div>
-    <span>© <span id="foot-year"></span> <span data-i18n="sponsored">Qubic – Sponsored by AndyQus</span></span>
+    <div class="fright"><span data-i18n="codeVersion">code</span> v.<code id="code-ver">–</code> (BETA)</div>
   </div>
 </footer>
 
@@ -988,6 +992,7 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
       discNoGuarantee: "We do not guarantee the completeness, accuracy, or availability of the data.",
       discDemo: "Use it for analysis purposes only \u2014 not as a basis for investment decisions.",
       dataWord: "Data:", tos: "Terms of Service", privacy: "Privacy Policy",
+      codeVersion: "code",
       sponsored: "Qubic \u2013 Sponsored by AndyQus",
       loading: "loading", noData: "no data", agoNow: "just now",
       agoS: "{n} s ago", agoMin: "{n} min ago", agoStd: "{n} h ago"
@@ -1049,6 +1054,7 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
       discNoGuarantee: "Wir garantieren weder Vollst\u00E4ndigkeit noch Richtigkeit oder Verf\u00FCgbarkeit der Daten.",
       discDemo: "Nur zu Analysezwecken verwenden \u2014 nicht als Grundlage f\u00FCr Investitionsentscheidungen.",
       dataWord: "Daten:", tos: "Nutzungsbedingungen", privacy: "Datenschutz",
+      codeVersion: "Code",
       sponsored: "Qubic \u2013 Sponsored by AndyQus",
       loading: "wird geladen", noData: "keine Daten", agoNow: "gerade eben",
       agoS: "vor {n} s", agoMin: "vor {n} Min", agoStd: "vor {n} Std"
@@ -1171,6 +1177,19 @@ footer { flex-direction: column; align-items: stretch; gap: 14px; }
     ? apiParam.replace(/\/$/, "")
     : (servedOverHttp ? "" : null);
   function apiUrl(path) { return (apiBase || "") + path; }
+
+  /* Die laufende Code-Version in der Fußzeile, wie auf allen anderen Seiten.
+     Sie kommt von /health und nicht aus den Mining-Daten: die Version ist eine
+     Eigenschaft des Codes, nicht der Messung. Ohne erreichbare API bleibt der
+     Strich stehen statt einer erfundenen Nummer. */
+  (function () {
+    var slot = document.getElementById("code-ver");
+    if (!slot || apiBase === null) return;
+    fetch(apiUrl("/health"), { headers: { accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.version) slot.textContent = d.version; })
+      .catch(function () {});
+  })();
 
   /* State is declared further up, before applyTheme() first reads it. */
   let prevCount    = null;    // vorheriger solution_count (für Delta-Berechnung)

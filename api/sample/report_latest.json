@@ -1,8 +1,8 @@
 {
   "epoch": 230,
   "status": "sealed",
-  "generated_at": 1790020147,
-  "code_version": "0.8.0",
+  "generated_at": 1790152868,
+  "code_version": "0.9.0",
   "reproducible": true,
   "data_sources": {
     "computors": "/v1/epochs/230/computors",
@@ -15,7 +15,7 @@
     "arbitrator": null,
     "tick_range": [
       79300000,
-      81063716
+      81244527
     ],
     "payout_lag_epochs": 1,
     "transfers_matched": 676,
@@ -9541,5 +9541,5 @@
     }
   ],
   "warnings": [],
-  "computed_at": 1790020147
+  "computed_at": 1790152868
 }

@@ -195,7 +195,13 @@
       <span class="fsep">&#x2022;</span>
       <a href="https://qubic.org/privacy-policy" target="_blank" rel="noreferrer">Datenschutz</a>
     </div>
-    <div class="fright"><a href="./">Report</a></div>
+    <!-- Rechts steht auf JEDER Seite dasselbe: die laufende Code-Version.
+         Vorher stand hier je nach Seite "Status & Log", "Report" oder die
+         Version — drei Antworten auf dieselbe Stelle, und keine davon war auf
+         allen Seiten zu finden. Die Version gehört hierher, weil sie die
+         Fußzeile beantwortet, was die Seite IST; die Navigation dorthin steht
+         im Kopf. -->
+    <div class="fright"><span data-i18n="codeVersion">code</span> v.<code id="code-ver">–</code> (BETA)</div>
   </div>
 </footer>
 
@@ -342,6 +348,17 @@
 
   document.getElementById("refresh").addEventListener("click", load);
   document.getElementById("foot-year").textContent = String(new Date().getFullYear());
+
+  /* Die laufende Code-Version, wie auf allen anderen Seiten. */
+  (function () {
+    var slot = document.getElementById("code-ver");
+    if (!slot) return;
+    fetch(url("/health"), { headers: { accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.version) slot.textContent = d.version; })
+      .catch(function () {});
+  })();
+
   load();
   setInterval(load, 15000);
 })();

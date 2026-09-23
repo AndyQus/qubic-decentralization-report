@@ -1074,7 +1074,13 @@ body[data-chart-style="flow"] .leg-swatch.price {
       <span class="fsep">&#x2022;</span>
       <a href="https://qubic.org/privacy-policy" target="_blank" rel="noreferrer" data-i18n="privacy">Privacy Policy</a>
     </div>
-    <div class="fright"><a href="./log.html">Status &amp; Log</a></div>
+    <!-- Rechts steht auf JEDER Seite dasselbe: die laufende Code-Version.
+         Vorher stand hier je nach Seite "Status & Log", "Report" oder die
+         Version — drei Antworten auf dieselbe Stelle, und keine davon war auf
+         allen Seiten zu finden. Die Version gehört hierher, weil sie die
+         Fußzeile beantwortet, was die Seite IST; die Navigation dorthin steht
+         im Kopf. -->
+    <div class="fright"><span data-i18n="codeVersion">code</span> v.<code id="code-ver">–</code> (BETA)</div>
   </div>
 </footer>
 
@@ -1194,6 +1200,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       discNoGuarantee: "We do not guarantee the completeness, accuracy, or availability of the data.",
       discDemo: "Use it for analysis purposes only — not as a basis for investment decisions.",
       sponsored: "Qubic – Sponsored by AndyQus", tos: "Terms of Service", privacy: "Privacy Policy",
+      codeVersion: "code",
 
       tipPrice: "Price",
       tipHeld: "Held for",
@@ -1223,7 +1230,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       burnReport: "Burn",
       priceReport: "Kurs",
       miningLive: "Mining Live",
-      howItWorks: "Funktionsweise",
+      howItWorks: "Wie es funktioniert",
       pageTitle: "Kurs",
       subtitle: "Marktpreis · Qubic Report",
 
@@ -1315,6 +1322,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       discNoGuarantee: "Wir übernehmen keine Gewähr für Vollständigkeit, Richtigkeit oder Verfügbarkeit der Daten.",
       discDemo: "Nutzung nur zu Analysezwecken — keine Grundlage für Investitionsentscheidungen.",
       sponsored: "Qubic – Sponsored by AndyQus", tos: "Nutzungsbedingungen", privacy: "Datenschutz",
+      codeVersion: "Code",
 
       tipPrice: "Preis",
       tipHeld: "Stand für",
@@ -1361,6 +1369,76 @@ body[data-chart-style="flow"] .leg-swatch.price {
   /* Der Preis liegt bei ~4e-7 USD. Eine feste Nachkommastelle würde ihn zu 0,00
      runden, eine Exponentialschreibweise ist für die meisten Leser unlesbar.
      Also: so viele Stellen, dass vier signifikante Ziffern übrig bleiben. */
+  /* Beschriftung der Preisachse.
+
+     Der Kurs liegt bei ~4e-7. Ausgeschrieben braucht jede Marke zehn
+     Nachkommastellen und wird zu einem Ziffernband, das niemand liest — und
+     untereinander unterscheiden sich fünf solcher Bänder erst weit hinten.
+
+     Also werden die führenden Nullen EINMAL über der Achse genannt und die
+     Marken tragen nur noch die Ziffern: aus 0,00003234 wird 3234.
+
+     Zwei Regeln halten das ehrlich:
+
+       * Alle Marken teilen denselben Bezug. Er kommt vom GRÖSSTEN Wert, nicht
+         vom kleinsten: liefe die Achse über eine Zehnerpotenz hinweg
+         (0,00009 neben 0,00011), bekäme sonst jede Marke ihren eigenen Faktor
+         und die Ziffern stünden für verschiedene Größenordnungen. Mit
+         gemeinsamem Bezug heißt es 0900 / 1000 / 1100 — gleich breit und
+         untereinander vergleichbar.
+       * Der Faktor wird nie verschwiegen. Er steht als eine Zeile über der
+         Achse; ohne ihn wäre "3234" keine Zahl mehr, sondern eine Ziffernfolge.
+
+     Passt die Zahl ohnehin in fünf Nachkommastellen, wird gar nichts
+     abgetrennt: 0,123 bleibt 0,123. Eine gekürzte Schreibweise ist dort
+     länger als das Original und nur noch Umweg. */
+  const AXIS_MAX_DEC = 5;   // ab hier lohnt das Abtrennen nicht mehr
+  const AXIS_SIG = 4;       // Ziffern, die stehenbleiben: 3234
+
+  function axisLabels(vals) {
+    const sep = (1.1).toLocaleString(locale()).indexOf(",") >= 0 ? "," : ".";
+    const pos = vals.filter(v => v != null && isFinite(v) && v > 0);
+    if (!pos.length) return { prefix: "", labels: vals.map(() => "–") };
+
+    const hi = Math.max.apply(null, pos);
+    const zeros = Math.max(0, Math.ceil(-Math.log10(hi)) - 1);
+
+    /* Genug Stellen, damit auch die beiden engsten Marken sich unterscheiden —
+       sonst stünde dieselbe Ziffernfolge zweimal untereinander. */
+    const sorted = pos.slice().sort((a, b) => a - b);
+    let gap = Infinity;
+    for (let i = 1; i < sorted.length; i++) {
+      const d = sorted[i] - sorted[i - 1];
+      if (d > 0) gap = Math.min(gap, d);
+    }
+    let sig = AXIS_SIG;
+    if (isFinite(gap)) sig = Math.max(AXIS_SIG, Math.ceil(-Math.log10(gap)) - zeros + 1);
+    sig = Math.min(sig, 6);
+
+    if (zeros + sig <= AXIS_MAX_DEC) {
+      /* Nachkommastellen gemeinsam kürzen, nicht je Marke: einzeln gekürzt
+         stünde "1,5 / 2 / 2,5" und die mittlere Marke sähe aus wie eine
+         andere Art Zahl als ihre Nachbarn. */
+      let dec = 0;
+      vals.forEach(v => {
+        if (v == null || !isFinite(v)) return;
+        const t = v.toFixed(AXIS_MAX_DEC).replace(/0+$/, "");
+        const i = t.indexOf(".");
+        if (i >= 0) dec = Math.max(dec, t.length - i - 1);
+      });
+      return { prefix: "",
+               labels: vals.map(v => (v == null || !isFinite(v)) ? "–"
+                                   : v.toFixed(dec).replace(".", sep)) };
+    }
+
+    const scale = Math.pow(10, zeros + sig);
+    return {
+      prefix: "0" + sep + "0".repeat(zeros),
+      labels: vals.map(v => (v == null || !isFinite(v)) ? "–"
+                          : String(Math.round(v * scale)).padStart(sig, "0"))
+    };
+  }
+
   function fmtPrice(x) {
     if (x == null || !isFinite(x) || x <= 0) return "–";
     const digits = Math.min(18, Math.max(2, Math.ceil(-Math.log10(x)) + 3));
@@ -1789,18 +1867,13 @@ body[data-chart-style="flow"] .leg-swatch.price {
     const TICKS = 4;
     const tickVals = [];
     for (let i = 0; i <= TICKS; i++) tickVals.push(pMin + (pMax - pMin) * i / TICKS);
-    const labels = tickVals.map(fmtPrice);
-    let prefix = "";
-    if (labels.length > 1) {
-      let k = 0;
-      while (k < labels[0].length && labels.every(s => s[k] === labels[0][k])) k++;
-      /* Nur kürzen, wenn dabei wirklich etwas gespart wird und ein Rest bleibt. */
-      if (k >= 4 && labels.every(s => s.length - k >= 2)) prefix = labels[0].slice(0, k);
-    }
+    const axis = axisLabels(tickVals);
+    const labels = axis.labels;
+    const prefix = axis.prefix;
     if (prefix) {
-      /* Der Vorsatz erklärt die Achsenwerte und steht deshalb über ihnen —
-         seit die Achse rechts liegt, also rechts. Rechtsbündig am äußeren Rand
-         statt über der obersten Marke: über ihr stieße er mit ihr zusammen. */
+      /* Der Faktor erklärt die Achsenwerte und steht deshalb über ihnen —
+         seit die Achse rechts liegt, also rechts, in derselben Spalte wie die
+         Marken. */
       chart.appendChild(el("text", {
         x: W - padR + 9, y: 12, "text-anchor": "start",
         "font-size": 11, opacity: .75
@@ -1819,7 +1892,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
         class: "y-tick",
         x: W - padR + 9, y: y + AXIS_FS * 0.36, "text-anchor": "start",
         "font-size": AXIS_FS, "font-weight": 600
-      }, prefix ? "…" + labels[i].slice(prefix.length) : labels[i]));
+      }, labels[i]));
     });
 
     /* Zeitachse: Marken an runden Positionen der sichtbaren Spanne. Die
@@ -2361,13 +2434,9 @@ body[data-chart-style="flow"] .leg-swatch.price {
     const TICKS = 4;
     const tickVals = [];
     for (let i = 0; i <= TICKS; i++) tickVals.push(pMin + (pMax - pMin) * i / TICKS);
-    const labels = tickVals.map(fmtPrice);
-    let prefix = "";
-    if (labels.length > 1) {
-      let k = 0;
-      while (k < labels[0].length && labels.every(s => s[k] === labels[0][k])) k++;
-      if (k >= 4 && labels.every(s => s.length - k >= 2)) prefix = labels[0].slice(0, k);
-    }
+    const axis = axisLabels(tickVals);
+    const labels = axis.labels;
+    const prefix = axis.prefix;
     if (prefix) {
       chart.appendChild(el("text", {
         x: W - padR + 9, y: 12, "text-anchor": "start", "font-size": 11, opacity: .75
@@ -2382,7 +2451,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       chart.appendChild(el("text", {
         class: "y-tick", x: W - padR + 9, y: y + AXIS_FS * 0.36, "text-anchor": "start",
         "font-size": AXIS_FS, "font-weight": 600
-      }, prefix ? "…" + labels[i].slice(prefix.length) : labels[i]));
+      }, labels[i]));
     });
 
     /* Die Nulllinie dieser Ansicht: der Startpreis des Ausschnitts. Ohne sie
@@ -3380,6 +3449,21 @@ body[data-chart-style="flow"] .leg-swatch.price {
      nicht das falsche Jahr behauptet. */
   var fy = document.getElementById("foot-year");
   if (fy) fy.textContent = String(new Date().getFullYear());
+
+  /* Die laufende Code-Version in der Fußzeile. Sie kommt von /health und nicht
+     aus dem Report: die Version ist eine Eigenschaft des Codes, nicht der
+     Daten, und eine frische Installation mit leerem Speicher hat trotzdem eine.
+     Bleibt der Abruf aus, steht dort weiter ein Strich — besser als eine Zahl,
+     die niemand nachgeprüft hat. */
+  (function () {
+    var slot = document.getElementById("code-ver");
+    if (!slot || API === null) return;
+    fetch(API + "/health", { headers: { accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.version) slot.textContent = d.version; })
+      .catch(function () {});
+  })();
+
   setRefreshState("loading");
   /* loadAll() plant über scheduleNextPoll() seinen eigenen nächsten Lauf, aus
      `next_refresh_in` des Servers. Ein festes Intervall gäbe es hier nicht mehr:

@@ -325,7 +325,9 @@ PAGE = """<!doctype html>
         <span class="fsep">&#x2022;</span>
         <a href="https://qubic.org/privacy-policy" target="_blank" rel="noreferrer" id="foot-privacy">Privacy Policy</a>
       </div>
-      <div class="fright"><a href="./">Report</a></div>
+      <!-- Wie auf allen anderen Seiten: rechts die laufende Code-Version.
+           Der Weg zurueck zum Report steht im Kopf dieser Seite. -->
+      <div class="fright"><span id="foot-ver-label">code</span> v.<code id="code-ver">–</code> (BETA)</div>
     </div>
   </footer>
 </div>
@@ -338,8 +340,8 @@ PAGE = """<!doctype html>
   function get(k){{ try{{ return localStorage.getItem(k); }}catch(e){{ return null; }} }}
   function set(k,v){{ try{{ localStorage.setItem(k,v); }}catch(e){{}} }}
 
-  var NAV={{en:{{sub:"How it works",back:"Dashboard",tos:"Terms of Service",privacy:"Privacy Policy"}},
-            de:{{sub:"Wie es funktioniert",back:"Dashboard",tos:"Nutzungsbedingungen",privacy:"Datenschutz"}}}};
+  var NAV={{en:{{sub:"How it works",back:"Dashboard",tos:"Terms of Service",privacy:"Privacy Policy",ver:"code"}},
+            de:{{sub:"Wie es funktioniert",back:"Dashboard",tos:"Nutzungsbedingungen",privacy:"Datenschutz",ver:"Code"}}}};
   var lang = get(LS_LANG)==="de" ? "de" : "en";
   var theme = get(LS_THEME)==="light" ? "light" : "dark";
 
@@ -364,11 +366,23 @@ PAGE = """<!doctype html>
     document.querySelector("#back-link .lbl").textContent = NAV[lang].back;
     document.getElementById("foot-tos").textContent = NAV[lang].tos;
     document.getElementById("foot-privacy").textContent = NAV[lang].privacy;
+    document.getElementById("foot-ver-label").textContent = NAV[lang].ver;
     var btns=document.querySelectorAll("#lang-seg button");
     for(var j=0;j<btns.length;j++){{
       btns[j].classList.toggle("active", btns[j].dataset.lang===lang);
     }}
   }}
+
+  /* Die laufende Version kommt von /health, wie auf den anderen Seiten. Diese
+     Seite ist statisch erzeugt und kennt sie deshalb nicht aus sich heraus;
+     schlaegt der Abruf fehl (Datei-Aufruf ohne API), bleibt der Strich stehen
+     statt einer erfundenen Nummer. */
+  (function(){{
+    if (location.protocol === "file:") return;
+    fetch("/health").then(function(r){{ return r.ok ? r.json() : null; }})
+      .then(function(d){{ if(d && d.version) document.getElementById("code-ver").textContent = d.version; }})
+      .catch(function(){{}});
+  }})();
 
   var lb=document.querySelectorAll("#lang-seg button");
   for(var k=0;k<lb.length;k++){{

@@ -518,7 +518,13 @@ table.data td:first-child { font-family: var(--sans); }
       <span class="fsep">&#x2022;</span>
       <a href="https://qubic.org/privacy-policy" target="_blank" rel="noreferrer" data-i18n="privacy">Privacy Policy</a>
     </div>
-    <div class="fright"><a href="./log.html">Status &amp; Log</a></div>
+    <!-- Rechts steht auf JEDER Seite dasselbe: die laufende Code-Version.
+         Vorher stand hier je nach Seite "Status & Log", "Report" oder die
+         Version — drei Antworten auf dieselbe Stelle, und keine davon war auf
+         allen Seiten zu finden. Die Version gehört hierher, weil sie die
+         Fußzeile beantwortet, was die Seite IST; die Navigation dorthin steht
+         im Kopf. -->
+    <div class="fright"><span data-i18n="codeVersion">code</span> v.<code id="code-ver">–</code> (BETA)</div>
   </div>
 </footer>
 
@@ -584,6 +590,7 @@ table.data td:first-child { font-family: var(--sans); }
       discNoGuarantee: "We do not guarantee the completeness, accuracy, or availability of the data.",
       discDemo: "Use it for analysis purposes only — not as a basis for investment decisions.",
       sponsored: "Qubic – Sponsored by AndyQus", tos: "Terms of Service", privacy: "Privacy Policy",
+      codeVersion: "code",
       thEvents: "Events", thBurned: "Burned (QU)", thPeriod: "Period",
       thCumulative: "Cumulative (QU)",
       tipEvents: "Burn events", tipBurned: "Burned", tipCum: "Cumulative",
@@ -646,6 +653,7 @@ table.data td:first-child { font-family: var(--sans); }
       discNoGuarantee: "Wir übernehmen keine Gewähr für Vollständigkeit, Richtigkeit oder Verfügbarkeit der Daten.",
       discDemo: "Nutzung nur zu Analysezwecken — keine Grundlage für Investitionsentscheidungen.",
       sponsored: "Qubic – Sponsored by AndyQus", tos: "Nutzungsbedingungen", privacy: "Datenschutz",
+      codeVersion: "Code",
       thEvents: "Ereignisse", thBurned: "Verbrannt (QU)", thPeriod: "Periode",
       thCumulative: "Kumulativ (QU)",
       tipEvents: "Burn-Ereignisse", tipBurned: "Verbrannt", tipCum: "Kumulativ",
@@ -1558,6 +1566,21 @@ table.data td:first-child { font-family: var(--sans); }
   // start claiming the wrong year on 1 January.
   var fy = document.getElementById("foot-year");
   if (fy) fy.textContent = String(new Date().getFullYear());
+
+  /* Die laufende Code-Version in der Fußzeile. Sie kommt von /health und nicht
+     aus dem Report: die Version ist eine Eigenschaft des Codes, nicht der
+     Daten, und eine frische Installation mit leerem Speicher hat trotzdem eine.
+     Bleibt der Abruf aus, steht dort weiter ein Strich — besser als eine Zahl,
+     die niemand nachgeprüft hat. */
+  (function () {
+    var slot = document.getElementById("code-ver");
+    if (!slot || API === null) return;
+    fetch(API + "/health", { headers: { accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.version) slot.textContent = d.version; })
+      .catch(function () {});
+  })();
+
   loadAll();
 })();
 </script>
