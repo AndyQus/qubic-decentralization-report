@@ -537,6 +537,58 @@ body[data-chart-style="flow"] .leg-swatch.price {
 /* Auf einem Telefon ist jede Spalte der Studientabelle knapp. Engere Polster
    und kleinere Ziffern bringen "Änderung" — die Spalte, wegen der jemand
    herscrollt — näher an den sichtbaren Bereich. */
+/* ─── Mobile Reihenfolge ────────────────────────────────────────────────────
+   Auf dem Telefon steht der Chart direkt unter dem Preis; die Kennzahlen
+   rücken darunter.
+
+   Der Grund ist die Fallhöhe: die fünf Kacheln stapeln sich auf einer schmalen
+   Spalte zu rund 300 px, und der Chart begann dadurch erst bei y≈600 — also
+   unterhalb des ersten Bildschirms. Wer die Seite auf dem Telefon öffnet, sieht
+   dann eine große Zahl und muss scrollen, um die Kurve zu finden, wegen der er
+   gekommen ist. Marktkapitalisierung und Umlauf beantworten dagegen Fragen, die
+   man erst nach der Kurve stellt.
+
+   Umgesetzt über die Quellreihenfolge, nicht über `order` auf allem: `.hero`
+   löst sich mit `display:contents` auf, seine Kinder werden damit zu direkten
+   Flex-Kindern von `.qs-main` und lassen sich einzeln einsortieren. Das geht
+   hier gefahrlos, weil der Hero auf dieser Seite ohnehin keine eigene Fläche
+   hat — theme.css nimmt ihm Rahmen und Tönung ab (`.qs-card.hero`). Ein Hero
+   mit Hintergrund würde ihn dabei verlieren.
+
+   `order` wirkt nur auf direkte Flex-Kinder, deshalb muss `.qs-main` hier
+   Flex-Container sein; ohne `display:contents` am Hero bliebe `.hero-facts`
+   in ihm eingeschlossen und unerreichbar für die Sortierung. */
+@media (max-width: 620px) {
+  .qs-main { display: flex; flex-direction: column; }
+  .hero { display: contents; }
+
+  /* Preis zuerst, dann der Chart, dann die Kennzahlen, dann der Rest in
+     Dokumentreihenfolge. Die Zahlen sind bewusst klein gehalten und liegen
+     weit auseinander, damit später etwas dazwischen passt. */
+  .hero-label { order: 1; }
+  .hero-price { order: 2; }
+  #chart-card   { order: 3; }
+  .hero-facts { order: 4; }
+  #honesty-note { order: 5; }
+  #study-card   { order: 6; }
+  #api-card     { order: 7; }
+  #sources-card { order: 8; }
+
+  /* Der Hero brachte seinen Abstand als Karte mit; aufgelöst tragen ihn die
+     Kinder selbst. */
+  .hero-label { margin-top: 4px; }
+  .hero-facts { margin-top: 0; margin-bottom: 18px; }
+
+  /* Zwei Spalten statt einer: fünf gestapelte Kacheln sind auf einem Telefon
+     eine lange, gleichförmige Strecke. Zu zweit nebeneinander bleiben sie
+     lesbar und kosten die halbe Höhe. minmax(0,1fr) statt 150px, damit sie
+     auch auf 320 px nicht wieder einspaltig werden. */
+  .hero-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Die letzte Kachel einer ungeraden Zahl bekommt die volle Breite, sonst
+     steht sie allein neben einer Lücke. */
+  .hero-facts > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+
 @media (max-width: 620px) {
   .study-table { font-size: 12px; }
   .study-table th, .study-table td { padding: 7px 7px; }
@@ -680,7 +732,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
   </section>
 
   <!-- 2 — CHART ------------------------------------------------------------ -->
-  <section class="qs-card qs-card--translucent">
+  <section class="qs-card qs-card--translucent" id="chart-card">
     <h2 data-i18n="chartTitle">Price over time</h2>
     <p class="desc" data-i18n="chartDesc">Every reading is a price that stood for a measured stretch of time. Vertical marks are epoch boundaries, where the protocol pays its 676 computors.</p>
 
@@ -832,7 +884,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
     <p class="desc" style="margin-top:8px" data-i18n="apiTerms">Free to use, including commercially. Please attribute the report and do not poll faster than once a minute — the underlying reading only changes that often.</p>
   </section>
 
-  <section class="qs-card qs-card--translucent">
+  <section class="qs-card qs-card--translucent" id="sources-card">
     <h2 data-i18n="aboutTitle">Where these figures come from</h2>
     <p class="desc" id="about-source" data-i18n="aboutSource">The price is read from Qubic's own <code>/v1/latest-stats</code> — the same endpoint this project already uses for supply and tick quality. Qubic's stats service holds the licence for the figure it publishes.</p>
     <p class="desc" style="margin-top:10px" data-i18n="aboutNoVolume">There is no trading volume here, and that is deliberate. Exchange APIs were built against first and then removed: MEXC's terms prohibit republishing their market data without written consent. A volume figure sourced that way would be a licence breach wearing a useful label.</p>
@@ -1477,8 +1529,18 @@ body[data-chart-style="flow"] .leg-swatch.price {
     /* Der linke Rand trägt den Preis — die einzige Zahl, wegen der jemand
        dieses Diagramm überhaupt ansieht. Er ist deshalb breiter als für die
        Ziffern nötig: die Achsenschrift steht größer als die der Zeitachse. */
-    const padL = narrow ? 74 : 98, padR = narrow ? 10 : 18;
-    const padT = 18, padB = narrow ? 38 : 44;
+    /* Die Preisachse steht RECHTS. Der breite Rand liegt deshalb rechts, und
+       links bleibt nur so viel, wie die erste Zeitmarke braucht.
+
+       Rechts ist für eine Kursachse der üblichere Platz: der jüngste Wert liegt
+       am rechten Ende der Kurve, und die Achse steht damit neben der Zahl, um
+       die es geht, statt am anderen Ende des Bildes. Alles Übrige rechnet
+       ohnehin in padL…W-padR und folgt der Vertauschung von selbst. */
+    const padL = narrow ? 10 : 14, padR = narrow ? 74 : 98;
+    /* Oben etwas mehr Luft, wenn ein gemeinsamer Vorsatz über der Achse steht:
+       er sitzt jetzt in derselben Spalte wie die Achsenwerte (rechts), und auf
+       gleicher Höhe mit der obersten Marke stieße er mit ihr zusammen. */
+    const padT = 26, padB = narrow ? 38 : 44;
     const plotW = W - padL - padR;
     const plotH = H - padT - padB;
     chart.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -1548,10 +1610,11 @@ body[data-chart-style="flow"] .leg-swatch.price {
       if (k >= 4 && labels.every(s => s.length - k >= 2)) prefix = labels[0].slice(0, k);
     }
     if (prefix) {
-      /* Linksbündig am Rand statt über der ersten Marke: rechtsbündig stieße
-         er sonst mit dem obersten Achsenwert zusammen. */
+      /* Der Vorsatz erklärt die Achsenwerte und steht deshalb über ihnen —
+         seit die Achse rechts liegt, also rechts. Rechtsbündig am äußeren Rand
+         statt über der obersten Marke: über ihr stieße er mit ihr zusammen. */
       chart.appendChild(el("text", {
-        x: 2, y: 12, "text-anchor": "start",
+        x: W - padR + 9, y: 12, "text-anchor": "start",
         "font-size": 11, opacity: .75
       }, prefix + "…"));
     }
@@ -1566,7 +1629,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       }));
       chart.appendChild(el("text", {
         class: "y-tick",
-        x: padL - 9, y: y + AXIS_FS * 0.36, "text-anchor": "end",
+        x: W - padR + 9, y: y + AXIS_FS * 0.36, "text-anchor": "start",
         "font-size": AXIS_FS, "font-weight": 600
       }, prefix ? "…" + labels[i].slice(prefix.length) : labels[i]));
     });
@@ -1942,8 +2005,18 @@ body[data-chart-style="flow"] .leg-swatch.price {
       chart.clientWidth || (chart.parentElement && chart.parentElement.clientWidth) || 900));
     const narrow = avail < 620;
     const W = narrow ? Math.min(avail, 520) : avail, H = narrow ? 300 : 360;
-    const padL = narrow ? 74 : 98, padR = narrow ? 10 : 18;
-    const padT = 18, padB = narrow ? 38 : 44;
+    /* Die Preisachse steht RECHTS. Der breite Rand liegt deshalb rechts, und
+       links bleibt nur so viel, wie die erste Zeitmarke braucht.
+
+       Rechts ist für eine Kursachse der üblichere Platz: der jüngste Wert liegt
+       am rechten Ende der Kurve, und die Achse steht damit neben der Zahl, um
+       die es geht, statt am anderen Ende des Bildes. Alles Übrige rechnet
+       ohnehin in padL…W-padR und folgt der Vertauschung von selbst. */
+    const padL = narrow ? 10 : 14, padR = narrow ? 74 : 98;
+    /* Oben etwas mehr Luft, wenn ein gemeinsamer Vorsatz über der Achse steht:
+       er sitzt jetzt in derselben Spalte wie die Achsenwerte (rechts), und auf
+       gleicher Höhe mit der obersten Marke stieße er mit ihr zusammen. */
+    const padT = 26, padB = narrow ? 38 : 44;
     const plotW = W - padL - padR;
     const plotH = H - padT - padB;
     chart.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -2109,7 +2182,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
     }
     if (prefix) {
       chart.appendChild(el("text", {
-        x: 2, y: 12, "text-anchor": "start", "font-size": 11, opacity: .75
+        x: W - padR + 9, y: 12, "text-anchor": "start", "font-size": 11, opacity: .75
       }, prefix + "…"));
     }
     const AXIS_FS = narrow ? 12 : 14;
@@ -2119,7 +2192,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
         x1: padL, y1: y, x2: W - padR, y2: y, stroke: gridCol, "stroke-width": 1
       }));
       chart.appendChild(el("text", {
-        class: "y-tick", x: padL - 9, y: y + AXIS_FS * 0.36, "text-anchor": "end",
+        class: "y-tick", x: W - padR + 9, y: y + AXIS_FS * 0.36, "text-anchor": "start",
         "font-size": AXIS_FS, "font-weight": 600
       }, prefix ? "…" + labels[i].slice(prefix.length) : labels[i]));
     });

@@ -345,7 +345,14 @@ PAGE = """<!doctype html>
 
   function applyTheme(){{
     root.setAttribute("data-theme",theme);
-    document.getElementById("theme-btn").textContent = theme==="dark" ? "\u1f319" : "\u2600\ufe0f";
+    /* Der Mond als Ersatzpaar (U+1F319). Er liegt jenseits von U+FFFF, und
+       eine Escape mit nur vier Ziffern kann ihn nicht tragen: JavaScript
+       liest die ersten vier als Zeichen und die fuenfte Ziffer als Text --
+       im Knopf stand deshalb nach dem ersten Umschalten ein griechisches
+       Iota mit einer 9 dahinter. Die geschweifte Variante waere die andere
+       Loesung, ist aber in dieser Python-Vorlage (kein r-String) selbst
+       keine gueltige Escape-Sequenz. */
+    document.getElementById("theme-btn").textContent = theme==="dark" ? "🌙" : "☀️";
   }}
   function applyLang(){{
     root.setAttribute("lang",lang);
@@ -502,18 +509,59 @@ STYLE = """
   }
 
   @media (max-width:640px){
-    .wrap{padding:0 15px 56px}
-    .top-inner{padding:11px 15px;gap:10px}
+    .wrap{padding:0 14px 56px}
+    .top-inner{padding:11px 14px;gap:10px}
     .brand .sub{display:none}
     .brand h1{font-size:15px}
     .toc ol{columns:1}
-    .doc table{min-width:340px}
+    .doc table{min-width:340px;font-size:13px}
     .doc th,.doc td{padding:8px 10px}
+    /* Eine lange URL oder ein langer Bezeichner in einer Zelle zwingt die
+       Tabelle sonst weit über ihre min-width hinaus, und die letzte Spalte
+       steht dann außerhalb des Kastens.
+
+       `break-word` statt `anywhere`: `anywhere` bricht auch dort, wo noch
+       Platz gewesen wäre, und macht aus "Consensus" ein "Consens-us". Es soll
+       nur greifen, wo ein einzelnes Wort ohnehin nicht in die Spalte passt —
+       und das ist genau, was `break-word` tut. Der Bindestrich-Umbruch bleibt
+       damit den Fällen vorbehalten, die ihn wirklich brauchen: URLs und
+       Bezeichner ohne Leerzeichen. */
+    .doc td{overflow-wrap:break-word}
+    .doc th{white-space:normal}
+
+    /* Ein Kasten, der seitwärts scrollt, sieht auf einem Telefon aus wie ein
+       Kasten, dem rechts etwas fehlt: man SIEHT die abgeschnittene Spalte und
+       hat keinen Hinweis, dass sie erreichbar ist. Der Verlauf am rechten Rand
+       ist dieser Hinweis — er verschwindet, sobald man ans Ende gescrollt hat,
+       weil `background-attachment:local` den zweiten Verlauf mitscrollen
+       lässt und nur der ortsfeste Schatten übrig bleibt. */
+    .tw{
+      background:
+        linear-gradient(to right, var(--bg) 30%, transparent) left / 24px 100% no-repeat local,
+        linear-gradient(to left,  var(--bg) 30%, transparent) right / 24px 100% no-repeat local,
+        radial-gradient(farthest-side at 0 50%, rgba(0,0,0,.35), transparent) left / 12px 100% no-repeat scroll,
+        radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,.35), transparent) right / 12px 100% no-repeat scroll;
+    }
+
+    /* Codeblöcke: auf einem Telefon ist eine 90 Zeichen lange Zeile ohnehin
+       nicht am Stück lesbar. Sie bleibt scrollbar (der Befehl soll unversehrt
+       kopierbar sein), bekommt aber eine kleinere Schrift, damit mehr davon
+       auf einmal im Bild steht. */
+    .doc pre{padding:11px 12px}
+    .doc pre code{font-size:11.8px}
+
+    /* Inline-Code bricht mit, statt die Zeile über den Rand zu schieben. Hier
+       ist `anywhere` richtig: ein Pfad wie /report/{epoch} hat keine Stelle,
+       an der ein Wortumbruch gutginge, und ungebrochen schöbe er die ganze
+       Zeile hinaus. */
+    .doc p code,.doc li code{overflow-wrap:anywhere}
   }
   /* very narrow phones: drop the back-link label, keep the arrow as the target */
   @media (max-width:380px){
     .back span.lbl{display:none}
-    .doc pre code{font-size:11.6px}
+    .doc pre code{font-size:11.2px}
+    .doc table{min-width:0}
+    .doc th,.doc td{padding:7px 8px}
   }
   @media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 """
