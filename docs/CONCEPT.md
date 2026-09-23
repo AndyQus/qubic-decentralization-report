@@ -362,10 +362,11 @@ snapshots stay only as a cold-start fallback for a fresh install with an empty d
 
 ## 5.1.1 Two clocks: what is live, and what is not
 
-Measured against the live network: the tick advances **~2.7/s**, while the computor list,
-revenue and clustering change **once per epoch** — roughly every 4.4 days (epoch length
-itself varies, 1.08M-2.29M ticks). Polling the analysis every minute would burn RPC budget to
-produce an identical answer for four days.
+Measured against the live network: the tick advances **~1.6/s**, while the computor list,
+revenue and clustering change **once per epoch** — once a week, Wednesday 12:00 UTC to
+Wednesday 12:00 UTC (the tick count per epoch varies, 1.08M-2.29M ticks; the week does not).
+Polling the analysis every minute would burn RPC budget to produce an identical answer for a
+week.
 
 So the service runs two cadences:
 

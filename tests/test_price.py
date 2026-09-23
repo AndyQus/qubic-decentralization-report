@@ -303,7 +303,7 @@ def test_the_price_endpoints_are_indexed_and_tagged():
 
 # -- the epoch payout study --------------------------------------------------
 #
-# This is the page's reason to exist: every ~4.4 days the protocol pays 676
+# This is the page's reason to exist: once a week (Wednesday 12:00 UTC) the protocol pays 676
 # computors at once, those payouts are emission rather than transfers (so the
 # public RPC does not carry them), and this project derives them anyway. Lining
 # them up against a measured price series is a question nobody else can ask.

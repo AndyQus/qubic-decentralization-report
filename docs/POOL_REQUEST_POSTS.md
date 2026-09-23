@@ -168,5 +168,5 @@ muss also gleich viel wieder einsparen.)*
   schwer zuzuordnen. Die Discord-Fassungen nennen die Chat-Antwort deshalb
   zuerst und den eigenen PR als zweiten Weg; wer selbst einen PR öffnet, ist
   natürlich weiterhin willkommen.
-- Zahlen ändern sich an jeder Epochengrenze (~4,4 Tage). Bei späterem Posten neu
+- Zahlen ändern sich an jeder Epochengrenze (mittwochs 12:00 UTC). Bei späterem Posten neu
   aus `https://report.qubic.tools/v1/dashboard-data` lesen.

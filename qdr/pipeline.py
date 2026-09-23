@@ -680,7 +680,7 @@ def price_summary(store: Store) -> dict:
 # -- the epoch payout study ------------------------------------------------
 # The one question this page can ask that no market site can.
 #
-# Every ~4.4 days the protocol pays 676 computors. Measured from our own sealed
+# Once a week (Wednesday 12:00 UTC) the protocol pays 676 computors. Measured from our own sealed
 # reports, epochs 227-228 each emitted ~180 billion QU (the epoch-227 halving is
 # visible in that series: 226 emitted ~360 billion). At 4.07e-7 USD that is
 # roughly 73,000 USD per epoch arriving in 676 wallets at once -- against a
@@ -934,9 +934,9 @@ def scan_burns(
     # The watch loop does not run at its nominal interval: the balance snapshot
     # ahead of it makes 676 sequential RPC calls at ~1.75 s each (measured), so a
     # pass comes round roughly every 20 minutes whatever --interval says. At
-    # ~2.7 ticks/s that is ~3,250 ticks of drift per pass, against a fixed budget
-    # covering 10,000 — it keeps up, but the margin shrinks to almost nothing if
-    # the RPC has a slow day and the gap stretches to an hour.
+    # ~1.6 ticks/s that is ~1,900 ticks of drift per pass, against a fixed budget
+    # covering 10,000 — it keeps up, and still does if the RPC has a slow day and
+    # the gap stretches to an hour (~5,800 ticks).
     #
     # Rather than depend on that arithmetic staying true, let a pass that is
     # behind buy the calls it needs to catch up, with a ceiling so it still
@@ -1333,7 +1333,8 @@ def burn_coverage(store: Store) -> dict:
 
 
 def build_burn_series(store: Store, by: str = "day",
-                      limit: Optional[int] = DEFAULT_BURN_DAYS) -> dict:
+                      limit: Optional[int] = DEFAULT_BURN_DAYS,
+                      now: Optional[float] = None) -> dict:
     """The burn series, with every point labelled measured or derived.
 
     Two regimes share one chart (CONCEPT_BURN §4.1): what we counted ourselves,
@@ -1345,6 +1346,8 @@ def build_burn_series(store: Store, by: str = "day",
     rows = store.burn_series(by=by, limit=limit)
     state = store.burn_scan_state()
     spans = store.day_ticks()
+    now = time.time() if now is None else now
+    today = dating.day_of(int(now))
     series = []
     cumulative = 0
     for r in rows:
@@ -1383,6 +1386,17 @@ def build_burn_series(store: Store, by: str = "day",
             point["coverage"] = round(
                 min(1.0, scanned / (period or TICKS_PER_DAY)), 4)
             point["partial"] = scanned < (period or TICKS_PER_DAY) * 0.95
+            # The running UTC day is never whole, whatever its tick count says.
+            # Tick numbers jump at an epoch change (epoch 231 ended at 81,259,537,
+            # 232 began at 81,400,000), so on 2026-09-23 a half-day span held
+            # 199,285 tick NUMBERS, beat TICKS_PER_DAY and read "100%, complete".
+            # For today the clock is the measure: the scan runs live, so the
+            # share of the day that has elapsed is the share it can have covered.
+            if not period and r["key"] >= today:
+                elapsed = (now - dating.day_start(today)) / dating.SECONDS_PER_DAY
+                point["coverage"] = round(min(1.0, max(0.0, elapsed)), 4)
+                point["partial"] = True
+                point["in_progress"] = True
         series.append(point)
     out = {
         "by": by,
@@ -1469,39 +1483,41 @@ def burn_reconciliation(store: Store) -> dict:
     }
 
 
-# Measured 2026-09-07 and unchanged since: the chain advances ~2.7 ticks/s. Used
-# only to project a per-tick observation into a per-day figure a reader can hold
-# onto; the underlying measurement is per tick and is reported as such.
-TICKS_PER_SECOND = 2.7
+# How many recent whole days the per-day rate averages over. A week, so the rate
+# spans every weekday once and an epoch change (Wednesday 12:00 UTC) at most once.
+RATE_DAYS = 7
 
 
-def _measured_rate(store: Store) -> dict:
-    """Burn rate over the ticks actually scanned.
+def _measured_rate(store: Store, now: Optional[float] = None) -> dict:
+    """Burn rate per day, averaged over whole UTC days that were fully scanned.
 
-    Returns per-tick, per-second and per-day figures, plus the tick span they
-    came from, so a consumer can show the projection and still see its basis.
-    Empty when nothing has been scanned — an invented rate would be exactly the
-    thing this whole feature exists to avoid.
+    This used to project a per-tick rate through an assumed 2.7 ticks/s, over
+    MIN..MAX of the scanned ticks. Both were wrong: the real rate is ~1.4-1.8
+    ticks/s and varies by day, the scanned range can have gaps, and tick numbers
+    jump at every epoch change, so a tick is not a unit of time. A whole scanned
+    day is: its burns and events divided by one day, measured over measured.
+
+    Empty when no whole day has been scanned yet — an invented rate would be
+    exactly the thing this whole feature exists to avoid.
     """
-    with store._lock:                      # noqa: SLF001 - same module family
-        row = store._conn.execute(
-            "SELECT SUM(burned) b, SUM(burn_events) e, "
-            "MIN(from_tick) lo, MAX(to_tick) hi FROM burn_buckets"
-        ).fetchone()
-    if not row or not row["e"] or row["lo"] is None:
+    series = build_burn_series(store, by="day", limit=None, now=now)["series"]
+    whole = [p for p in series
+             if p.get("period_measured") and not p.get("partial")][-RATE_DAYS:]
+    if not whole:
         return {}
-    ticks = max(1, int(row["hi"]) - int(row["lo"]) + 1)
-    events_per_tick = int(row["e"]) / ticks
-    burned_per_tick = int(row["b"] or 0) / ticks
-    per_day = 86_400 * TICKS_PER_SECOND
+    n = len(whole)
+    events = sum(p["events"] for p in whole)
+    burned = sum(p["burned"] for p in whole)
     return {
-        "scanned_ticks": ticks,
-        "events_per_tick": round(events_per_tick, 4),
-        "events_per_second": round(events_per_tick * TICKS_PER_SECOND, 3),
-        "events_per_day": int(round(events_per_tick * per_day)),
-        "burned_per_day": int(round(burned_per_tick * per_day)),
-        "rate_basis": f"{int(row['e'])} events over {ticks} scanned ticks "
-                      f"@ {TICKS_PER_SECOND} ticks/s",
+        "rate_days": n,
+        "rate_from_day": whole[0]["key"],
+        "rate_to_day": whole[-1]["key"],
+        "events_per_second": round(events / (n * 86_400), 5),
+        "events_per_day": int(round(events / n)),
+        "burned_per_day": int(round(burned / n)),
+        "rate_basis": f"{events} events, {burned} QU over {n} whole UTC "
+                      f"day{'s' if n != 1 else ''} "
+                      f"({whole[0]['key']} to {whole[-1]['key']})",
     }
 
 
@@ -1538,12 +1554,9 @@ def build_burn_latest(store: Store) -> Optional[dict]:
             "events": int(recent["events"]) if recent else 0,
             "first_measured_tick": state["first_tick"] if state else None,
             "last_scanned_tick": state["last_tick"] if state else None,
-            # Rate over the ticks actually scanned, not over a wall-clock day: a
-            # day still being measured has only partial hours in it, so dividing
-            # its total by 24 would understate the rate all day and only become
-            # right at midnight. Per-tick is what was observed; the ~2.7 ticks/s
-            # measured tick rate turns it into a per-day figure for the reader,
-            # and it is labelled as the projection it is.
+            # Rate over whole UTC days only, never the running one: a day still
+            # being measured has only partial hours in it, so dividing its total
+            # by 24 would understate the rate all day. See _measured_rate.
             **_measured_rate(store),
         },
         "coverage": cov["epochs"][-1] if cov["epochs"] else None,

@@ -148,7 +148,7 @@ Alle Zahlen wurden vor dem Schreiben aus dem Live-Deployment gelesen:
 - Jeder X-Post wurde gezählt, nicht geschätzt (URL als 23 Zeichen nach X' Regel):
   Einzelpost 272, 1/ 269, 2/ 270, 3/ 256, 4/ 277. Die deutschen Fassungen sind
   länger als die englischen, mehrere Entwürfe mussten dafür gekürzt werden.
-- Die Zahlen ändern sich an jeder Epochengrenze (~4,4 Tage). Wird dies mehr als
+- Die Zahlen ändern sich an jeder Epochengrenze (mittwochs 12:00 UTC). Wird dies mehr als
   ein paar Tage nach Erstellung gepostet, die Werte neu aus
   `https://report.qubic.tools/v1/dashboard-data` lesen statt der Tabelle oben zu
   vertrauen.

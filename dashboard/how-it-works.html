@@ -6,7 +6,7 @@
 <title>How it works — Qubic Report</title>
 <meta name="description" content="The concept behind the report — what is measured, why those metrics, and where attribution stops being provable." />
 <!-- GENERATED FILE — do not edit.
-     Source: docs/CONCEPT.md + docs/CONCEPT.de.md (concept-sha 60ab4b056e74)
+     Source: docs/CONCEPT.md + docs/CONCEPT.de.md (concept-sha f798e68eab32)
      Regenerate: python scripts/build_how_it_works.py -->
 
 <!-- Icons, PWA und Link-Vorschau wie auf den übrigen Seiten. Diese Seite
@@ -164,10 +164,7 @@
   }
 
   @media (max-width:640px){
-    /* 10px, das Mass der Kursseite. Hier steht Fliesstext, der von Breite
-       wenig hat — aber die Tabellen im Dokument haben eine min-width, und
-       jedes Pixel Rand schiebt sie früher ins seitliche Scrollen. */
-    .wrap{padding:0 10px 56px}
+    .wrap{padding:0 14px 56px}
     .top-inner{padding:11px 14px;gap:10px}
     .brand .sub{display:none}
     .brand h1{font-size:15px}
@@ -333,7 +330,7 @@ GET /report/{epoch}/snapshot.json → frozen, archivable snapshot</code></pre>
 <p><strong>API impact.</strong> <code>/v1/report/{epoch}</code> becomes a store lookup and can serve <em>any</em> historical epoch, not just whatever snapshot was last built. Responses carry <code>status</code> (<code>sealed</code> / <code>partial</code> / <code>live</code>), <code>computed_at</code>, and <code>code_version</code>. The static <code>api/sample/*.json</code> snapshots stay only as a cold-start fallback for a fresh install with an empty database.</p>
 <hr>
 <h2 id="511-two-clocks-what-is-live-and-what-is-not">5.1.1 Two clocks: what is live, and what is not</h2>
-<p>Measured against the live network: the tick advances <strong>~2.7/s</strong>, while the computor list, revenue and clustering change <strong>once per epoch</strong> — roughly every 4.4 days (epoch length itself varies, 1.08M-2.29M ticks). Polling the analysis every minute would burn RPC budget to produce an identical answer for four days.</p>
+<p>Measured against the live network: the tick advances <strong>~1.6/s</strong>, while the computor list, revenue and clustering change <strong>once per epoch</strong> — once a week, Wednesday 12:00 UTC to Wednesday 12:00 UTC (the tick count per epoch varies, 1.08M-2.29M ticks; the week does not). Polling the analysis every minute would burn RPC budget to produce an identical answer for a week.</p>
 <p>So the service runs two cadences:</p>
 <ul><li><strong><code>/v1/pulse</code></strong> — tick, epoch progress, tick quality, active addresses. Cheap, cached ~10 s, designed to be polled every 15 s. This is what the dashboard animates.</li><li><strong>The report</strong> — recomputed only when the epoch turns (the dashboard watches the pulse's epoch number rather than polling the report on a timer).</li></ul>
 <p>The running epoch also has <em>no revenue yet</em> — it is credited when the epoch closes — so the headline report is the newest <strong>settled</strong> epoch, with the running one shown separately as the live panel. Presenting the running epoch as the report would show an empty one while a complete one sat right behind it.</p>
@@ -467,7 +464,7 @@ GET /report/{epoch}/snapshot.json → eingefrorener, archivierbarer Snapshot</co
 <p><strong>Auswirkung auf die API.</strong> <code>/v1/report/{epoch}</code> wird zu einem Speicher-Lookup und kann <em>jede</em> historische Epoche ausliefern, nicht nur den zuletzt gebauten Snapshot. Antworten führen <code>status</code> (<code>sealed</code> / <code>partial</code> / <code>live</code>), <code>computed_at</code> und <code>code_version</code> mit. Die statischen <code>api/sample/*.json</code> bleiben nur noch als Kaltstart-Fallback für eine frische Installation mit leerer Datenbank.</p>
 <hr>
 <h2 id="511-zwei-takte-was-live-ist-und-was-nicht">5.1.1 Zwei Takte: was live ist und was nicht</h2>
-<p>Am Live-Netz gemessen: Der Tick läuft mit <strong>~2,7/s</strong>, während sich Computor-Liste, Revenue und Clustering <strong>einmal pro Epoche</strong> ändern — etwa alle 4,4 Tage (die Epochenlänge selbst schwankt, 1,08–2,29 Mio. Ticks). Die Analyse minütlich abzufragen würde RPC-Budget verbrennen, um vier Tage lang dieselbe Antwort zu erzeugen.</p>
+<p>Am Live-Netz gemessen: Der Tick läuft mit <strong>~1,6/s</strong>, während sich Computor-Liste, Revenue und Clustering <strong>einmal pro Epoche</strong> ändern — einmal pro Woche, von Mittwoch 12:00 UTC bis Mittwoch 12:00 UTC (die Tickzahl je Epoche schwankt, 1,08–2,29 Mio. Ticks; die Woche nicht). Die Analyse minütlich abzufragen würde RPC-Budget verbrennen, um eine Woche lang dieselbe Antwort zu erzeugen.</p>
 <p>Der Dienst läuft deshalb in zwei Takten:</p>
 <ul><li><strong><code>/v1/pulse</code></strong> — Tick, Epochen-Fortschritt, Tick-Qualität, aktive Adressen. Günstig, ~10 s gecacht, ausgelegt auf Abruf alle 15 s. Das ist es, was das Dashboard animiert.</li><li><strong>Der Report</strong> — nur neu berechnet, wenn die Epoche wechselt (das Dashboard beobachtet die Epochennummer des Pulses, statt den Report auf Verdacht zu pollen).</li></ul>
 <p>Die laufende Epoche hat außerdem <em>noch kein Revenue</em> — es wird erst bei Epochenschluss gutgeschrieben. Der Hauptbericht ist deshalb die neueste <strong>abgeschlossene</strong> Epoche, die laufende erscheint separat im Live-Panel. Die laufende als Report zu zeigen hieße, einen leeren Bericht zu zeigen, während ein vollständiger direkt dahinter liegt.</p>

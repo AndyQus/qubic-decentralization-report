@@ -49,8 +49,8 @@
     GET /v1/price/series   — die Reihe (Intervalle bzw. Stundenzusammenfassung)
     GET /v1/price/epochs   — die Auswertung rund um die Computor-Auszahlungen
 
-  Warum es diese Seite gibt: alle 4,4 Tage zahlt das Protokoll 676 Computors
-  aus — seit der Halbierung in Epoche 227 rund 180 Mrd. QU je Epoche, gemessen
+  Warum es diese Seite gibt: einmal pro Woche, beim Epochenwechsel (mittwochs
+  12:00 UTC), zahlt das Protokoll 676 Computors aus — seit der Halbierung in Epoche 227 rund 180 Mrd. QU je Epoche, gemessen
   aus unseren eigenen versiegelten Reports. Diese Auszahlungen sind Emission und
   tauchen auf der öffentlichen RPC überhaupt nicht als Transfers auf; nur dieses
   Projekt leitet sie aus dem End-Epoch-Log eines Bob-Nodes ab. Damit ist es das
@@ -1045,7 +1045,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
     <div class="study-head">
       <h2 data-i18n="studyTitle">Around the computor payouts</h2>
     </div>
-    <p class="desc" data-i18n="studyDesc">Every ~4.4 days the protocol pays 676 computors at once. Those payouts are emission, not transfers — the public RPC does not carry them at all, so this comparison exists nowhere else. The table reports what the price did; it does not claim the payout caused it.</p>
+    <p class="desc" data-i18n="studyDesc">Once a week, when the epoch turns (Wednesday 12:00 UTC), the protocol pays 676 computors at once. Those payouts are emission, not transfers — the public RPC does not carry them at all, so this comparison exists nowhere else. The table reports what the price did; it does not claim the payout caused it.</p>
 
     <div class="study-verdict" id="study-verdict" hidden>–</div>
 
@@ -1256,12 +1256,12 @@ body[data-chart-style="flow"] .leg-swatch.price {
       tipSma: "{days}-day avg.",
 
       studyTitle: "Around the computor payouts",
-      studyDesc: "Every ~4.4 days the protocol pays 676 computors at once. Those payouts are emission, not transfers — the public RPC does not carry them at all, so this comparison exists nowhere else. The table reports what the price did; it does not claim the payout caused it.",
+      studyDesc: "Once a week, when the epoch turns (Wednesday 12:00 UTC), the protocol pays 676 computors at once. Those payouts are emission, not transfers — the public RPC does not carry them at all, so this comparison exists nowhere else. The table reports what the price did; it does not claim the payout caused it.",
       thEpoch: "Epoch", thWhen: "Boundary", thBefore: "Before",
       thAfter: "After", thChange: "Change", thCoverage: "Window watched",
       studyPending: "Not enough boundaries yet. {n} more needed before this table is worth reading — one epoch is an anecdote.",
       studyReady: "Across {n} observed boundaries: median {median}, {up} up and {down} down, spread {min} to {max}.",
-      studyEmpty: "No epoch boundary has been observed yet. The worker has to watch an epoch change — the next one is within ~4.4 days of the last.",
+      studyEmpty: "No epoch boundary has been observed yet. The worker has to watch an epoch change — the next one is on Wednesday at 12:00 UTC.",
       studyUnavail: "The payout study is not available yet.",
       notObserved: "not on both sides",
       payoutLine: "Most recent sealed payout: epoch {epoch} paid {qu} QU to {n} computors{usd}.",
@@ -1378,12 +1378,12 @@ body[data-chart-style="flow"] .leg-swatch.price {
       tipSma: "{days}-Tage-Schnitt",
 
       studyTitle: "Rund um die Computor-Auszahlungen",
-      studyDesc: "Alle ~4,4 Tage zahlt das Protokoll 676 Computors auf einmal aus. Diese Auszahlungen sind Emission, keine Überweisungen — die öffentliche RPC führt sie gar nicht, deshalb gibt es diesen Vergleich sonst nirgends. Die Tabelle berichtet, was der Kurs tat; sie behauptet nicht, die Auszahlung habe es verursacht.",
+      studyDesc: "Einmal pro Woche, beim Epochenwechsel (mittwochs 12:00 UTC), zahlt das Protokoll 676 Computors auf einmal aus. Diese Auszahlungen sind Emission, keine Überweisungen — die öffentliche RPC führt sie gar nicht, deshalb gibt es diesen Vergleich sonst nirgends. Die Tabelle berichtet, was der Kurs tat; sie behauptet nicht, die Auszahlung habe es verursacht.",
       thEpoch: "Epoche", thWhen: "Grenze", thBefore: "Davor",
       thAfter: "Danach", thChange: "Änderung", thCoverage: "Fenster beobachtet",
       studyPending: "Noch zu wenige Grenzen. {n} weitere nötig, bevor diese Tabelle etwas hergibt — eine Epoche ist eine Anekdote.",
       studyReady: "Über {n} beobachtete Grenzen: Median {median}, {up} aufwärts und {down} abwärts, Spanne {min} bis {max}.",
-      studyEmpty: "Es wurde noch keine Epochengrenze beobachtet. Der Worker muss einen Epochenwechsel miterleben — der nächste liegt ~4,4 Tage nach dem letzten.",
+      studyEmpty: "Es wurde noch keine Epochengrenze beobachtet. Der Worker muss einen Epochenwechsel miterleben — der nächste ist am Mittwoch um 12:00 UTC.",
       studyUnavail: "Die Auszahlungs-Auswertung ist noch nicht verfügbar.",
       notObserved: "nicht beidseitig",
       payoutLine: "Jüngste versiegelte Auszahlung: Epoche {epoch} zahlte {qu} QU an {n} Computors{usd}.",

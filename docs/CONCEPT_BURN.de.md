@@ -41,10 +41,10 @@ Parallel dazu meldete ein Bob-Node für die Ticks 80.820.000–80.820.500 im sel
 **913 Burn-Transfers von je exakt 1.000.000 QU** — 913.000.000 QU in 500 Ticks.
 
 Es wird also kontinuierlich verbrannt; `latest-stats.burnedQus` berichtet es nur nicht
-kontinuierlich. Der Wert ist ein **Epochengrenzen-Aggregat**. Eine Epoche dauert ~4,4 Tage.
+kontinuierlich. Der Wert ist ein **Epochengrenzen-Aggregat**. Eine Epoche dauert eine Woche (Mittwoch 12:00 UTC bis Mittwoch 12:00 UTC).
 
 **Die Konsequenz für dieses Feature.** `burnedQus` stündlich abzufragen und „pro Tag" zu
-speichern, ergäbe eine Tabelle identischer Zahlen über vier Tage und dann einen Sprung. Das
+speichern, ergäbe eine Tabelle identischer Zahlen über eine Woche und dann einen Sprung. Das
 als Tagesdiagramm zu zeichnen und die flache Strecke mit „0 QU heute verbrannt" zu
 beschriften, wäre falsch — an diesem Tag wurden ~426 Milliarden QU verbrannt, der Zähler
 hatte es nur noch nicht veröffentlicht. Den Sprung rückwirkend über die Tage zu
@@ -227,7 +227,7 @@ Die Reihe hat daher zwei klar getrennte Regime, und die API beschriftet jeden Pu
 
 | Regime | Quelle | Auflösung | Label |
 |---|---|---|---|
-| Vor dem ersten Scan | `burnedQus`-Deltas an Epochengrenzen | pro Epoche (~4,4 T) | `measured: false` |
+| Vor dem ersten Scan | `burnedQus`-Deltas an Epochengrenzen | pro Epoche (wöchentlich) | `measured: false` |
 | Ab dem ersten Scan | Bob-Ereignisse, aggregiert | pro Tag / pro Stunde | `measured: true` |
 
 Das Diagramm zeichnet das ältere Regime als epochenbreite Stufen und das neuere als

@@ -62,6 +62,31 @@ def day_start(day: str) -> int:
     return calendar.timegm(time.strptime(day, "%Y-%m-%d"))
 
 
+# An epoch is a calendar week, not a tick count: it runs from Wednesday 12:00 UTC
+# to the next Wednesday 12:00 UTC (docs.qubic.org: "Each epoch ... spans seven
+# days"). Measured: epoch 231's first tick is dated Wed 2026-09-16 12:10 UTC and
+# epoch 232's Wed 2026-09-23 12:17 UTC — the switch itself takes a few minutes.
+# This repo once said "~4.4 days", derived from tick counts at an assumed
+# 2.7 ticks/s; the tick rate varies, the week does not.
+EPOCH_SECONDS = 7 * SECONDS_PER_DAY
+_ANCHOR_EPOCH = 232
+_ANCHOR_START = calendar.timegm((2026, 9, 23, 12, 0, 0))
+
+
+def epoch_start(epoch: int) -> int:
+    """Unix second of the nominal start of `epoch` (Wednesday 12:00 UTC)."""
+    return _ANCHOR_START + (int(epoch) - _ANCHOR_EPOCH) * EPOCH_SECONDS
+
+
+def epoch_progress(epoch: int, now: float) -> float:
+    """0..1 through `epoch` by wall clock.
+
+    Clamped: an epoch that overruns its Wednesday while the network switches
+    reads as full rather than spilling into the next one.
+    """
+    return min(max((now - epoch_start(epoch)) / EPOCH_SECONDS, 0.0), 1.0)
+
+
 def _nearest_dated(ts_of: Callable[[int], Optional[int]], tick: int,
                    lo: int, hi: int) -> tuple[Optional[int], Optional[int]]:
     """The closest tick to `tick` within [lo, hi] that carries a timestamp.

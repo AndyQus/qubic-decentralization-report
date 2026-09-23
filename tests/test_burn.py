@@ -673,3 +673,68 @@ def test_contract_burns_are_untouched_by_the_netting():
     events = burn_events(logs)
     assert len(events) == 1
     assert events[0]["kind"] == "contract" and events[0]["contract"] == 13
+
+
+# -- the per-day rate and the running day -------------------------------------
+#
+# Production figures, 2026-09-23: the rate was projected through an assumed
+# 2.7 ticks/s over MIN..MAX of the scanned ticks, and the running day read
+# "100%, complete" because tick numbers jump at an epoch change (231 ended at
+# 81,259,537, 232 began at 81,400,000).
+
+import calendar as _cal
+
+_NOON_0923 = _cal.timegm((2026, 9, 23, 13, 30, 0))   # a Wednesday, 13:30 UTC
+
+
+def _two_whole_days_and_today(tmp_path):
+    from qdr.store import Store
+    store = Store(str(tmp_path / "q.db"))
+    # two whole, dated days, as production stores them
+    store.put_day_ticks("2026-09-21", 80_966_661, 81_084_263, complete=True)
+    store.put_day_ticks("2026-09-22", 81_084_264, 81_201_955, complete=True)
+    store.put_burn_bucket(from_tick=80_966_661, to_tick=81_084_263, epoch=231,
+                          day="2026-09-21", burned=2_000_260, burn_events=28)
+    store.put_burn_bucket(from_tick=81_084_264, to_tick=81_201_955, epoch=231,
+                          day="2026-09-22", burned=1_000_260, burn_events=27)
+    # today spans the epoch change: 199,285 tick NUMBERS in 13.5 hours
+    store.put_burn_bucket(from_tick=81_201_956, to_tick=81_401_240, epoch=232,
+                          day="2026-09-23", burned=9_002_150, burn_events=25)
+    return store
+
+
+def test_the_running_day_is_partial_even_across_a_tick_jump(tmp_path):
+    from qdr import pipeline
+    store = _two_whole_days_and_today(tmp_path)
+    today = pipeline.build_burn_series(store, by="day", now=_NOON_0923)["series"][-1]
+    assert today["key"] == "2026-09-23"
+    assert today["partial"] is True and today["in_progress"] is True
+    assert today["coverage"] == 0.5625          # 13.5 h of 24
+
+
+def test_a_past_day_keeps_its_measured_coverage(tmp_path):
+    from qdr import pipeline
+    store = _two_whole_days_and_today(tmp_path)
+    days = pipeline.build_burn_series(store, by="day", now=_NOON_0923)["series"]
+    assert [d["partial"] for d in days[:2]] == [False, False]
+    assert "in_progress" not in days[0]
+
+
+def test_the_rate_is_the_mean_of_whole_days_not_a_tick_projection(tmp_path):
+    from qdr import pipeline
+    store = _two_whole_days_and_today(tmp_path)
+    rate = pipeline._measured_rate(store, now=_NOON_0923)
+    assert rate["rate_days"] == 2
+    assert (rate["rate_from_day"], rate["rate_to_day"]) == ("2026-09-21", "2026-09-22")
+    assert rate["burned_per_day"] == 1_500_260           # (2,000,260 + 1,000,260) / 2
+    assert rate["events_per_day"] == 28                  # 55 / 2, rounded half-even
+    assert "ticks/s" not in rate["rate_basis"]
+
+
+def test_no_whole_day_means_no_rate(tmp_path):
+    from qdr.store import Store
+    from qdr import pipeline
+    store = Store(str(tmp_path / "q.db"))
+    store.put_burn_bucket(from_tick=81_201_956, to_tick=81_401_240, epoch=232,
+                          day="2026-09-23", burned=9_002_150, burn_events=25)
+    assert pipeline._measured_rate(store, now=_NOON_0923) == {}

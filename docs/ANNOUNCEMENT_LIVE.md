@@ -144,7 +144,7 @@ Replace `<link>` with https://report.qubic.tools/dashboard/ before posting.
 - Every X post was counted, not estimated (URL as 23 chars, X's own rule):
   single 280, 1/ 269, 2/ 272, 3/ 236, 4/ 276. The single post is exactly at the
   limit, so any edit to it has to remove as much as it adds.
-- Figures move at each epoch boundary (~4.4 days). If posting more than a few
+- Figures move at each epoch boundary (Wednesdays 12:00 UTC). If posting more than a few
   days after this file was written, re-read them from
   `https://report.qubic.tools/v1/dashboard-data` rather than trusting the table
   above.

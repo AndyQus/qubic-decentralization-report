@@ -50,11 +50,10 @@ DASHBOARD_DIR = ROOT / "dashboard"
 # How stale the live epoch may get before a request triggers a recompute.
 LIVE_MAX_AGE_S = int(os.environ.get("QDR_LIVE_MAX_AGE", "300"))
 
-# Measured 2026-09-07: ~2.7 ticks/s. Epoch LENGTH varies a lot though (1.08M-2.29M
-# ticks over epochs 223-229), so the pulse derives the expected length from recent
-# history; this constant is only the fallback when that lookup fails.
+# An epoch is a week (Wednesday 12:00 UTC to Wednesday 12:00 UTC, see
+# qdr.dating.epoch_start), but its tick COUNT varies a lot (1.08M-2.29M over epochs
+# 223-229). The expected tick count is context only; this constant is its fallback.
 TYPICAL_EPOCH_TICKS = int(os.environ.get("QDR_EPOCH_TICKS", "1400000"))
-TICKS_PER_SECOND = 2.7
 
 app = FastAPI(
     title="Qubic Decentralization Report API",
@@ -439,7 +438,7 @@ def worker_log(lines: int = Query(200, ge=1, le=2000)):
 
 
 # The live pulse is cached for a few seconds: many dashboards may poll it, but
-# the upstream only moves ~2.7 ticks/s, so re-fetching per request is pointless.
+# the upstream only moves ~1.6 ticks/s, so re-fetching per request is pointless.
 _pulse_cache: dict = {"at": 0.0, "data": None}
 PULSE_TTL_S = float(os.environ.get("QDR_PULSE_TTL", "10"))
 
@@ -450,10 +449,10 @@ def pulse():
 
     Deliberately separate from the report: ticks advance continuously, but the
     computor list, revenue and clustering only change at an epoch boundary
-    (~4.4 days). Poll this often; poll `/v1/report/latest` slowly.
+    (weekly, Wednesday 12:00 UTC). Poll this often; poll `/v1/report/latest` slowly.
 
-    `epoch_progress` is 0..1 through the current epoch, derived from the observed
-    epoch length, so a UI can show the epoch filling up.
+    `epoch_progress` is 0..1 through the current epoch by wall clock — an epoch is
+    a week, not a tick count — and `epoch_ends_at` is the nominal end (unix s).
     """
     import time as _t
     now = _t.time()
@@ -473,10 +472,9 @@ def pulse():
             return stale
         raise HTTPException(status_code=503, detail=f"pulse unavailable: {e}")
 
-    span = data["tick"] - data["initial_tick"]
-    expected = data.get("expected_epoch_ticks") or TYPICAL_EPOCH_TICKS
-    data["epoch_progress"] = round(min(max(span / expected, 0.0), 1.0), 4)
-    data["ticks_per_second"] = TICKS_PER_SECOND
+    from qdr import dating
+    data["epoch_progress"] = round(dating.epoch_progress(data["epoch"], now), 4)
+    data["epoch_ends_at"] = dating.epoch_start(data["epoch"] + 1)
     data["served_at"] = int(now)
     _pulse_cache.update(at=now, data=data)
     return data
@@ -518,9 +516,15 @@ def mining():
             return stale
         raise HTTPException(status_code=503, detail=f"mining state unavailable: {e}")
 
-    # Epoch length varies a lot between epochs, so the progress bar needs the observed
-    # expectation rather than a constant. This comes from the RPC, not the node, and a
-    # missing value only costs the bar its denominator.
+    # The progress bar runs on the wall clock: an epoch is a week (Wednesday 12:00
+    # UTC to Wednesday 12:00 UTC), while its tick count varies a lot. The expected
+    # tick count stays in the payload as context only; it comes from the RPC, not
+    # the node, and a missing value costs nothing but that context.
+    ep_no = (data.get("epoch") or {}).get("epoch")
+    if data.get("status") == "live" and ep_no:
+        from qdr import dating
+        data["epoch"]["progress"] = round(dating.epoch_progress(int(ep_no), now), 4)
+        data["epoch"]["ends_at"] = dating.epoch_start(int(ep_no) + 1)
     if data.get("status") == "live":
         expected = TYPICAL_EPOCH_TICKS
         client = get_client()
@@ -1156,7 +1160,7 @@ def price_epochs(
 ):
     """The question only this project can ask.
 
-    Every ~4.4 days the protocol pays 676 computors at once — measured from our
+    Once a week, when the epoch turns (Wednesday 12:00 UTC), the protocol pays 676 computors at once — measured from our
     own sealed reports, ~180 billion QU per epoch since the epoch-227 halving.
     Those payouts are protocol emission: they are **not transfers**, and the
     public RPC does not carry them at all. Deriving them from a Bob node's

@@ -42,7 +42,7 @@ def start_mining_sampler(store: Store, interval: int) -> threading.Thread:
 
     It runs beside the main watch loop rather than inside it because the two
     have nothing in common but the store: the report only changes at an epoch
-    boundary (~4.4 days, hence a 300s loop), while mining state is a live
+    boundary (weekly, hence a 300s loop), while mining state is a live
     reading that is gone if not taken. Sharing one interval would force either
     a useless flood of report recomputes or a mining curve with 5-minute gaps.
 
@@ -63,7 +63,7 @@ def start_mining_sampler(store: Store, interval: int) -> threading.Thread:
             except Exception as e:      # never let a sampling error kill the thread
                 print(f"[mining] sample failed: {e}", file=sys.stderr)
             try:
-                # Hourly is far more often than an epoch boundary (~4.4 days);
+                # Hourly is far more often than an epoch boundary (weekly);
                 # the point is only that no single prune ever has much to do.
                 if time.time() - last_prune > 3600:
                     dropped = store.prune_mining()
@@ -86,7 +86,7 @@ def start_price_sampler(client, store: Store, interval: int) -> threading.Thread
     """Sample the market on its own timer, in the background.
 
     Its own thread for the same reason mining has one: the cadences have nothing
-    in common. The report changes at an epoch boundary (~4.4 days), the price
+    in common. The report changes at an epoch boundary (weekly), the price
     moves in minutes. Sharing one interval would mean either recomputing the
     report 1440 times a day or drawing the price at 5-minute resolution.
 

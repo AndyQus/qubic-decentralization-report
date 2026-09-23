@@ -179,9 +179,9 @@ class CachedClient:
         """Cheap, always-fresh view of the running epoch.
 
         Two things move on very different timescales (measured 2026-09-07):
-        the tick advances ~2.7/s and epoch quality drifts continuously, while the
+        the tick advances ~1.6/s and epoch quality drifts continuously, while the
         computor list, revenue and clustering only change at an epoch boundary —
-        roughly every 4.4 days. So the live view polls this, and the analysis
+        once a week, Wednesday 12:00 UTC. So the live view polls this, and the analysis
         pipeline stays on its slow cadence instead of recomputing 676 operators
         every minute for data that has not moved.
         """

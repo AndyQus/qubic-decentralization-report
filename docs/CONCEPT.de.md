@@ -383,10 +383,11 @@ leerer Datenbank.
 
 ## 5.1.1 Zwei Takte: was live ist und was nicht
 
-Am Live-Netz gemessen: Der Tick läuft mit **~2,7/s**, während sich Computor-Liste, Revenue
-und Clustering **einmal pro Epoche** ändern — etwa alle 4,4 Tage (die Epochenlänge selbst
-schwankt, 1,08–2,29 Mio. Ticks). Die Analyse minütlich abzufragen würde RPC-Budget verbrennen,
-um vier Tage lang dieselbe Antwort zu erzeugen.
+Am Live-Netz gemessen: Der Tick läuft mit **~1,6/s**, während sich Computor-Liste, Revenue
+und Clustering **einmal pro Epoche** ändern — einmal pro Woche, von Mittwoch 12:00 UTC bis
+Mittwoch 12:00 UTC (die Tickzahl je Epoche schwankt, 1,08–2,29 Mio. Ticks; die Woche nicht).
+Die Analyse minütlich abzufragen würde RPC-Budget verbrennen, um eine Woche lang dieselbe
+Antwort zu erzeugen.
 
 Der Dienst läuft deshalb in zwei Takten:
 

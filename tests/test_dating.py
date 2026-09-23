@@ -109,3 +109,36 @@ def test_single_day_range_is_one_bucket():
     ranges = dating.day_boundaries(ts_of, lo, hi)
     assert len(ranges) == 1
     assert ranges[0]["from_tick"] == lo and ranges[0]["to_tick"] == hi
+
+
+# -- the epoch clock ----------------------------------------------------------
+#
+# An epoch is a week, Wednesday 12:00 UTC to Wednesday 12:00 UTC. The repo once
+# called it "~4.4 days", reasoned from tick counts at an assumed tick rate.
+
+def _utc(*t):
+    import calendar
+    return calendar.timegm(t + (0,) * (6 - len(t)))
+
+
+def test_epoch_starts_on_wednesday_noon_utc():
+    import time as _time
+    for e in (220, 231, 232, 240):
+        tm = _time.gmtime(dating.epoch_start(e))
+        assert (tm.tm_wday, tm.tm_hour, tm.tm_min) == (2, 12, 0)
+
+
+def test_epoch_start_matches_measured_first_ticks():
+    # first ticks measured on the live network: 231 at 12:10, 232 at 12:17 UTC
+    assert dating.epoch_start(231) == _utc(2026, 9, 16, 12)
+    assert dating.epoch_start(232) == _utc(2026, 9, 23, 12)
+    assert dating.epoch_start(233) - dating.epoch_start(232) == 7 * 86400
+
+
+def test_epoch_progress_runs_on_the_clock_and_clamps():
+    start = dating.epoch_start(232)
+    assert dating.epoch_progress(232, start) == 0.0
+    assert dating.epoch_progress(232, start + 3.5 * 86400) == 0.5
+    # the switch takes minutes: an overrunning epoch reads full, not past it
+    assert dating.epoch_progress(231, start + 600) == 1.0
+    assert dating.epoch_progress(232, start - 600) == 0.0

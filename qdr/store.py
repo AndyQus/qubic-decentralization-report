@@ -240,7 +240,7 @@ CREATE TABLE IF NOT EXISTS mining_samples (
 CREATE INDEX IF NOT EXISTS ix_mining_epoch ON mining_samples(epoch, at);
 
 -- One row per epoch, summarising what the samples showed. Samples are pruned to
--- a rolling window; this is not, and it is tiny (~100 bytes per 4.4 days), so
+-- a rolling window; this is not, and it is tiny (~100 bytes per week), so
 -- long-run history survives without keeping the detail that produced it. Same
 -- split as burn_buckets (detail, windowed) vs burn_totals (anchor, permanent).
 CREATE TABLE IF NOT EXISTS mining_epochs (

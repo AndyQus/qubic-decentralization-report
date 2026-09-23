@@ -40,10 +40,10 @@ asked for the log of ticks 80,820,000–80,820,500 in the same period, reported 
 transfers of exactly 1,000,000 QU each** — 913,000,000 QU burned in 500 ticks.
 
 So burning is happening continuously; `latest-stats.burnedQus` just doesn't report it
-continuously. It is an **epoch-boundary aggregate**. An epoch lasts ~4.4 days.
+continuously. It is an **epoch-boundary aggregate**. An epoch lasts one week (Wednesday 12:00 UTC to Wednesday 12:00 UTC).
 
 **The consequence for this feature.** Polling `burnedQus` every hour and storing it "by
-day" would produce a table of identical numbers for four days, then one jump. Drawing that
+day" would produce a table of identical numbers for a week, then one jump. Drawing that
 as a daily chart and labelling the flat stretch "0 QU burned today" would be false — it
 burned ~426 billion QU that day, the counter simply had not published yet. Interpolating
 the jump backwards across the days would be worse: an invented curve presented as
@@ -212,7 +212,7 @@ So the series has two clearly separated regimes, and the API labels every point:
 
 | Regime | Source | Resolution | Label |
 |---|---|---|---|
-| Before first scan | `burnedQus` deltas at epoch boundaries | per epoch (~4.4 d) | `measured: false` |
+| Before first scan | `burnedQus` deltas at epoch boundaries | per epoch (weekly) | `measured: false` |
 | From first scan on | Bob events, aggregated | per day / per hour | `measured: true` |
 
 The chart draws the older regime as epoch-wide steps and the newer as a daily curve, and

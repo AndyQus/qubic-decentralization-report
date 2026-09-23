@@ -979,7 +979,7 @@ html { scroll-behavior: smooth; }
       growth: "Growth:", perMin: "/ min", thresholdWord: "Threshold:",
       thresholdHint: "max. errors of {graded} (\u225C {pct} % hits)",
       epochProgress: "Epoch progress", epochWord: "Epoch",
-      ofTicks: "of {n} ticks", tickWord: "Tick",
+      endsAt: "ends {d}, 12:00 UTC", tickWord: "Tick",
       noNode: "No node reachable",
       unavailDefault: "Data will be fetched again automatically.",
       unavailFile: "This page was opened as a file (file://) and has no API. Start the server and open it through that: python -m uvicorn api.server:app --port 8000 \u2192 http://127.0.0.1:8000/dashboard/mining.html",
@@ -1040,7 +1040,7 @@ html { scroll-behavior: smooth; }
       growth: "Zuwachs:", perMin: "/ Min.", thresholdWord: "Schwelle:",
       thresholdHint: "max. Fehler von {graded} (\u225C {pct} % Treffer)",
       epochProgress: "Epochenfortschritt", epochWord: "Epoche",
-      ofTicks: "von {n} Ticks", tickWord: "Tick",
+      endsAt: "endet {d}, 12:00 UTC", tickWord: "Tick",
       noNode: "Kein Node erreichbar",
       unavailDefault: "Daten werden automatisch erneut abgerufen.",
       unavailFile: "Diese Seite wurde als Datei ge\u00F6ffnet (file://) und hat keine API. Starte den Server und \u00F6ffne sie dar\u00FCber: python -m uvicorn api.server:app --port 8000 \u2192 http://127.0.0.1:8000/dashboard/mining.html",
@@ -1302,7 +1302,7 @@ html { scroll-behavior: smooth; }
     document.getElementById("hero-threshold-pct").textContent = "";
     document.getElementById("hero-epoch-badge").textContent = t("epochWord") + " \u2013";
     document.getElementById("ep-ticks").textContent = "–";
-    document.getElementById("ep-of").textContent = t("ofTicks", { n: "\u2013" });
+    document.getElementById("ep-of").textContent = t("endsAt", { d: "\u2013" });
     document.getElementById("ep-fill").style.width = "0%";
     document.getElementById("ep-pct").textContent = "–";
     document.getElementById("ep-tick-abs").textContent = t("tickWord") + " \u2013";
@@ -1361,11 +1361,12 @@ html { scroll-behavior: smooth; }
       document.getElementById("hero-epoch-badge").textContent = t("epochWord") + " " + ep.epoch;
     }
 
-    /* Epochenfortschritt */
-    if (ep && ep.ticks_into_epoch != null && ep.expected_ticks) {
-      const pct = Math.min(100, ep.ticks_into_epoch / ep.expected_ticks * 100);
+    /* Epochenfortschritt — nach der Uhr, nicht nach Ticks: eine Epoche läuft
+       von Mittwoch 12:00 UTC bis Mittwoch 12:00 UTC, ihre Tickzahl schwankt. */
+    if (ep && ep.ticks_into_epoch != null && ep.progress != null) {
+      const pct = Math.min(100, ep.progress * 100);
       document.getElementById("ep-ticks").textContent = fmtInt(ep.ticks_into_epoch);
-      document.getElementById("ep-of").textContent = t("ofTicks", { n: fmtInt(ep.expected_ticks) });
+      document.getElementById("ep-of").textContent = t("endsAt", { d: epochEndDay(ep.ends_at) });
       document.getElementById("ep-fill").style.width = pct.toFixed(2) + "%";
       document.getElementById("ep-pct").textContent = pct.toFixed(1) + "%";
       document.getElementById("ep-tick-abs").textContent = t("tickWord") + " " + fmtInt(ep.tick);
@@ -1641,8 +1642,17 @@ html { scroll-behavior: smooth; }
     return n;
   }
 
-  /* Uhrzeit statt Datum: die Reihe deckt eine Epoche ab (~4,4 Tage), und auf
-     der x-Achse interessiert der Tagesverlauf, nicht das Kalenderdatum. */
+  /* Epochenende als UTC-Tag: die Grenze ist Mittwoch 12:00 UTC, in Ortszeit
+     wäre das je nach Zone eine andere Uhrzeit. */
+  function epochEndDay(ts) {
+    const d = new Date(ts * 1000);
+    const p = n => String(n).padStart(2, "0");
+    const wd = new Intl.DateTimeFormat(lang === "de" ? "de-DE" : "en-GB",
+      { weekday: "short", timeZone: "UTC" }).format(d);
+    return wd + " " + p(d.getUTCDate()) + "." + p(d.getUTCMonth() + 1) + ".";
+  }
+
+  /* Uhrzeit für Reihen unter einem Tag; darüber histStamp mit Datum. */
   function histClock(ts) {
     const d = new Date(ts * 1000);
     const p = n => String(n).padStart(2, "0");
@@ -1733,15 +1743,18 @@ html { scroll-behavior: smooth; }
       class: "hist-dot", cx: last[0].toFixed(1), cy: last[1].toFixed(1), r: 3.5
     }));
 
-    /* x-Achse: so viele Marken, wie ohne Überlappung sicher passen. */
-    const labels = Math.max(2, Math.min(8, Math.floor(plotW / 92)));
+    /* x-Achse: so viele Marken, wie ohne Überlappung sicher passen. Die Reihe
+       deckt bis zu eine Epoche ab, also bis zu eine Woche; ab einem Tag Spanne
+       wäre eine reine Uhrzeit mehrdeutig, dann trägt jede Marke das Datum. */
+    const multiDay = tMax - tMin > 86400;
+    const labels = Math.max(2, Math.min(8, Math.floor(plotW / (multiDay ? 104 : 92))));
     for (let i = 0; i <= labels; i++) {
       const ts = tMin + (tMax - tMin) * i / labels;
       svg.appendChild(svgEl("text", {
         x: x(ts).toFixed(1), y: H - padB + 18,
         "text-anchor": i === 0 ? "start" : (i === labels ? "end" : "middle"),
         "font-size": "11"
-      }, histClock(ts)));
+      }, multiDay ? histStamp(ts) : histClock(ts)));
     }
 
     /* Hover: eine Trefferfläche über die volle Plotbreite, der nächste Punkt

@@ -390,7 +390,7 @@ docker image prune -f              # remove the superseded image
 | `QDR_PULSE_TTL` | Seconds the live pulse is cached | `10` |
 | `QDR_MINING_TTL` | Seconds a live mining reading is cached before a node is queried again | `30` |
 | `QDR_MINING_SAMPLE_INTERVAL` | Seconds between mining samples written to the store by the ingest worker | `30` |
-| `QDR_BURN_BACKFILL_DAYS` | Days of burn history to count on start, from before the worker existed (see below) | `4` (one epoch; `0` disables) |
+| `QDR_BURN_BACKFILL_DAYS` | Days of burn history to count on start, from before the worker existed (see below) | `7` (one epoch; `0` disables) |
 | `QDR_BURN_BACKFILL_CALLS` | Call budget for that backfill | `days x 300 + 100` (~270 calls buy one day) |
 | `QDR_BURN_BACKFILL_INTERVAL` | Seconds between re-checks for a finished day that is still half-measured (an idle check costs no network call) | `3600` |
 
@@ -409,7 +409,7 @@ from a tick rate. The worker therefore keeps the last **4 days** (one epoch)
 filled, and `QDR_BURN_BACKFILL_DAYS` changes or disables that:
 
 ```bash
-docker run -e QDR_BURN_BACKFILL_DAYS=7 ...        # more history
+docker run -e QDR_BURN_BACKFILL_DAYS=14 ...       # more history
 docker run -e QDR_BURN_BACKFILL_DAYS=0 ...        # off
 python scripts/ingest.py --burn-backfill --burn-backfill-days 4   # locally
 ```
@@ -474,7 +474,7 @@ see. Two consequences worth knowing:
   0.8 MB per epoch). Two and not one, because `solution_count` resets to zero at
   an epoch boundary — a one-epoch window would delete the previous peak at exactly
   the moment the drop appears.
-* **`mining_epochs` keeps one row per epoch forever** (~100 bytes per 4.4 days):
+* **`mining_epochs` keeps one row per epoch forever** (~100 bytes per week):
   final count, peak, mean threshold. Pruning costs resolution, never history.
   Same split as `burn_buckets` (detail, windowed) and `burn_totals` (anchor,
   permanent).
@@ -577,8 +577,8 @@ report states `linkage_coverage: 0` rather than implying independence, and the d
 warns that the Nakamoto figure is an **upper bound** on decentralization. Pool self-reports
 are what would sharpen it.
 
-**Update cadence, measured:** the tick advances ~2.7/s while the analysis changes once per
-epoch (~4.4 days, though epoch length varies 1.08M–2.29M ticks). Hence two clocks —
+**Update cadence, measured:** the tick advances ~1.6/s (it varies by day) while the analysis changes once per
+epoch (weekly, Wednesday 12:00 UTC; the tick count per epoch varies 1.08M–2.29M). Hence two clocks —
 `/v1/pulse` for the live view (poll every 15 s) and the report only when the epoch turns.
 
 Remaining for production: filling the self-reporting registry with real pool declarations

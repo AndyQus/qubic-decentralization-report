@@ -325,14 +325,14 @@ never a guessed one. Override with `QDR_CONTRACTS_URL`.
 
 | Quantity | Rate | Poll |
 |---|---|---|
-| Tick / tick quality | ~2.7 ticks/s (160/min) | 15-60 s |
+| Tick / tick quality | ~1.4-1.8 ticks/s, varies by day (epoch 231: 1.03M ticks in 7 days) | 15-60 s |
 | Computor list, revenue, clustering | once per epoch | on epoch change |
 | Ant-colony mining state (peer port 21841) | continuous; ~146 solutions/min measured 2026-09-20 | 30 s, **and stored** |
 
-Epoch **length varies a lot** — 1.08M to 2.29M ticks across epochs 223-229 (~4.4 days at the
-measured rate), so anything showing "progress through the epoch" must derive the expected
-length from recent history (`/v1/status` → `lastProcessedTicksPerEpoch`) rather than assume a
-constant.
+Epoch **length varies a lot** — 1.08M to 2.29M ticks across epochs 223-229 — while its duration
+does not: an epoch runs from Wednesday 12:00 UTC to the next Wednesday 12:00 UTC (measured:
+epoch 231's first tick 2026-09-16 12:10 UTC, epoch 232's 2026-09-23 12:17 UTC). So "progress
+through the epoch" is measured on the wall clock (`qdr.dating.epoch_progress`), not in ticks.
 
 This is why the service has two clocks: `/v1/pulse` (cheap, cached ~10 s, safe to poll every
 15 s) carries what actually moves, while the report is only recomputed when the epoch turns.
@@ -346,4 +346,4 @@ matching the API's own cache TTL so no fetched reading is discarded) into `minin
 windowed to the last two epochs, with a permanent one-row-per-epoch summary in `mining_epochs`.
 Measured cost: 0.8 MB per epoch of raw samples, ~100 bytes per epoch of summary.
 Re-running a 676-operator analysis every minute would burn RPC budget to produce an identical
-answer for four days.
+answer for a week.

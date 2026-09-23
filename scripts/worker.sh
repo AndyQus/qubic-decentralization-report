@@ -6,7 +6,7 @@
 # runs as its own service and owns three jobs.
 #
 #   1. Backfill on start. A fresh deployment has an empty store, and an epoch
-#      lasts ~4.4 days — without this, a new instance would sit on "building"
+#      lasts a week — without this, a new instance would sit on "building"
 #      until the next epoch boundary. Bob's end-epoch logs reach back far
 #      enough to seal real history within minutes of first start.
 #   1b. Re-derive stale epochs on start. A sealed epoch is normally immutable,
@@ -116,9 +116,12 @@ python scripts/ingest.py --burn-scan ||   echo "[worker] burn scan incomplete; t
 # every restart after it skips the window rather than re-scanning it. Operators
 # who do control their environment can still set QDR_BURN_BACKFILL_DAYS=0.
 #
-# Four days is one Qubic epoch (~4.4 days), which is the span the page's own
-# reconciliation is measured over — less would leave the epoch view short.
-BURN_BACKFILL_DAYS="${QDR_BURN_BACKFILL_DAYS:-4}"
+# Seven days is one Qubic epoch (Wednesday 12:00 UTC to Wednesday 12:00 UTC),
+# which is the span the page's own reconciliation is measured over — less would
+# leave the epoch view short. This was 4, from the wrong belief that an epoch
+# lasts ~4.4 days. Measured 2026-09-23: Bob still serves tick logs of the two
+# previous epochs (230, 231), so a 7-day window can always be filled.
+BURN_BACKFILL_DAYS="${QDR_BURN_BACKFILL_DAYS:-7}"
 if [ "$BURN_BACKFILL_DAYS" -gt 0 ] 2>/dev/null; then
   # Budget scales with the ask. A day of chain is ~134,000 ticks at the measured
   # 1.55 ticks/s, and a call covers 500 — so ~270 calls per day, plus headroom.

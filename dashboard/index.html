@@ -1123,9 +1123,9 @@
 
   /* ---------- live epoch ----------
      Two clocks, because the underlying data moves at two very different speeds
-     (measured against the live network): the tick advances ~2.7/s, while the
+     (measured against the live network): the tick advances ~1.6/s, while the
      computor list, revenue and clustering only change at an epoch boundary —
-     every ~4.4 days. So the pulse is polled every 15 s and the report is left
+     once a week (Wednesday 12:00 UTC). So the pulse is polled every 15 s and the report is left
      alone; re-running a 676-operator analysis every minute would be pure waste.
      Polling pauses entirely while the tab is hidden. */
   const PULSE_MS = 15000;

@@ -409,7 +409,7 @@ table.data td:first-child { font-family: var(--sans); }
       <div class="qs-stat glass-card themed">
         <div class="s-label" data-i18n="rateLabel">Burn rate</div>
         <div class="s-val small" id="f-rate">–</div>
-        <div class="s-sub" data-i18n="rateSub">projected from scanned ticks</div>
+        <div class="s-sub" data-i18n="rateSub">average of the last whole days</div>
       </div>
       <div class="qs-stat glass-card">
         <div class="s-label" data-i18n="coverageLabel">Coverage</div>
@@ -427,7 +427,7 @@ table.data td:first-child { font-family: var(--sans); }
   <!-- Ehrlichkeitshinweis: steht ÜBER dem Diagramm, nicht im Kleingedruckten. -->
   <div class="notice qs-panel--translucent" id="honesty-note">
     <strong data-i18n="noteTitle">What is measured here:</strong>
-    <span data-i18n="noteBody">The total above is the official counter, the same figure the explorer shows. It only steps once per epoch (~4.4 days), so every per-day figure below was counted by this project from a Qubic node's own burn events — starting when we began measuring. Nothing before that is interpolated.</span>
+    <span data-i18n="noteBody">The total above is the official counter, the same figure the explorer shows. It only steps once per epoch (weekly, Wednesday 12:00 UTC), so every per-day figure below was counted by this project from a Qubic node's own burn events — starting when we began measuring. Nothing before that is interpolated.</span>
   </div>
 
   <!-- 2 — CHART ------------------------------------------------------------ -->
@@ -579,9 +579,9 @@ table.data td:first-child { font-family: var(--sans); }
       furnaceIdle: "No burn events measured yet — nothing is falling because nothing was counted.",
       furnaceLive: "Each spark is one measured burn event — about {rate}/s at the rate last counted.",
       furnaceReduced: "Animation off (reduced motion). The measured figures above are unaffected.",
-      rateLabel: "Burn rate", rateSub: "projected from scanned ticks",
+      rateLabel: "Burn rate", rateSub: "average of the last whole days",
       noteTitle: "What is measured here:",
-      noteBody: "The total above is the official counter, the same figure the explorer shows. It only steps once per epoch (~4.4 days), so every per-day figure below was counted by this project from a Qubic node's own burn events — starting when we began measuring. Nothing before that is interpolated.",
+      noteBody: "The total above is the official counter, the same figure the explorer shows. It only steps once per epoch (weekly, Wednesday 12:00 UTC), so every per-day figure below was counted by this project from a Qubic node's own burn events — starting when we began measuring. Nothing before that is interpolated.",
       chartTitle: "Burned over time",
       chartDesc: "Counted from individual burn events. Each bar is one period; the line is the running total across the measured range.",
       byDay: "Day", byEpoch: "Epoch", byYear: "Year",
@@ -642,9 +642,9 @@ table.data td:first-child { font-family: var(--sans); }
       furnaceIdle: "Noch keine Burn-Ereignisse gemessen — es fällt nichts, weil nichts gezählt wurde.",
       furnaceLive: "Jeder Funke ist ein gemessenes Burn-Ereignis — etwa {rate}/s bei der zuletzt gezählten Rate.",
       furnaceReduced: "Animation aus (reduzierte Bewegung). Die gemessenen Zahlen oben sind davon unberührt.",
-      rateLabel: "Burn-Rate", rateSub: "aus gescannten Ticks hochgerechnet",
+      rateLabel: "Burn-Rate", rateSub: "Mittel der letzten ganzen Tage",
       noteTitle: "Was hier gemessen ist:",
-      noteBody: "Die Gesamtsumme oben ist der offizielle Zähler — dieselbe Zahl, die der Explorer zeigt. Er springt nur einmal pro Epoche (~4,4 Tage). Jeder Tageswert darunter wurde von diesem Projekt aus den Burn-Ereignissen eines Qubic-Nodes selbst gezählt, beginnend mit dem Start unserer Messung. Nichts davor ist interpoliert.",
+      noteBody: "Die Gesamtsumme oben ist der offizielle Zähler — dieselbe Zahl, die der Explorer zeigt. Er springt nur einmal pro Epoche (wöchentlich, mittwochs 12:00 UTC). Jeder Tageswert darunter wurde von diesem Projekt aus den Burn-Ereignissen eines Qubic-Nodes selbst gezählt, beginnend mit dem Start unserer Messung. Nichts davor ist interpoliert.",
       chartTitle: "Verbrannt im Zeitverlauf",
       chartDesc: "Aus einzelnen Burn-Ereignissen gezählt. Jeder Balken ist eine Periode; die Linie ist die laufende Summe über den gemessenen Bereich.",
       byDay: "Tag", byEpoch: "Epoche", byYear: "Jahr",
@@ -1272,9 +1272,8 @@ table.data td:first-child { font-family: var(--sans); }
       document.getElementById(id).classList.toggle("unsure", unsure);
     }
 
-    /* Die Rate stammt aus den tatsächlich gescannten Ticks, nicht aus einem
-       angebrochenen Kalendertag — sonst läge sie den ganzen Tag zu niedrig und
-       wäre erst um Mitternacht richtig. */
+    /* Die Rate ist das Mittel ganzer, vollständig gescannter UTC-Tage, nie der
+       angebrochene Tag — der läge den ganzen Tag zu niedrig. */
     document.getElementById("f-rate").textContent =
       m.burned_per_day ? mark(fmtCompact(m.burned_per_day) + " " + t("perDay")) : "–";
     document.getElementById("f-today").textContent =

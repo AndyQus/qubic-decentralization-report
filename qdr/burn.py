@@ -7,8 +7,8 @@ counter **does not move between epoch boundaries**: six samples over 375 ticks
 reported 913 burn transfers of exactly 1,000,000 QU each over 500 ticks in the
 same window.
 
-So the RPC figure is an epoch aggregate (~4.4 days per step). Storing it hourly
-would yield four flat days and one jump; calling the flat stretch "0 QU burned
+So the RPC figure is an epoch aggregate (one step per week). Storing it hourly
+would yield a flat week and one jump; calling the flat stretch "0 QU burned
 today" would be false, and interpolating the jump backwards would be an invented
 curve presented as measurement. This module therefore *counts the events* from a
 Bob node's tick logs, and the RPC total becomes the epoch-boundary anchor those
