@@ -1683,6 +1683,14 @@ body[data-chart-style="flow"] .leg-swatch.price {
       minimumFractionDigits: digits, maximumFractionDigits: digits
     });
   }
+  /* Die Null in der Breite des Zielwerts — fmtPrice() gibt für 0 einen
+     Gedankenstrich zurück ("kein Kurs"), und genau das darf der Aufschlag
+     nicht zeigen: dort ist die 0 der Anfang einer Zahl, nicht ihr Fehlen. */
+  function fmtZeroPrice(digits) {
+    return (0).toLocaleString(locale(), {
+      minimumFractionDigits: digits, maximumFractionDigits: digits
+    });
+  }
   function fmtInt(x) {
     if (x == null || !isFinite(x)) return "–";
     return Math.round(x).toLocaleString(locale());
@@ -1810,6 +1818,10 @@ body[data-chart-style="flow"] .leg-swatch.price {
      diesen einen Betrachter, nicht über die Daten. */
   const WELCOME_MAX_AGE_S = 7 * 24 * 3600;
   const WELCOME_MS = 1400;
+  /* Der Aufschlag läuft länger als ein Kurswechsel (520 ms) und kürzer als der
+     Blick zurück: er baut zehn Nachkommastellen aus dem Nichts auf, und das
+     braucht Zeit, um als Ziffernfolge lesbar zu sein statt als Zucken. */
+  const OPENING_MS = 1100;
   let welcomeDone = false;    // nur einmal je Seitenaufruf
   let welcomeDraw = false;    // das nächste Zeichnen baut die Kurve auf
 
@@ -3118,26 +3130,43 @@ body[data-chart-style="flow"] .leg-swatch.price {
   function animatePriceTo(el, fromVal, toVal, durationMs) {
     if (!el) return;
     if (priceAnimFrame) cancelAnimationFrame(priceAnimFrame);
-    if (REDUCED || fromVal == null || !isFinite(fromVal) || fromVal <= 0
+    /* Die Null ist der eine Startwert, der NICHT geometrisch zu erreichen ist:
+       log(0) ist -Infinity, und zwischen 0 und dem Kurs liegt kein Verhältnis,
+       über das sich interpolieren ließe. Der Lauf vom Aufschlag läuft deshalb
+       linear — und das ist hier auch das Richtige: er zeigt keine Bewegung des
+       Kurses, sondern baut die Zahl einmal auf. */
+    const fromZero = fromVal === 0;
+    if (REDUCED || fromVal == null || !isFinite(fromVal) || fromVal < 0
         || toVal == null || !isFinite(toVal) || toVal <= 0 || fromVal === toVal) {
       el.textContent = fmtPrice(toVal);
       return;
     }
     const start = performance.now();
-    const logFrom = Math.log(fromVal), logTo = Math.log(toVal);
+    const logFrom = fromZero ? 0 : Math.log(fromVal), logTo = Math.log(toVal);
     /* Die Breite steht vor dem ersten Bild fest: die des Zielwerts, und wenn
        der Startwert mehr Stellen trägt, dessen — so wird die Zahl während des
        Laufs nie breiter, als sie an einem der beiden Enden ist. */
-    const width = Math.max(priceDigits(fromVal), priceDigits(toVal));
+    const width = fromZero
+      ? priceDigits(toVal)
+      : Math.max(priceDigits(fromVal), priceDigits(toVal));
     function step(now) {
       const p = Math.min(1, (now - start) / durationMs);
       const ease = 1 - Math.pow(1 - p, 3);   /* cubic ease-out, wie in mining.html */
       /* Am Ende exakt der Zielwert, nicht exp(log(x)) — das ließe die letzte
          Ziffer gelegentlich um eins danebenstehen. Und am Ende in der eigenen
          Breite: die Zahl steht danach still, da darf sie wieder sie selbst sein. */
-      el.textContent = p >= 1
-        ? fmtPrice(toVal)
-        : fmtPrice(Math.exp(logFrom + (logTo - logFrom) * ease), width);
+      if (p >= 1) {
+        el.textContent = fmtPrice(toVal);
+      } else if (fromZero) {
+        /* Immer in der Zielbreite: ohne sie gäbe fmtPrice() für die ersten
+           Bilder "–" zurück (der Wert liegt unter der ersten signifikanten
+           Stelle), und der Lauf begänne mit einem Gedankenstrich. Die 0 selbst
+           wird deshalb hier geschrieben, nicht von fmtPrice geholt. */
+        const v = toVal * ease;
+        el.textContent = v <= 0 ? fmtZeroPrice(width) : fmtPrice(v, width);
+      } else {
+        el.textContent = fmtPrice(Math.exp(logFrom + (logTo - logFrom) * ease), width);
+      }
       if (p < 1) priceAnimFrame = requestAnimationFrame(step);
       else priceAnimFrame = null;
     }
@@ -3500,17 +3529,30 @@ body[data-chart-style="flow"] .leg-swatch.price {
          gespeicherten Kurs vom letzten Besuch. Dann startet die Zahl dort statt
          beim aktuellen Wert. Danach übernimmt wieder die normale Regel, die nur
          auf echte Bewegungen reagiert. */
-      const welcome = (!welcomeDone && prevPrice === null) ? welcomeFrom() : null;
+      const firstLoad = !welcomeDone && prevPrice === null;
+      const welcome = firstLoad ? welcomeFrom() : null;
       welcomeDone = true;
       if (welcome != null) {
         from = welcome;
         dir = latest.price > welcome ? "up" : (latest.price < welcome ? "down" : null);
+      } else if (firstLoad) {
+        /* Der Aufschlag: die Zahl wird einmal aufgebaut, statt fertig
+           dazustehen. Sie läuft von 0 hoch — das zeigt keine Kursbewegung
+           (es gab keine), sondern gibt dem Leser die Ziffernfolge, um die es
+           auf dieser Seite geht, als Bewegung statt als Block.
+
+           Nur hier, und nur wenn der Blick zurück nicht greift: der würde von
+           einem echten früheren Kurs aus zählen und sagt in Worten dazu, von
+           wo — ein Lauf von 0 machte diesen Satz falsch. Spätere Abrufe laufen
+           weiter vom vorigen Kurs, denn dort MEINT die Bewegung etwas. */
+        from = 0;
       }
 
       prevPrice = latest.price;
       lastFetchTs = latest.at != null ? latest.at : Math.round(Date.now() / 1000);
 
-      renderHero(from, welcome != null ? WELCOME_MS : undefined);
+      renderHero(from, welcome != null ? WELCOME_MS
+                       : (from === 0 ? OPENING_MS : undefined));
       if (welcome != null) {
         showWelcomeNote(welcome, latest.price);
         if (dir) markDirection(dir);
