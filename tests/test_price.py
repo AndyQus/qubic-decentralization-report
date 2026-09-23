@@ -43,6 +43,7 @@ def _client(store_path: Path) -> TestClient:
     server._price_cache.update(at=0.0, data=None)
     server._price_series_cache.clear()
     server._price_avg_cache.clear()
+    server._price_days_cache.clear()
     return TestClient(server.app)
 
 
@@ -145,6 +146,17 @@ def test_latest_says_when_a_new_reading_can_exist():
     """
     path, _ = _store_with_prices()
     c = _client(path)
+
+    # Start the pair of calls just after a minute boundary. The countdown
+    # targets the NEXT boundary, so a first call landing in the last second of
+    # a minute would see the second call roll over to a fresh ~65 and fail an
+    # assertion about counting down -- a real property tested at the one moment
+    # it legitimately does not hold. Waiting costs a fraction of a second and
+    # removes the flake rather than papering over it with a retry.
+    interval = pipeline.PRICE_SAMPLE_INTERVAL_S
+    into_minute = time.time() % interval
+    if into_minute > interval - 3:
+        time.sleep(interval - into_minute + 0.2)
 
     body = c.get("/v1/price/latest").json()
     nxt = body["next_refresh_in"]
@@ -576,3 +588,90 @@ def test_price_now_on_an_empty_store_answers_503():
     d = Path(tempfile.mkdtemp(prefix="qdr_price_"))
     Store(d / "qdr.db").close()
     assert _client(d / "qdr.db").get("/v1/price/now").status_code == 503
+
+
+# -- the calendar ------------------------------------------------------------
+#
+# A grid of 365 squares is the easiest place on this project to hide a lie: an
+# unobserved day painted in the neutral colour looks exactly like a day that was
+# measured and did not move, and nobody scanning a year of squares would catch
+# it. Every test here defends that one distinction.
+
+def _store_with_day_gap() -> Path:
+    """25 days of hours with a 4-day hole and one 3-hour day inside them."""
+    d = Path(tempfile.mkdtemp(prefix="qdr_price_cal_"))
+    st = Store(d / "qdr.db")
+    today = (int(time.time()) // 86400) * 86400
+    start = today - 25 * 86400
+    with st._tx() as c:
+        for i in range(25):
+            if 8 <= i < 12:          # nobody was watching
+                continue
+            hours = 3 if i == 15 else 24   # a day seen only briefly
+            day = start + i * 86400
+            for h in range(hours):
+                at = day + h * 3600
+                price = 4.0e-7 * (1 + i * 0.01)
+                c.execute(
+                    "INSERT OR REPLACE INTO price_hours (at,open,high,low,close,"
+                    "avg_price,market_cap,moves,polls,updated_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (at, price, price, price, price, price, 600_000_000, 1, 60, at))
+    st.close()
+    return d / "qdr.db"
+
+
+def test_an_unobserved_day_is_never_reported_as_a_flat_day():
+    """The whole point of the endpoint. `change_pct: 0` would render in the
+    neutral colour and claim the price held on a day nobody measured."""
+    body = _client(_store_with_day_gap()).get("/v1/price/days?days=40").json()
+    gaps = [d for d in body["series"] if d["state"] == "unwatched"]
+    assert gaps, "the seeded hole should appear"
+    assert all(d["change_pct"] is None for d in gaps)
+    assert all(d["close"] is None for d in gaps)
+    # and it is never silently dropped either: a missing square would shift
+    # every later day into the wrong weekday column.
+    assert len(gaps) == 5      # the 4-day hole plus the 3-hour day
+
+
+def test_a_briefly_watched_day_does_not_count_as_measured():
+    """Three hours produce a real close, but not one worth comparing against a
+    full day -- and a calendar cannot show that nuance in a coloured square."""
+    body = _client(_store_with_day_gap()).get("/v1/price/days?days=40").json()
+    thin = [d for d in body["series"] if 0 < d["hours"] < 12]
+    assert thin and all(d["state"] == "unwatched" for d in thin)
+
+
+def test_the_first_day_is_distinguished_from_an_unwatched_one():
+    """Both have change_pct null, for completely different reasons."""
+    body = _client(_store_with_day_gap()).get("/v1/price/days?days=40").json()
+    first = [d for d in body["series"] if d["state"] == "first"]
+    assert len(first) == 1
+    assert first[0]["close"] is not None    # it WAS measured
+    assert first[0]["change_pct"] is None   # there is just nothing before it
+
+
+def test_days_are_contiguous_so_a_calendar_can_index_them():
+    """One row per calendar day, no holes -- a grid lays these out by position,
+    and a missing row would put every later day under the wrong weekday."""
+    body = _client(_store_with_day_gap()).get("/v1/price/days?days=40").json()
+    ats = [d["at"] for d in body["series"]]
+    assert all(b - a == 86400 for a, b in zip(ats, ats[1:]))
+
+
+def test_the_summary_counts_agree_with_the_rows():
+    body = _client(_store_with_day_gap()).get("/v1/price/days?days=40").json()
+    sm, rows = body["summary"], body["series"]
+    for state in ("up", "down", "flat", "unwatched"):
+        assert sm[state] == sum(1 for d in rows if d["state"] == state), state
+
+
+def test_price_days_never_publishes_trading_volume():
+    body = _client(_store_with_day_gap()).get("/v1/price/days?days=40").json()
+    assert "volume" not in _field_names(body)
+
+
+def test_price_days_on_an_empty_store_answers_503():
+    d = Path(tempfile.mkdtemp(prefix="qdr_price_cal_"))
+    Store(d / "qdr.db").close()
+    assert _client(d / "qdr.db").get("/v1/price/days").status_code == 503

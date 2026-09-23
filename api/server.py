@@ -232,6 +232,7 @@ def api_index():
             "/v1/price/change",
             "/v1/price/at",
             "/v1/price/average",
+            "/v1/price/days",
             "/v1/price/coverage",
             "/v1/price/epochs",
             "/health",
@@ -952,6 +953,102 @@ def price_coverage():
     if not cov["point"]["points"] and not cov["hour"]["hours"]:
         raise _no_data("price coverage")
     return {**cov, "source": pipeline.price_source(), "measured": True}
+
+
+_price_days_cache: dict = {}
+PRICE_DAYS_TTL_S = float(os.environ.get("QDR_PRICE_DAYS_TTL", "300"))
+
+
+@app.get("/v1/price/days", tags=["price"],
+         summary="One row per day: up, down, or not watched")
+def price_days(
+    days: int = Query(365, ge=1, le=1200,
+                      description="How many days back to return."),
+):
+    """Daily closes and the move from the day before, for a calendar view.
+
+    Built on the permanent hourly summary, so it keeps its reach after price
+    points are pruned.
+
+    **A day with no reading is not a flat day.** It is returned with
+    `change_pct: null` and `state: "unwatched"` rather than 0, because a
+    calendar that paints an unobserved day in the neutral colour is making a
+    claim about a day nobody measured -- and on a grid of 365 squares that lie
+    is invisible. The states are `up`, `down`, `flat` (measured, and genuinely
+    unchanged) and `unwatched`.
+
+    `hours` travels with every row for the same reason: a day seen for three
+    hours produced a real close, but it is not the same evidence as a day seen
+    for all 24, and a consumer may want to shade it differently.
+
+    The first day on record has no predecessor, so its `change_pct` is null
+    too -- with `state: "first"`, to distinguish "nothing to compare against"
+    from "nobody looked".
+    """
+    import time as _t
+
+    store = get_store()
+    now = _t.time()
+    hit = _price_days_cache.get(days)
+    if hit and now - hit["at"] < PRICE_DAYS_TTL_S:
+        return hit["data"]
+
+    # One extra day of lookback so the oldest requested day can be compared
+    # against its predecessor rather than reported as "first".
+    rows = store.price_days(days=days + 1)
+    if not rows:
+        raise _no_data("price history")
+
+    # A day needs a majority of its hours to carry a close worth comparing.
+    MIN_HOURS = 12
+    by_day = {r["at"]: r for r in rows}
+
+    out = []
+    prev_close = None
+    first_at = rows[0]["at"]
+    last_at = rows[-1]["at"]
+    day = first_at
+    while day <= last_at:
+        r = by_day.get(day)
+        if r is None or r["hours"] < MIN_HOURS:
+            # Explicitly a hole, not a zero. See the docstring.
+            out.append({"at": day, "close": None, "change_pct": None,
+                        "hours": r["hours"] if r else 0, "state": "unwatched"})
+            day += 86400
+            continue
+        if prev_close is None:
+            out.append({"at": day, "close": r["avg_price"], "change_pct": None,
+                        "hours": r["hours"], "state": "first"})
+        else:
+            pct = (r["avg_price"] - prev_close) / prev_close * 100.0
+            state = "flat" if pct == 0 else ("up" if pct > 0 else "down")
+            out.append({"at": day, "close": r["avg_price"],
+                        "change_pct": round(pct, 4),
+                        "hours": r["hours"], "state": state})
+        prev_close = r["avg_price"]
+        day += 86400
+
+    out = out[-days:]
+    measured = [d for d in out if d["change_pct"] is not None]
+    data = {
+        "days": len(out),
+        "series": out,
+        "min_hours_per_day": MIN_HOURS,
+        "summary": {
+            "up": sum(1 for d in out if d["state"] == "up"),
+            "down": sum(1 for d in out if d["state"] == "down"),
+            "flat": sum(1 for d in out if d["state"] == "flat"),
+            "unwatched": sum(1 for d in out if d["state"] == "unwatched"),
+            "best": max((d["change_pct"] for d in measured), default=None),
+            "worst": min((d["change_pct"] for d in measured), default=None),
+        },
+        "coverage": store.price_coverage(),
+        "source": pipeline.price_source(),
+        "measured": True,
+    }
+    _price_days_cache.clear()
+    _price_days_cache[days] = {"at": now, "data": data}
+    return data
 
 
 _price_avg_cache: dict = {}

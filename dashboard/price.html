@@ -146,6 +146,19 @@
      Epochenmarke. Bernstein ist auf beiden Untergründen lesbar und steht auf
      dieser Seite sonst für nichts. */
   --sma-line:   #b45309;
+  /* Kalenderskala. Drei Stufen je Richtung, dazu ein neutraler Ton für einen
+     gemessenen Tag ohne Bewegung und eine gedeckte Farbe für die Schraffur
+     der unbeobachteten Tage. Die Richtungen erben die Farben, die die Seite
+     schon trägt (--price-up/--price-down), damit das Raster nicht eine dritte
+     Farbsprache neben Hero und Diagramm aufmacht. */
+  --cal-zero:   rgba(17, 24, 39, .10);
+  --cal-up-1:   #a5d8ec;
+  --cal-up-2:   #4a9fc4;
+  --cal-up-3:   #0369a1;
+  --cal-down-1: #f7c0bd;
+  --cal-down-2: #e3736c;
+  --cal-down-3: #dc2626;
+  --cal-none:   rgba(107, 114, 128, .55);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -158,6 +171,14 @@
     --price-down: #fb7185;
     --chart-halo: #0b0f14;
     --sma-line:   #f0b429;
+    --cal-zero:   rgba(242, 245, 250, .08);
+    --cal-up-1:   #14505f;
+    --cal-up-2:   #2b92ad;
+    --cal-up-3:   #4ee0fc;
+    --cal-down-1: #5c2230;
+    --cal-down-2: #a8414f;
+    --cal-down-3: #fb7185;
+    --cal-none:   rgba(185, 194, 207, .38);
   }
 }
 :root[data-theme="dark"] {
@@ -170,6 +191,14 @@
   --price-down: #fb7185;
   --chart-halo: #0b0f14;
   --sma-line:   #f0b429;
+  --cal-zero:   rgba(242, 245, 250, .08);
+  --cal-up-1:   #14505f;
+  --cal-up-2:   #2b92ad;
+  --cal-up-3:   #4ee0fc;
+  --cal-down-1: #5c2230;
+  --cal-down-2: #a8414f;
+  --cal-down-3: #fb7185;
+  --cal-none:   rgba(185, 194, 207, .38);
 }
 
 /* ─── Hero ─────────────────────────────────────────────────────────────────
@@ -537,6 +566,87 @@ body[data-chart-style="flow"] .leg-swatch.price {
 /* Auf einem Telefon ist jede Spalte der Studientabelle knapp. Engere Polster
    und kleinere Ziffern bringen "Änderung" — die Spalte, wegen der jemand
    herscrollt — näher an den sichtbaren Bereich. */
+/* ─── Kalender ──────────────────────────────────────────────────────────────
+   Ein Feld je Tag, sieben Zeilen (Mo–So), die Wochen als Spalten von links
+   nach rechts — dieselbe Anordnung wie GitHubs Beitragsraster, weil sie
+   bekannt ist und ein Jahr auf einen Blick zeigt.
+
+   Die Farbskala hat hier eine Mitte, anders als bei GitHub: dort zählt eine
+   Menge (0 aufwärts), hier ein Vorzeichen. Rot nach unten, Leitfarbe nach
+   oben, drei Stufen je Richtung, und dazwischen ein neutraler Ton für einen
+   Tag, der gemessen wurde und sich nicht bewegt hat. */
+.cal-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+.cal-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 1fr);
+  gap: 3px;
+  /* Die Spalten wachsen mit dem Inhalt; der Scroll-Container fängt ein Jahr
+     auf einem Telefon ab, statt die Seite seitwärts zu schieben. */
+  grid-auto-columns: 12px;
+  min-width: max-content;
+}
+.cal-day {
+  width: 12px; height: 12px; border-radius: 3px;
+  background: var(--cal-zero);
+  outline: 1px solid rgba(255, 255, 255, .04); outline-offset: -1px;
+}
+/* Ein Feld VOR dem ersten Messtag: nur Platzhalter, damit die erste Woche am
+   richtigen Wochentag beginnt. Unsichtbar, aber im Raster vorhanden. */
+.cal-day.pad { background: none; outline: none; }
+
+.cal-day.up.s1 { background: var(--cal-up-1); }
+.cal-day.up.s2 { background: var(--cal-up-2); }
+.cal-day.up.s3 { background: var(--cal-up-3); }
+.cal-day.down.s1 { background: var(--cal-down-1); }
+.cal-day.down.s2 { background: var(--cal-down-2); }
+.cal-day.down.s3 { background: var(--cal-down-3); }
+
+/* Nicht gemessen: schraffiert, nicht getönt. Derselbe Gedanke wie die
+   Lückenschraffur im Diagramm — die Fläche sagt "hier ist kein Wert", und
+   nicht "hier ist der Wert null". */
+.cal-day.none {
+  background:
+    repeating-linear-gradient(45deg,
+      var(--cal-none) 0 2px, transparent 2px 4px);
+  outline-color: rgba(255, 255, 255, .06);
+}
+.cal-day:hover { outline: 1px solid var(--accent); outline-offset: 0; }
+
+.cal-foot {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+  margin-top: 12px; font-size: 12px; color: var(--muted);
+}
+.cal-legend { display: inline-flex; align-items: center; gap: 4px; }
+.cal-leg-item { display: inline-flex; align-items: center; gap: 5px; }
+.cal-leg-gap { margin-left: 8px; }
+.cal-sw { width: 11px; height: 11px; border-radius: 3px; flex: none;
+  outline: 1px solid rgba(255, 255, 255, .05); outline-offset: -1px; }
+.cal-sw.zero { background: var(--cal-zero); }
+.cal-sw.up.s1 { background: var(--cal-up-1); }
+.cal-sw.up.s2 { background: var(--cal-up-2); }
+.cal-sw.up.s3 { background: var(--cal-up-3); }
+.cal-sw.down.s1 { background: var(--cal-down-1); }
+.cal-sw.down.s2 { background: var(--cal-down-2); }
+.cal-sw.down.s3 { background: var(--cal-down-3); }
+.cal-sw.none {
+  background: repeating-linear-gradient(45deg,
+    var(--cal-none) 0 2px, transparent 2px 4px);
+}
+.cal-tally { margin-left: auto; }
+.cal-tally b { color: var(--text); font-weight: 650; }
+.cal-empty {
+  padding: 18px 0; text-align: center; color: var(--muted); font-size: 13px;
+}
+
+@media (max-width: 620px) {
+  /* Etwas kleinere Felder: ein Jahr bleibt damit auf einem Telefon in zwei
+     Wischbewegungen erreichbar statt in vier. */
+  .cal-grid { grid-auto-columns: 10px; gap: 2.5px; }
+  .cal-day { width: 10px; height: 10px; border-radius: 2px; }
+  .cal-tally { margin-left: 0; width: 100%; }
+}
+
 /* ─── Mobile Reihenfolge ────────────────────────────────────────────────────
    Auf dem Telefon steht der Chart direkt unter dem Preis; die Kennzahlen
    rücken darunter.
@@ -570,9 +680,13 @@ body[data-chart-style="flow"] .leg-swatch.price {
   #chart-card   { order: 3; }
   .hero-facts { order: 4; }
   #honesty-note { order: 5; }
-  #study-card   { order: 6; }
-  #api-card     { order: 7; }
-  #sources-card { order: 8; }
+  /* Jede Karte braucht hier eine Nummer. Ohne sie fällt sie auf order:0 und
+     landet VOR allem, was numeriert ist — genau das war beim Kalender der
+     Fall, der dadurch über dem Diagramm stand. */
+  #cal-card     { order: 6; }
+  #study-card   { order: 7; }
+  #api-card     { order: 8; }
+  #sources-card { order: 9; }
 
   /* Der Hero brachte seinen Abstand als Karte mit; aufgelöst tragen ihn die
      Kinder selbst. */
@@ -811,7 +925,42 @@ body[data-chart-style="flow"] .leg-swatch.price {
     <span data-i18n="noteBody">The price is read once a minute from Qubic's own RPC and stored when it changes, together with how long it held. The chart draws steps, never a curve — between two readings the price did not move gradually, it stood still and then jumped. There is no trading volume on this page: the RPC publishes none.</span>
   </div>
 
-  <!-- 3 — EPOCHENSTUDIE ---------------------------------------------------- -->
+  <!-- 3 — KALENDER --------------------------------------------------------- -->
+  <!-- Ein Jahr als Raster, ein Feld je Tag: steigende Tage in der Leitfarbe,
+       fallende rot, die Stärke nach dem Betrag der Änderung.
+
+       Der entscheidende Zustand ist der VIERTE: ein Tag ohne Messung. Er wird
+       ausdrücklich anders gezeichnet als ein Tag mit 0 % — schraffiert statt
+       getönt. Auf 365 Feldern wäre ein unbeobachteter Tag in der neutralen
+       Farbe eine unsichtbare Lüge: das Raster behauptete Ruhe, wo niemand
+       hingesehen hat. Dieselbe Regel wie die Schraffur im Diagramm. -->
+  <section class="qs-card qs-card--translucent" id="cal-card">
+    <h2 data-i18n="calTitle">Rising and falling days</h2>
+    <p class="desc" data-i18n="calDesc">One square per day, coloured by the move against the day before. Days nobody measured are hatched, not neutral — an unobserved day is not a quiet day.</p>
+
+    <div class="cal-scroll">
+      <div class="cal-grid" id="cal-grid" role="img" aria-label="Calendar of daily moves"></div>
+    </div>
+    <div class="cal-empty" id="cal-empty" hidden>–</div>
+
+    <div class="cal-foot">
+      <div class="cal-legend" id="cal-legend">
+        <span class="cal-leg-item"><span data-i18n="calLess">Less</span></span>
+        <span class="cal-sw down s3" aria-hidden="true"></span>
+        <span class="cal-sw down s2" aria-hidden="true"></span>
+        <span class="cal-sw down s1" aria-hidden="true"></span>
+        <span class="cal-sw zero" aria-hidden="true"></span>
+        <span class="cal-sw up s1" aria-hidden="true"></span>
+        <span class="cal-sw up s2" aria-hidden="true"></span>
+        <span class="cal-sw up s3" aria-hidden="true"></span>
+        <span class="cal-leg-item"><span data-i18n="calMore">More</span></span>
+        <span class="cal-leg-item cal-leg-gap"><span class="cal-sw none" aria-hidden="true"></span><span data-i18n="calUnwatched">Not measured</span></span>
+      </div>
+      <div class="cal-tally" id="cal-tally">–</div>
+    </div>
+  </section>
+
+  <!-- 4 — EPOCHENSTUDIE ---------------------------------------------------- -->
   <section class="qs-card qs-card--translucent" id="study-card">
     <div class="study-head">
       <h2 data-i18n="studyTitle">Around the computor payouts</h2>
@@ -874,6 +1023,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
     <ul class="api-list">
       <li><code>/v1/price/now</code> — <span data-i18n="apiNow">the last price and how long it has stood, in about a tenth of the bytes. For tickers and widgets.</span></li>
       <li><code>/v1/price/average?days=50</code> — <span data-i18n="apiAverage">the moving average over daily prices. Says how many days actually stand behind it, and refuses to call a short window a long one.</span></li>
+      <li><code>/v1/price/days?days=365</code> — <span data-i18n="apiDays">one row per day for the calendar: the move against the day before. A day nobody measured comes back as null, never as zero.</span></li>
       <li><code>/v1/price/series?range=24h</code> — <span data-i18n="apiSeries">the step series behind the chart. Each row is an interval: the price held from <code>at</code> until <code>until</code>. Draw it as steps, never as a curve.</span></li>
       <li><code>/v1/price/epochs</code> — <span data-i18n="apiEpochs">the study of what the price does around the computor payouts.</span></li>
       <li><code>/v1/price/at?t=&lt;unix&gt;</code> — <span data-i18n="apiAt">the price at one moment, with the reading it came from.</span></li>
@@ -986,6 +1136,19 @@ body[data-chart-style="flow"] .leg-swatch.price {
       legEpoch: "Epoch boundary",
       legGap: "Not observed",
       legExtreme: "High and low in view",
+      calTitle: "Rising and falling days",
+      calDesc: "One square per day, coloured by the move against the day before. Days nobody measured are hatched, not neutral — an unobserved day is not a quiet day.",
+      calLess: "Down",
+      calMore: "Up",
+      calUnwatched: "Not measured",
+      calTally: "<b>{up}</b> up · <b>{down}</b> down · <b>{unwatched}</b> not measured",
+      calEmpty: "No days on record yet.",
+      calTipUp: "up",
+      calTipDown: "down",
+      calTipFlat: "unchanged",
+      calTipNone: "Not measured. The worker recorded fewer than {min} hours this day, so there is no close to compare.",
+      calTipFirst: "First day on record — nothing before it to compare against.",
+      calTipHours: "{h} of 24 hours observed",
       legSma: "{days}-day average",
       smaToggle: "50-day average",
       smaNotReady: "A {days}-day average needs {days} days of readings; {have} are on record. This page has no backfill — the RPC serves only “now”, so the record begins when the worker first ran. The line appears in {need} more days.",
@@ -1013,6 +1176,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       apiMore: "Three more endpoints carry the rest of this page:",
       apiNow: "the last price and how long it has stood, in about a tenth of the bytes. For tickers and widgets.",
       apiAverage: "the moving average over daily prices. Says how many days actually stand behind it, and refuses to call a short window a long one.",
+      apiDays: "one row per day for the calendar: the move against the day before. A day nobody measured comes back as null, never as zero.",
       apiSeries: "the step series behind the chart. Each row is an interval: the price held from at until until. Draw it as steps, never as a curve.",
       apiEpochs: "the study of what the price does around the computor payouts.",
       apiAt: "the price at one moment, with the reading it came from.",
@@ -1093,6 +1257,19 @@ body[data-chart-style="flow"] .leg-swatch.price {
       legEpoch: "Epochengrenze",
       legGap: "Nicht beobachtet",
       legExtreme: "Hoch und Tief im Ausschnitt",
+      calTitle: "Steigende und fallende Tage",
+      calDesc: "Ein Feld je Tag, eingefärbt nach der Bewegung gegen den Vortag. Tage, die niemand gemessen hat, sind schraffiert und nicht neutral — ein unbeobachteter Tag ist kein ruhiger Tag.",
+      calLess: "Abwärts",
+      calMore: "Aufwärts",
+      calUnwatched: "Nicht gemessen",
+      calTally: "<b>{up}</b> aufwärts · <b>{down}</b> abwärts · <b>{unwatched}</b> nicht gemessen",
+      calEmpty: "Noch keine Tage aufgezeichnet.",
+      calTipUp: "aufwärts",
+      calTipDown: "abwärts",
+      calTipFlat: "unverändert",
+      calTipNone: "Nicht gemessen. Der Worker hat an diesem Tag weniger als {min} Stunden aufgezeichnet, es gibt also keinen Schlusskurs zum Vergleich.",
+      calTipFirst: "Erster Tag der Aufzeichnung — davor liegt nichts zum Vergleichen.",
+      calTipHours: "{h} von 24 Stunden beobachtet",
       legSma: "{days}-Tage-Durchschnitt",
       smaToggle: "50-Tage-Schnitt",
       smaNotReady: "Ein {days}-Tage-Durchschnitt braucht {days} Tage Messungen; aufgezeichnet sind {have}. Diese Seite füllt nichts zurück — die RPC liefert nur „jetzt“, die Aufzeichnung beginnt also beim ersten Lauf des Workers. In {need} Tagen erscheint die Linie.",
@@ -1120,6 +1297,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       apiMore: "Drei weitere Endpunkte tragen den Rest dieser Seite:",
       apiNow: "der letzte Kurs und wie lange er schon steht, in etwa einem Zehntel der Bytes. Für Ticker und Widgets.",
       apiAverage: "der gleitende Durchschnitt über Tagespreise. Nennt, wie viele Tage tatsächlich dahinterstehen, und gibt ein kurzes Fenster nicht als langes aus.",
+      apiDays: "eine Zeile je Tag für den Kalender: die Bewegung gegen den Vortag. Ein Tag, den niemand gemessen hat, kommt als null zurück, nie als Null.",
       apiSeries: "die Stufenreihe hinter dem Diagramm. Jede Zeile ist ein Intervall: Der Preis galt von at bis until. Als Stufen zeichnen, nie als Kurve.",
       apiEpochs: "die Auswertung, was der Kurs rund um die Computor-Auszahlungen tut.",
       apiAt: "der Preis zu einem Zeitpunkt, mitsamt der Messung, aus der er stammt.",
@@ -1289,6 +1467,10 @@ body[data-chart-style="flow"] .leg-swatch.price {
   const SMA_DAYS = 50;
   let showSma = safeGet(LS_SMA) !== "0";
   let smaData = null;
+  /* Die Tagesreihe für den Kalender. Wie der Durchschnitt hängt sie nicht am
+     gewählten Fenster — ein Jahr ist ein Jahr, egal welcher Ausschnitt oben
+     im Diagramm steht. */
+  let calData = null;
 
   /* Wer Bewegung abbestellt hat, bekommt keine. Das CSS hält das ohnehin über
      die Media Query; die Konstante verhindert zusätzlich, dass Klassen gesetzt
@@ -2648,6 +2830,117 @@ body[data-chart-style="flow"] .leg-swatch.price {
     }
   }
 
+  /* ─── Kalender ────────────────────────────────────────────────────────────
+     Ein Feld je Tag, sieben Zeilen, Wochen als Spalten. Die Farbstufe folgt
+     dem BETRAG der Tagesänderung, die Richtung der Farbe.
+
+     Die Schwellen sind fest (0,5 % / 1,5 % / 3 %) und nicht relativ zum
+     beobachteten Maximum. Eine relative Skala würde die Farben bei jedem neuen
+     Extremtag umdeuten: derselbe Tag wäre heute dunkel und morgen blass, ohne
+     dass sich an ihm etwas geändert hätte. Feste Schwellen kosten etwas
+     Kontrast in ruhigen Zeiten und behalten dafür ihre Bedeutung.
+
+     Der vierte Zustand ist der wichtigste: ein Tag ohne Messung wird
+     schraffiert und NICHT als 0 % gezeichnet. Das Raster darf nicht behaupten,
+     ein unbeobachteter Tag sei ein ruhiger gewesen. */
+  const CAL_STEPS = [0.5, 1.5, 3.0];
+
+  function calStep(pct) {
+    const a = Math.abs(pct);
+    if (a < CAL_STEPS[0]) return 0;
+    if (a < CAL_STEPS[1]) return 1;
+    if (a < CAL_STEPS[2]) return 2;
+    return 3;
+  }
+
+  function renderCalendar() {
+    const grid = document.getElementById("cal-grid");
+    const empty = document.getElementById("cal-empty");
+    const tally = document.getElementById("cal-tally");
+    const card = document.getElementById("cal-card");
+    if (!grid) return;
+    grid.innerHTML = "";
+
+    const rows = (calData && calData.series) || [];
+    if (!rows.length) {
+      grid.hidden = true;
+      if (empty) { empty.hidden = false; empty.textContent = t("calEmpty"); }
+      if (tally) tally.textContent = "";
+      return;
+    }
+    grid.hidden = false;
+    if (empty) empty.hidden = true;
+
+    /* Die erste Spalte beginnt am Wochentag des ersten Tages, nicht am Montag.
+       Ohne die Platzhalter davor säße jeder Tag in der falschen Zeile, und das
+       Raster behauptete Wochentage, die nicht stimmen. Montag ist Zeile 1,
+       deshalb (getUTCDay()+6)%7 — getUTCDay() zählt ab Sonntag. */
+    const firstDow = (new Date(rows[0].at * 1000).getUTCDay() + 6) % 7;
+    for (let i = 0; i < firstDow; i++) {
+      const pad = document.createElement("div");
+      pad.className = "cal-day pad";
+      pad.setAttribute("aria-hidden", "true");
+      grid.appendChild(pad);
+    }
+
+    const min = (calData && calData.min_hours_per_day) || 12;
+    rows.forEach(r => {
+      const d = document.createElement("div");
+      let cls = "cal-day";
+      if (r.state === "unwatched") cls += " none";
+      else if (r.state === "first") cls += "";
+      else if (r.change_pct == null) cls += " none";
+      else {
+        const st = calStep(r.change_pct);
+        if (st === 0) cls += "";
+        else cls += (r.change_pct > 0 ? " up" : " down") + " s" + st;
+      }
+      d.className = cls;
+      d.dataset.at = r.at;
+      d.addEventListener("mousemove", e => showCalTip(e, r, min));
+      d.addEventListener("mouseleave", hideTip);
+      grid.appendChild(d);
+    });
+
+    const sm = (calData && calData.summary) || {};
+    if (tally) {
+      tally.innerHTML = t("calTally", {
+        up: fmtInt(sm.up || 0), down: fmtInt(sm.down || 0),
+        unwatched: fmtInt(sm.unwatched || 0)
+      });
+    }
+    grid.setAttribute("aria-label", t("calTitle") + ": " +
+      fmtDay(rows[0].at) + " – " + fmtDay(rows[rows.length - 1].at));
+    if (card) card.hidden = false;
+  }
+
+  function fmtDay(unix) {
+    return new Date(unix * 1000).toLocaleDateString(locale(),
+      { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "UTC" });
+  }
+
+  function showCalTip(evt, r, min) {
+    const rows = [];
+    rows.push(`<div class="tip-key">${escapeHtml(fmtDay(r.at))}</div>`);
+    if (r.state === "unwatched") {
+      rows.push(`<div class="tip-note">${escapeHtml(t("calTipNone", { min: min }))}</div>`);
+    } else if (r.state === "first") {
+      rows.push(`<div class="tip-row"><span>${escapeHtml(t("tipPrice"))}</span><span>${escapeHtml(fmtPrice(r.close))}</span></div>`);
+      rows.push(`<div class="tip-note">${escapeHtml(t("calTipFirst"))}</div>`);
+    } else {
+      const dir = r.change_pct > 0 ? t("calTipUp")
+                : (r.change_pct < 0 ? t("calTipDown") : t("calTipFlat"));
+      rows.push(`<div class="tip-row"><span>${escapeHtml(t("tipPrice"))}</span><span>${escapeHtml(fmtPrice(r.close))}</span></div>`);
+      rows.push(`<div class="tip-row"><span>${escapeHtml(dir)}</span><span>${escapeHtml(fmtPct(r.change_pct))}</span></div>`);
+    }
+    if (r.hours != null && r.hours > 0 && r.hours < 24) {
+      rows.push(`<div class="tip-note">${escapeHtml(t("calTipHours", { h: r.hours }))}</div>`);
+    }
+    tip.innerHTML = rows.join("");
+    tip.classList.add("show");
+    positionTip(evt);
+  }
+
   /* ─── Laden ─────────────────────────────────────────────────────────────── */
   function showBuilding(bodyText) {
     const note = document.getElementById("honesty-note");
@@ -2672,6 +2965,18 @@ body[data-chart-style="flow"] .leg-swatch.price {
     } catch (e) {
       smaData = null;
     }
+  }
+
+  /* 365 Tage, unabhängig vom Fenster. Ein 503 heißt hier "noch keine
+     Kurshistorie" und ist bei einer jungen Installation der Normalfall; die
+     Karte sagt das dann in Worten statt ein leeres Raster zu zeigen. */
+  async function loadCalendar() {
+    try {
+      calData = await getJSON("/v1/price/days?days=365");
+    } catch (e) {
+      calData = null;
+    }
+    renderCalendar();
   }
 
   async function loadSeries(pulse) {
@@ -2751,6 +3056,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
     /* Vor loadSeries: das Diagramm zeichnet die Durchschnittslinie mit, und ein
        Abruf danach hätte sie erst beim nächsten Zeichnen im Bild. */
     await loadSma();
+    await loadCalendar();
     await loadSeries(changed);
     /* Früher wurde hier der Hintergrund neu ausgerichtet, sobald der Hero seine
        endgültige Höhe hatte: die wandernde Stufenkurve suchte sich ihre Lage aus
@@ -2830,6 +3136,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
     });
     renderHero();
     renderStudy();
+    renderCalendar();
     if (series) drawChart(series);
   }
   document.getElementById("lang-seg").addEventListener("click", e => {
