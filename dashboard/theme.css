@@ -288,7 +288,7 @@ a:hover { text-decoration: underline; }
   display: flex; align-items: center; gap: 12px;
 }
 .qs-logo {
-  width: 30px; height: 30px; border-radius: 9px; flex: none;
+  width: 55px; height: 55px; border-radius: 9px; flex: none;
   background: var(--gradient);
 }
 /* .qs-title / .qs-subtitle are sized in the header block below, together with
@@ -316,7 +316,7 @@ a:hover { text-decoration: underline; }
 }
 .qs-header-inner .logo,
 .qs-header-inner .qs-logo {
-  width: 32px; height: 32px; border-radius: 9px; flex: 0 0 auto;
+  width: 55px; height: 55px; border-radius: 9px; flex: 0 0 auto;
   background: var(--gradient);
 }
 /* The Qubic logomark, cut out of the gradient tile.
