@@ -848,6 +848,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       </div>
     </div>
     <div class="spacer"></div>
+    <button class="qs-icon-btn qs-burger" id="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">☰</button>
     <div class="controls">
       <nav class="qs-nav" id="site-nav" aria-label="Sections">
         <a class="how-link qs-link" href="./" data-i18n="navReport">Report</a>
@@ -855,7 +856,6 @@ body[data-chart-style="flow"] .leg-swatch.price {
         <a class="how-link qs-link" href="./price.html" aria-current="page" data-i18n="priceReport">Price</a>
         <a class="how-link qs-link" href="./mining.html" data-i18n="miningLive">Mining</a>
       </nav>
-      <button class="qs-icon-btn qs-burger" id="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">☰</button>
       <div class="seg qs-seg" id="lang-seg">
         <button data-lang="en">EN</button><button data-lang="de">DE</button>
       </div>
@@ -2380,10 +2380,32 @@ body[data-chart-style="flow"] .leg-swatch.price {
     }
 
     /* Lücken über die volle Höhe: wir wissen nicht, wo der Preis dort war. */
+    /* Schmale Lücken deckend statt schraffiert — dieselbe Begründung wie in
+       drawFlow. Die Schwelle liegt hier niedriger, weil dieses Raster mit 6px
+       Abstand und 2px Strich dichter ist und schon bei geringerer Breite
+       trägt. Anders als dort bricht die Stufenlinie an der Lücke nicht
+       sichtbar ab — eine Stufe darüber wäre eine flache Linie —, die Fläche
+       muss den Befund hier also allein tragen. */
+    const MIN_HATCH_W = 10;
     gaps.forEach(([a, b]) => {
-      const x = X(a), w = Math.max(2, X(b) - X(a));
+      const x0 = X(a), x1 = X(b), raw = x1 - x0;
+      if (raw < MIN_HATCH_W) {
+        const w = Math.max(3, raw);
+        const mid = (x0 + x1) / 2;
+        const gx = Math.max(padL, Math.min(W - padR - w, mid - w / 2));
+        chart.appendChild(el("rect", {
+          x: gx, y: padT, width: w, height: plotH, fill: gapCol, opacity: .55
+        }));
+        [gx, gx + w].forEach(ex => {
+          chart.appendChild(el("line", {
+            x1: ex, y1: padT, x2: ex, y2: padT + plotH,
+            stroke: gapCol, "stroke-width": 1, opacity: .9
+          }));
+        });
+        return;
+      }
       chart.appendChild(el("rect", {
-        x: x, y: padT, width: w, height: plotH, fill: "url(#gap-hatch)"
+        x: x0, y: padT, width: raw, height: plotH, fill: "url(#gap-hatch)"
       }));
     });
 
@@ -2882,10 +2904,40 @@ body[data-chart-style="flow"] .leg-swatch.price {
       }));
     });
 
+    /* Eine Lücke von wenigen Minuten ist in einem Tagesfenster nur ein paar
+       Pixel breit, und in diese Breite passt die Schraffur nicht: das Raster
+       ist 9px weit, ein 4px-Streifen erwischt also höchstens einen einzigen
+       Strich, oft keinen. Übrig blieb ein leerer Schlitz — die Kurve bricht
+       ab, und nichts sagt warum. Das liest sich als Zeichenfehler, nicht als
+       Befund, und war genau die falsche Aussage: die Seite will zeigen, DASS
+       hier nicht gemessen wurde.
+
+       Unter MIN_HATCH_W trägt deshalb eine deckende Fläche denselben Befund,
+       mit zwei Kanten als Begrenzung; darüber bleibt es bei der Schraffur,
+       die auf Breite ruhiger wirkt als ein Block. Die Fläche bekommt eine
+       Mindestbreite, damit auch eine Lücke von einer Minute sichtbar bleibt —
+       sie wird dabei um ihre Mitte aufgezogen, sonst wanderte der Befund von
+       der Stelle weg, an der er gilt. */
+    const MIN_HATCH_W = 14;
     gaps.forEach(([a, b]) => {
-      const x = X(a), w = Math.max(2, X(b) - X(a));
+      const x0 = X(a), x1 = X(b), raw = x1 - x0;
+      if (raw < MIN_HATCH_W) {
+        const w = Math.max(3, raw);
+        const mid = (x0 + x1) / 2;
+        const gx = Math.max(padL, Math.min(W - padR - w, mid - w / 2));
+        chart.appendChild(el("rect", {
+          x: gx, y: padT, width: w, height: plotH, fill: gapCol, opacity: .5
+        }));
+        [gx, gx + w].forEach(ex => {
+          chart.appendChild(el("line", {
+            x1: ex, y1: padT, x2: ex, y2: padT + plotH,
+            stroke: gapCol, "stroke-width": 1, opacity: .9
+          }));
+        });
+        return;
+      }
       chart.appendChild(el("rect", {
-        x: x, y: padT, width: w, height: plotH, fill: "url(#gap-hatch-flow)"
+        x: x0, y: padT, width: raw, height: plotH, fill: "url(#gap-hatch-flow)"
       }));
     });
 
