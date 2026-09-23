@@ -509,6 +509,91 @@
           0.095478
         ]
       }
+    },
+    {
+      "epoch": 231,
+      "status": "sealed",
+      "nakamoto_one_third": 225,
+      "gini": 0.004247,
+      "bubbles": [
+        {
+          "id": "unattributed",
+          "label": "Unattributed",
+          "confidence": "unattributed",
+          "slots": 676,
+          "revenue_share": 1.0,
+          "operators": 676
+        }
+      ],
+      "slot_distribution": {
+        "epoch": 231,
+        "slots": 676,
+        "total_revenue": 180609448901,
+        "min": 255910231,
+        "max": 268701925,
+        "median": 268701925,
+        "spread": 1.05,
+        "flat_value": 268701925,
+        "flat_slots": 388,
+        "flat_share": 0.573964,
+        "distinct_values": 82,
+        "bands": [
+          {
+            "id": "top1",
+            "slots": 6,
+            "revenue_share": 0.008927,
+            "min": 268701925,
+            "max": 268701925
+          },
+          {
+            "id": "top10",
+            "slots": 61,
+            "revenue_share": 0.090753,
+            "min": 268701925,
+            "max": 268701925
+          },
+          {
+            "id": "upper",
+            "slots": 102,
+            "revenue_share": 0.151751,
+            "min": 268701925,
+            "max": 268701925
+          },
+          {
+            "id": "mid",
+            "slots": 169,
+            "revenue_share": 0.25143,
+            "min": 268701925,
+            "max": 268701925
+          },
+          {
+            "id": "lower",
+            "slots": 169,
+            "revenue_share": 0.250531,
+            "min": 266605766,
+            "max": 268701925
+          },
+          {
+            "id": "bottom",
+            "slots": 169,
+            "revenue_share": 0.246609,
+            "min": 255910231,
+            "max": 266605766
+          }
+        ],
+        "deciles": [
+          0.099679,
+          0.101167,
+          0.099679,
+          0.101167,
+          0.101167,
+          0.099649,
+          0.100645,
+          0.098867,
+          0.099661,
+          0.098318
+        ]
+      }
     }
   ]
 }
