@@ -1183,12 +1183,17 @@ def price_epochs(
         return _payout_study_cache["data"]
 
     study = pipeline.epoch_payout_study(store, window_s=window, limit=limit)
-    if not study["boundaries_seen"]:
-        # No boundary observed yet is the normal state of a young deployment,
-        # not an error — but it is also not a result, so it answers like every
-        # other unfilled read here.
-        raise _no_data("observed epoch boundaries (the worker has not yet "
-                       "watched an epoch change)")
+    # No boundary observed yet is the normal state of a young deployment, and
+    # the study already says so in its own terms: `cases: []`, `conclusive:
+    # false`, and `epochs_needed` counting down. That is an answer, not a
+    # failure, so it is served as one.
+    #
+    # It used to raise 503 like the genuinely unfilled reads do. That was wrong
+    # twice over: it threw away a well-formed result, and every browser logs a
+    # 503 to the console as a red error, so a correctly-behaving young
+    # deployment looked broken to anyone who opened devtools. A read that has
+    # nothing to report yet still answers; only a read that cannot answer at
+    # all raises.
     data = {**study, "source": pipeline.price_source(), "measured": True}
     _payout_study_cache.update({"at": now, "key": key, "data": data})
     return data

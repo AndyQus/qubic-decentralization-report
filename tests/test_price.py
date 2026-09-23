@@ -402,9 +402,17 @@ def test_study_never_claims_causation():
     assert "does not claim" in text or "not claim" in text
 
 
-def test_study_endpoint_503s_before_any_boundary_was_seen():
-    """A young deployment has watched no epoch change. That is a normal state,
-    and it is not a result."""
+def test_study_answers_200_before_any_boundary_was_seen():
+    """A young deployment has watched no epoch change.
+
+    That is a normal state and it IS an answer: the study reports zero cases,
+    says it is not conclusive, and counts how many boundaries it still needs.
+    It used to raise 503, which threw that answer away and made every browser
+    log a red console error against a deployment that was working correctly.
+
+    What must never happen is the opposite: answering 200 with a change figure
+    derived from no boundaries at all.
+    """
     d = Path(tempfile.mkdtemp(prefix="qdr-epoch-api-"))
     s = Store(d / "qdr.db")
     now = (int(time.time()) // 60) * 60
@@ -413,8 +421,17 @@ def test_study_endpoint_503s_before_any_boundary_was_seen():
     s.close()
 
     r = _client(d / "qdr.db").get("/v1/price/epochs")
-    assert r.status_code == 503
-    assert "boundar" in r.json()["detail"].lower()
+    assert r.status_code == 200
+    body = r.json()
+
+    assert body["boundaries_seen"] == 0
+    assert body["observed"] == 0
+    assert body["cases"] == []
+    assert body["conclusive"] is False
+    assert body["epochs_needed"] > 0
+    # No boundaries means no summary to draw -- an empty study must not carry
+    # one, because the page renders it as a verdict.
+    assert "summary" not in body
 
 
 def test_study_endpoint_is_indexed_and_tagged():
