@@ -233,6 +233,50 @@
   font-size: clamp(12px, 1.7vw, 15px); letter-spacing: .08em;
   color: var(--muted);
 }
+/* Der Satz zum letzten Besuch. Er steht zwischen Preis und Kennzahlen und
+   nimmt keinen bleibenden Platz weg: eingeblendet, ein paar Sekunden lesbar,
+   dann wieder fort. Er beschreibt den BESUCH, nicht den Kurs — bliebe er
+   stehen, läse er sich nach einer Weile als Eigenschaft der Zahl darüber. */
+.welcome-note {
+  display: inline-block; margin-top: 10px;
+  padding: 5px 12px; border-radius: var(--radius-pill);
+  font-size: 12.5px; line-height: 1.4;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--muted);
+  animation: welcomefade .5s ease-out;
+}
+.welcome-note[hidden] { display: none; }
+.welcome-note.up   { color: var(--price-up);   border-color: color-mix(in srgb, var(--price-up) 45%, transparent); }
+.welcome-note.down { color: var(--price-down); border-color: color-mix(in srgb, var(--price-down) 45%, transparent); }
+/* Der Aufbau der Kurve beim Wiederkommen. Die Linie wird über ihre eigene
+   Länge aufgedeckt (stroke-dasharray/-offset), die Fläche darunter über eine
+   Maske nachgezogen. Beides läuft von links nach rechts, also in Zeitrichtung:
+   die Kurve entsteht so, wie sie gemessen wurde.
+
+   Nur beim ersten Zeichnen nach einem Wiederbesuch, nie bei einem gewöhnlichen
+   Neuzeichnen — sonst baute sich das Bild bei jedem Fensterwechsel neu auf und
+   die Bewegung hieße nichts mehr. */
+.chart-svg.welcome-draw .price-line {
+  stroke-dasharray: var(--line-len);
+  stroke-dashoffset: var(--line-len);
+  animation: linedraw 1.4s ease-out forwards;
+}
+.chart-svg.welcome-draw .price-area {
+  animation: areafade 1.4s ease-out forwards;
+  transform-origin: left center;
+}
+@keyframes linedraw { to { stroke-dashoffset: 0; } }
+@keyframes areafade { from { opacity: 0; transform: scaleX(0); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .chart-svg.welcome-draw .price-line,
+  .chart-svg.welcome-draw .price-area { animation: none; stroke-dasharray: none; }
+}
+
+@keyframes welcomefade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
 .hero-held {
   display: inline-flex; align-items: center; gap: 8px;
   margin-top: 12px; padding: 6px 12px;
@@ -816,6 +860,9 @@ body[data-chart-style="flow"] .leg-swatch.price {
   <section class="qs-card hero" id="hero">
     <div class="hero-label" data-i18n="heroLabel">Price per QU</div>
     <div class="hero-price"><span id="hero-price">–</span><span class="hero-unit" data-i18n="heroUnit">USD</span></div>
+    <!-- Der Blick zurück: erscheint nur, wenn beim letzten Besuch ein anderer
+         Kurs zu sehen war, und sagt, von wo aus die Zahl gerade hochläuft. -->
+    <div class="welcome-note" id="welcome-note" hidden></div>
     <div class="hero-facts">
       <div class="qs-stat glass-card themed">
         <div class="s-label" data-i18n="capLabel">Market cap</div>
@@ -1097,6 +1144,9 @@ body[data-chart-style="flow"] .leg-swatch.price {
   const LS_THEME = "qdr.theme";
   const LS_STYLE = "qdr.price.chartStyle";
   const LS_SMA = "qdr.price.sma";
+  /* Was beim letzten Besuch auf dieser Seite zu sehen war: Preis und Zeitpunkt.
+     Daraus wird beim nächsten Besuch die Bewegung seit damals gezeigt. */
+  const LS_LAST_SEEN = "qdr.price.lastSeen";
   const root = document.documentElement;
 
   /* ─── i18n ──────────────────────────────────────────────────────────────
@@ -1142,6 +1192,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       legEpoch: "Epoch boundary",
       legGap: "Not observed",
       legExtreme: "High and low in view",
+      welcomeBack: "Since your last visit {span} ago: from {from} — {pct}.",
       calTitle: "Rising and falling days",
       calDesc: "One square per day, coloured by the move against the day before. Days nobody measured are hatched, not neutral — an unobserved day is not a quiet day.",
       calLess: "Down",
@@ -1264,6 +1315,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
       legEpoch: "Epochengrenze",
       legGap: "Nicht beobachtet",
       legExtreme: "Hoch und Tief im Ausschnitt",
+      welcomeBack: "Seit Ihrem letzten Besuch vor {span}: von {from} — {pct}.",
       calTitle: "Steigende und fallende Tage",
       calDesc: "Ein Feld je Tag, eingefärbt nach der Bewegung gegen den Vortag. Tage, die niemand gemessen hat, sind schraffiert und nicht neutral — ein unbeobachteter Tag ist kein ruhiger Tag.",
       calLess: "Abwärts",
@@ -1550,6 +1602,110 @@ body[data-chart-style="flow"] .leg-swatch.price {
      im Diagramm steht. */
   let calData = null;
 
+  /* ─── Der letzte Besuch ────────────────────────────────────────────────────
+     Beim Verlassen der Seite wird der zuletzt gezeigte Kurs gespeichert. Beim
+     nächsten Besuch beginnt die Zahl im Hero NICHT beim aktuellen Wert, sondern
+     bei dem von damals, und zählt von dort hoch oder runter — und die Kurve
+     wird in derselben Bewegung von links nach rechts aufgedeckt.
+
+     Der Sinn ist nicht die Animation, sondern die Frage, die ein Wiederkehrer
+     tatsächlich hat: "was ist passiert, seit ich das letzte Mal hier war?" Eine
+     Zahl, die einfach dasteht, beantwortet sie nicht; eine, die von der alten
+     zur neuen läuft, zeigt Richtung und Ausmaß in einer Geste.
+
+     Drei Grenzen, damit daraus keine Behauptung wird:
+
+       * Nur bis WELCOME_MAX_AGE_S zurück. Nach Wochen ist der alte Kurs keine
+         Erinnerung mehr, sondern eine beliebige Zahl aus der Vergangenheit,
+         und die Bewegung dorthin wäre bedeutungslos.
+       * Nur, wenn sich der Preis überhaupt geändert hat — sonst liefe eine
+         Animation über eine Bewegung, die es nicht gab.
+       * Nie bei `prefers-reduced-motion`. Dann steht sofort der aktuelle Wert.
+
+     Gespeichert wird in localStorage, also je Browser und je Gerät. Das ist
+     genau richtig: "seit ich zuletzt hingesehen habe" ist eine Aussage über
+     diesen einen Betrachter, nicht über die Daten. */
+  const WELCOME_MAX_AGE_S = 7 * 24 * 3600;
+  const WELCOME_MS = 1400;
+  let welcomeDone = false;    // nur einmal je Seitenaufruf
+  let welcomeDraw = false;    // das nächste Zeichnen baut die Kurve auf
+
+  /* Der Kurs, von dem aus gezählt wird — oder null, wenn es keinen gültigen
+     Blick zurück gibt. Jede Bedingung hier ist ein Fall, in dem die Bewegung
+     nichts aussagen würde. */
+  function welcomeFrom() {
+    if (REDUCED) return null;
+    if (!latest || latest.price == null || !isFinite(latest.price)) return null;
+    if (!lastSeen) return null;
+    const age = Math.round(Date.now() / 1000) - lastSeen.at;
+    /* Eine Uhr, die nachgeht, liefert ein negatives Alter; das ist kein
+       Blick zurück, sondern ein kaputter Zeitstempel. */
+    if (age < 0 || age > WELCOME_MAX_AGE_S) return null;
+    if (lastSeen.price === latest.price) return null;
+    return lastSeen.price;
+  }
+
+  /* Was der Leser gerade sieht, in Worten. Ohne diesen Satz ist die laufende
+     Zahl nur eine Animation; mit ihm ist sie eine Auskunft: seit wann, und wie
+     viel. Er verschwindet nach ein paar Sekunden wieder, weil er den Besuch
+     einordnet und nicht den Kurs. */
+  let welcomeTimer = null;
+  function showWelcomeNote(fromPrice, toPrice) {
+    const box = document.getElementById("welcome-note");
+    if (!box) return;
+    const pct = (toPrice - fromPrice) / fromPrice * 100;
+    const dir = pct > 0 ? "up" : "down";
+    box.className = "welcome-note " + dir;
+    box.textContent = t("welcomeBack", {
+      span: fmtSpan(Math.round(Date.now() / 1000) - lastSeen.at),
+      from: fmtPrice(fromPrice),
+      pct: fmtPct(pct)
+    });
+    box.hidden = false;
+    clearTimeout(welcomeTimer);
+    welcomeTimer = setTimeout(() => { box.hidden = true; }, 9000);
+  }
+
+  /* SOFORT beim Laden gelesen, nicht erst wenn der Preis eintrifft.
+
+     Der Grund ist ein Fehler, der beim Testen auffiel und der die Funktion
+     sonst vollständig ausgehebelt hätte: `pagehide` feuert auch beim NEULADEN
+     einer Seite. Der Speicher wurde dadurch mit dem gerade aktuellen Kurs
+     überschrieben, bevor der neue Seitenaufruf ihn lesen konnte — und der
+     Vergleich lief immer gegen den eigenen Wert von vor einer Sekunde. Wer
+     F5 drückte, sah nie eine Bewegung.
+
+     Einmal hier gelesen, gehört der Wert diesem Seitenaufruf, und was später
+     gespeichert wird, ist für den NÄCHSTEN bestimmt. */
+  const lastSeen = readLastSeen();
+
+  function readLastSeen() {
+    const raw = safeGet(LS_LAST_SEEN);
+    if (!raw) return null;
+    try {
+      const v = JSON.parse(raw);
+      if (!v || typeof v.price !== "number" || !isFinite(v.price) || v.price <= 0) return null;
+      if (typeof v.at !== "number" || !isFinite(v.at)) return null;
+      return v;
+    } catch (e) { return null; }
+  }
+
+  function rememberLastSeen() {
+    if (!latest || latest.price == null || !isFinite(latest.price)) return;
+    safeSet(LS_LAST_SEEN, JSON.stringify({
+      price: latest.price, at: Math.round(Date.now() / 1000)
+    }));
+  }
+
+  /* Merken beim Verlassen. `pagehide` statt `beforeunload`: auf Mobilgeräten
+     wird eine Seite oft nur in den Hintergrund geschoben und nie "entladen",
+     und `beforeunload` feuert dort schlicht nicht. `visibilitychange` deckt
+     den Fall ab, dass der Tab gewechselt und nie geschlossen wird. */
+  window.addEventListener("pagehide", rememberLastSeen);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") rememberLastSeen();
+  });
+
   /* Wer Bewegung abbestellt hat, bekommt keine. Das CSS hält das ohnehin über
      die Media Query; die Konstante verhindert zusätzlich, dass Klassen gesetzt
      und Knoten angelegt werden, die dann nichts tun. */
@@ -1601,6 +1757,24 @@ body[data-chart-style="flow"] .leg-swatch.price {
      Lücken, Epochenmarken, Tooltips — bauen beide selbst, weil sie sich in
      Geometrie und Farbgebung zu stark unterscheiden, um sich einen Rumpf zu
      teilen, ohne dass er zur Fallunterscheidung verkommt. */
+  /* Setzt den Aufbau in Gang, sobald die Linie im Bild ist. Die Länge des
+     Pfades muss dafür bekannt sein — eine gestrichelte Linie deckt sich nur
+     dann sauber auf, wenn der Strich genau so lang ist wie der Pfad. */
+  function runWelcomeDraw() {
+    if (!welcomeDraw) return;
+    welcomeDraw = false;
+    const line = chart.querySelector(".price-line");
+    if (!line) return;
+    let len = 0;
+    try { len = line.getTotalLength(); } catch (e) { len = 0; }
+    if (!len || !isFinite(len)) return;
+    chart.style.setProperty("--line-len", len.toFixed(1));
+    chart.classList.remove("welcome-draw");
+    void chart.offsetWidth;          /* Reflow, sonst startet die Animation nicht neu */
+    chart.classList.add("welcome-draw");
+    setTimeout(() => chart.classList.remove("welcome-draw"), 1600);
+  }
+
   function drawChart(payload, pulse) {
     /* Die Legende benennt, was gerade im Bild ist: in der Fluss-Ansicht ist die
        Linie interpoliert, und "Kurs (Stufen)" darunter wäre schlicht falsch. */
@@ -1611,8 +1785,9 @@ body[data-chart-style="flow"] .leg-swatch.price {
       flowNote.hidden = chartStyle !== "flow";
       if (chartStyle === "flow") flowNote.textContent = t("flowNote");
     }
-    if (chartStyle === "flow") return drawFlow(payload, pulse);
-    return drawSteps(payload, pulse);
+    if (chartStyle === "flow") { drawFlow(payload, pulse); runWelcomeDraw(); return; }
+    drawSteps(payload, pulse);
+    runWelcomeDraw();
   }
 
   /* ─── Gleitender Durchschnitt ──────────────────────────────────────────────
@@ -2756,9 +2931,10 @@ body[data-chart-style="flow"] .leg-swatch.price {
      einfach hinschreiben". Ein Sprach- oder Themenwechsel ruft renderHero()
      ebenfalls, und dabei darf die Zahl nicht loslaufen: dort hat sich kein
      Preis geändert, nur seine Schreibweise. */
-  function renderHero(from) {
+  function renderHero(from, durationMs) {
     if (!latest) return;
-    animatePriceTo(document.getElementById("hero-price"), from, latest.price, 520);
+    animatePriceTo(document.getElementById("hero-price"), from, latest.price,
+                   durationMs || 520);
 
     /* "Seit wann unverändert" ist die Angabe, die diese Datenform gegenüber
        einem Börsen-Chart voraus hat. Steht deshalb prominent, nicht im Tooltip. */
@@ -3080,12 +3256,32 @@ body[data-chart-style="flow"] .leg-swatch.price {
       changed = prevPrice !== null && latest.price !== prevPrice;
       /* Der alte Preis wird gemerkt, BEVOR prevPrice weiterrückt: von ihm aus
          zählt die Zahl hoch oder runter. */
-      const from = changed ? prevPrice : null;
-      const dir = changed ? (latest.price > prevPrice ? "up" : "down") : null;
+      let from = changed ? prevPrice : null;
+      let dir = changed ? (latest.price > prevPrice ? "up" : "down") : null;
+
+      /* Der erste Abruf nach dem Öffnen ist die einzige Gelegenheit für den
+         Blick zurück: hier gibt es noch kein `prevPrice`, aber vielleicht einen
+         gespeicherten Kurs vom letzten Besuch. Dann startet die Zahl dort statt
+         beim aktuellen Wert. Danach übernimmt wieder die normale Regel, die nur
+         auf echte Bewegungen reagiert. */
+      const welcome = (!welcomeDone && prevPrice === null) ? welcomeFrom() : null;
+      welcomeDone = true;
+      if (welcome != null) {
+        from = welcome;
+        dir = latest.price > welcome ? "up" : (latest.price < welcome ? "down" : null);
+      }
+
       prevPrice = latest.price;
       lastFetchTs = latest.at != null ? latest.at : Math.round(Date.now() / 1000);
 
-      renderHero(from);
+      renderHero(from, welcome != null ? WELCOME_MS : undefined);
+      if (welcome != null) {
+        showWelcomeNote(welcome, latest.price);
+        if (dir) markDirection(dir);
+        /* Das Diagramm wird erst weiter unten in loadSeries() gezeichnet; die
+           Markierung wartet dort auf ihren Einsatz. */
+        welcomeDraw = !REDUCED;
+      }
       if (changed) {
         /* Richtungsfarbe zuerst, dann das Aufleuchten in derselben Farbe: beides
            meint dasselbe Ereignis und soll auch gleich aussehen. */
