@@ -298,9 +298,17 @@
   /* The wide desktop padding (24px, matching mining.html) is too much on a
      phone: with the Burn link added, the header controls overflowed and the
      whole body scrolled sideways. Narrower gutters below 560px, which is where
-     that header stops fitting. */
+     that header stops fitting.
+
+     10px, not 14px, and the panels give up their inner 18px too. Every layer
+     costs width twice over -- column, then card -- and the tables and the
+     epoch bar inside were being squeezed into a column narrower than the same
+     content gets on the price page. This is the measure price.html settled on;
+     the pages now lose the same 20px per side rather than 32. */
   @media (max-width:560px){
-    .wrap{padding:0 14px 48px}
+    .wrap{padding:0 10px 48px}
+    .panel-head{padding:16px 10px 4px}
+    .panel-body{padding:14px 10px 20px}
   }
 </style>
 <script>

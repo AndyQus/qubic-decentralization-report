@@ -164,7 +164,10 @@
   }
 
   @media (max-width:640px){
-    .wrap{padding:0 14px 56px}
+    /* 10px, das Mass der Kursseite. Hier steht Fliesstext, der von Breite
+       wenig hat — aber die Tabellen im Dokument haben eine min-width, und
+       jedes Pixel Rand schiebt sie früher ins seitliche Scrollen. */
+    .wrap{padding:0 10px 56px}
     .top-inner{padding:11px 14px;gap:10px}
     .brand .sub{display:none}
     .brand h1{font-size:15px}

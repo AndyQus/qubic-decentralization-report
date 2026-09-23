@@ -581,10 +581,13 @@ html { scroll-behavior: smooth; }
 @media (max-width: 600px) {
   .hero { padding: 36px var(--gutter-mobile) 32px; }
   .hero-count { font-size: clamp(44px, 14vw, 72px); }
-  .main-grid { padding: 0 var(--gutter-mobile) 48px; }
-  .sc-body { padding: 12px 16px 16px; }
-  .sc-head { padding: 14px 16px 0; }
-  .sc-desc { margin: 4px 16px 0; }
+  /* 10px aussen und innen, wie auf der Kursseite. Der Hero behält seinen
+     breiteren Rand: dort steht eine einzelne grosse Zahl mittig, die keine
+     Breite braucht — die Karten darunter mit ihren Rastern schon. */
+  .main-grid { padding: 0 10px 48px; }
+  .sc-body { padding: 12px 10px 16px; }
+  .sc-head { padding: 14px 10px 0; }
+  .sc-desc { margin: 4px 10px 0; }
   .task-params { grid-template-columns: 1fr; }
   .node-grid { grid-template-columns: 1fr; }
   .rev-kpis { grid-template-columns: 1fr 1fr; }

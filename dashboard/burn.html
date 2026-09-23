@@ -316,8 +316,12 @@ table.data td:first-child { font-family: var(--sans); }
 /* ─── Mobile ────────────────────────────────────────────────────────────────── */
 @media (max-width: 700px) {
   .brand h1 { font-size: 15px; }
-  main { padding: 16px 14px 22px; }
-  .card { padding: 14px; }
+  /* Aussen 10px statt 14, innen 10 statt 14: dieselbe Rechnung wie auf der
+     Kursseite. Jede Schicht kostet die Breite zweimal, und die Tabelle der
+     Computoren hat hier am meisten davon — ihre Namensspalte bekommt die
+     28px, die Rand und Karte vorher für sich behielten. */
+  main { padding: 16px 10px 22px; }
+  .card { padding: 14px 10px; }
   .hero-facts { gap: 10px; }
   .hero-facts .qs-stat { flex: 1 1 calc(50% - 10px); min-width: 0; }
   /* Die Umschaltung wird vollbreit, Touch-Ziele ≥ 44 px. */

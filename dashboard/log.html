@@ -126,6 +126,14 @@
     footer .fbar{grid-template-columns:1fr;justify-items:center;text-align:center;gap:8px}
     footer .fright{text-align:center}
   }
+  /* Auf dem Telefon aussen und innen 10px, wie auf der Kursseite. Diese Seite
+     hatte als einzige gar keine schmalere Regel und verlor mit 20px Rand plus
+     18px Karte fast 40px pro Seite — am teuersten ausgerechnet hier, wo
+     Log-Zeilen stehen, die ohnehin zu lang für eine Telefonspalte sind. */
+  @media (max-width:560px){
+    main{padding:16px 10px}
+    .card{padding:16px 10px}
+  }
 </style>
 </head>
 <body>
