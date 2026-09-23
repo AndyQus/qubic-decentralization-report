@@ -1650,8 +1650,11 @@ body[data-chart-style="flow"] .leg-swatch.price {
      Ziffer nicht, sollte QU je dort stehen. */
   const PRICE_SIG = 3;
 
-  function fmtPrice(x) {
-    if (x == null || !isFinite(x) || x <= 0) return "–";
+  /* Wie viele Nachkommastellen ein Preis bekommt. Getrennt von fmtPrice(),
+     weil die Zahl auch VOR dem Formatieren gebraucht wird: wer eine Reihe von
+     Werten in derselben Breite zeigen will, fragt hier einmal und gibt das
+     Ergebnis dann an jedes fmtPrice() weiter. */
+  function priceDigits(x) {
     /* Die Zehnerstelle der ERSTEN signifikanten Ziffer. `floor`, nicht `ceil`:
        4,07e-7 hat den Exponenten -7 und damit sechs führende Nullen, `ceil`
        lieferte hier eine Stelle zu viel und hängte die überzählige Null an. */
@@ -1661,7 +1664,18 @@ body[data-chart-style="flow"] .leg-swatch.price {
     let used = 0;
     while (used < 12
            && Math.abs(Number(x.toFixed(used)) - x) > Math.abs(x) * 1e-9) used++;
-    const digits = Math.min(18, Math.max(2, -exp + (PRICE_SIG - 1), used));
+    return Math.min(18, Math.max(2, -exp + (PRICE_SIG - 1), used));
+  }
+
+  /* `fixed` überschreibt die selbst gemessene Breite. Gedacht für Zwischen-
+     werte, die keine Messung sind: eine animierte Zahl läuft durch krumme
+     Zwischenstände wie 4,137281943e-7, deren kürzeste exakte Schreibweise
+     zwölf Stellen braucht — und die Anzeige würde für einen Moment breiter,
+     bevor sie am Zielwert wieder auf neun zurückspringt. Solche Ziffern
+     stehen in keiner Quelle; sie gehören der Interpolation. */
+  function fmtPrice(x, fixed) {
+    if (x == null || !isFinite(x) || x <= 0) return "–";
+    const digits = fixed != null ? fixed : priceDigits(x);
     return x.toLocaleString(locale(), {
       minimumFractionDigits: digits, maximumFractionDigits: digits
     });
@@ -3086,7 +3100,8 @@ body[data-chart-style="flow"] .leg-swatch.price {
 
        1. Nicht runden. Der Zähler dort zählt ganze Lösungen; hier stünde nach
           Math.round() konstant "0". Zwischenwerte laufen deshalb ungerundet
-          durch fmtPrice(), das ohnehin auf vier signifikante Stellen formatiert.
+          durch fmtPrice() — aber in der Breite des ZIELWERTS, sonst zeigte
+          der Lauf kurz mehr Stellen als der Kurs selbst hat (s. fmtPrice).
 
        2. Nicht linear in der Zahl, sondern im Verhältnis. Der Preis bewegt sich
           in Sprüngen von ~0,2 %; ein linearer Lauf über so eine Spanne zeigt
@@ -3107,12 +3122,19 @@ body[data-chart-style="flow"] .leg-swatch.price {
     }
     const start = performance.now();
     const logFrom = Math.log(fromVal), logTo = Math.log(toVal);
+    /* Die Breite steht vor dem ersten Bild fest: die des Zielwerts, und wenn
+       der Startwert mehr Stellen trägt, dessen — so wird die Zahl während des
+       Laufs nie breiter, als sie an einem der beiden Enden ist. */
+    const width = Math.max(priceDigits(fromVal), priceDigits(toVal));
     function step(now) {
       const p = Math.min(1, (now - start) / durationMs);
       const ease = 1 - Math.pow(1 - p, 3);   /* cubic ease-out, wie in mining.html */
       /* Am Ende exakt der Zielwert, nicht exp(log(x)) — das ließe die letzte
-         Ziffer gelegentlich um eins danebenstehen. */
-      el.textContent = fmtPrice(p >= 1 ? toVal : Math.exp(logFrom + (logTo - logFrom) * ease));
+         Ziffer gelegentlich um eins danebenstehen. Und am Ende in der eigenen
+         Breite: die Zahl steht danach still, da darf sie wieder sie selbst sein. */
+      el.textContent = p >= 1
+        ? fmtPrice(toVal)
+        : fmtPrice(Math.exp(logFrom + (logTo - logFrom) * ease), width);
       if (p < 1) priceAnimFrame = requestAnimationFrame(step);
       else priceAnimFrame = null;
     }
