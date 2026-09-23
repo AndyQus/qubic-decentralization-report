@@ -398,12 +398,17 @@ a:hover { text-decoration: underline; }
      once the bar had collapsed, EN/DE and the theme toggle were the two
      controls a reader still expected to find behind the menu, not beside it.
 
-     The trick is that .controls itself becomes the panel. The burger is taken
-     out of the flow and pinned to the header's right edge; its three siblings
-     then stack down the panel in source order, so the language switch and the
-     theme button need no placement rules of their own and the panel sizes
-     itself around them. The burger stays put in the DOM next to the nav it
-     names with aria-controls. */
+     The trick is that .controls itself becomes the panel, and its contents --
+     the nav links, the language switch and the theme button -- stack down it
+     in source order. So those two need no placement rules of their own, and
+     the panel sizes itself around them instead of having room guessed for it.
+
+     The burger sits OUTSIDE .controls in the markup, immediately before it,
+     and is pinned here to the header's right edge. That is not cosmetic: the
+     panel is display:none while closed, and a button inside it would be hidden
+     along with it, leaving no way to open the menu at all. A button that opens
+     a panel cannot live inside that panel. aria-controls carries the
+     relationship instead, which never depended on nesting. */
   .qs-icon-btn.qs-burger {
     display: inline-flex;
     position: absolute; top: 50%; right: var(--gutter-mobile);
