@@ -227,6 +227,7 @@ def api_index():
             "/v1/mining",
             "/v1/mining/series",
             "/v1/price/latest",
+            "/v1/price/now",
             "/v1/price/series",
             "/v1/price/change",
             "/v1/price/at",
@@ -701,6 +702,61 @@ def price_latest():
     data["measured"] = True
     _price_cache.update({"at": now, "data": data})
     return dict(data, next_refresh_in=_price_next_refresh_in(now))
+
+
+@app.get("/v1/price/now", tags=["price"],
+         summary="The last price, and nothing else")
+def price_now():
+    """The current price in the smallest honest payload.
+
+    `/v1/price/latest` answers the same question with roughly 1.5 KB of
+    context -- coverage, change over four windows, the source chain. That is the
+    right answer for a page being built; it is the wrong one for a ticker
+    polling every minute, a status bar, or a widget that wants a number and a
+    timestamp.
+
+    What stays, and why none of it is padding:
+
+      * `price` -- the figure itself, USD per QU.
+      * `at` / `age_s` -- when it was measured. A price without a time is not a
+        measurement, and a consumer that cannot see staleness will render a
+        stopped worker as a live quote.
+      * `held_for_s` -- how long it has stood. On this market a flat number is
+        the normal case, and this is what separates "steady" from "nobody is
+        looking".
+      * `status` -- `live` or `stale`, already decided here so a caller does not
+        have to pick a threshold of its own.
+
+    Deliberately absent: trading volume, which the RPC does not publish and
+    which this project will not source elsewhere. No field here is ever
+    computed from an exchange feed.
+
+    Same reading, same cache and same minute cadence as `/v1/price/latest` --
+    this is a narrower view of one measurement, not a second measurement.
+    """
+    import time as _t
+
+    now = _t.time()
+    if _price_cache["data"] and now - _price_cache["at"] < PRICE_TTL_S:
+        data = _price_cache["data"]
+    else:
+        store = get_store()
+        data = pipeline.price_summary(store)
+        if data.get("status") == "no data":
+            raise _no_data("market price")
+        data["measured"] = True
+        _price_cache.update({"at": now, "data": data})
+
+    return {
+        "price": data.get("price"),
+        "at": data.get("at"),
+        "age_s": data.get("age_s"),
+        "held_for_s": data.get("held_for_s"),
+        "status": data.get("status"),
+        "quote": "USD per QU",
+        "next_refresh_in": _price_next_refresh_in(now),
+        "measured": True,
+    }
 
 
 def _price_next_refresh_in(now: float) -> int:

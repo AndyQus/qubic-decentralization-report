@@ -527,3 +527,52 @@ def test_an_empty_store_answers_503_rather_than_a_flat_line():
     d = Path(tempfile.mkdtemp(prefix="qdr_price_avg_"))
     Store(d / "qdr.db").close()
     assert _client(d / "qdr.db").get("/v1/price/average?days=50").status_code == 503
+
+
+# -- the compact reading -----------------------------------------------------
+
+def test_price_now_answers_with_the_same_figure_as_latest():
+    """Two views of one measurement. If these ever disagree, one of them is
+    reading a different store or a different cache generation."""
+    db, _ = _store_with_prices()
+    c = _client(db)
+    full = c.get("/v1/price/latest").json()
+    slim = c.get("/v1/price/now").json()
+    assert slim["price"] == full["price"]
+    assert slim["at"] == full["at"]
+    assert slim["status"] == full["status"]
+
+
+def test_price_now_keeps_the_fields_that_make_a_price_readable():
+    """A bare number is the one thing this endpoint must not become. Without a
+    timestamp a stopped worker renders as a live quote, and without held_for_s
+    a flat market cannot be told from an unobserved one."""
+    db, _ = _store_with_prices()
+    body = _client(db).get("/v1/price/now").json()
+    for k in ("price", "at", "age_s", "held_for_s", "status", "quote"):
+        assert k in body, k
+    assert body["quote"] == "USD per QU"
+    assert body["measured"] is True
+
+
+def test_price_now_stays_smaller_than_the_full_reading():
+    """The endpoint's whole reason for existing. If it grows back toward
+    `latest`, a caller may as well use `latest`."""
+    import json
+    db, _ = _store_with_prices()
+    c = _client(db)
+    slim = len(json.dumps(c.get("/v1/price/now").json()))
+    full = len(json.dumps(c.get("/v1/price/latest").json()))
+    assert slim < full // 2, (slim, full)
+
+
+def test_price_now_never_publishes_trading_volume():
+    db, _ = _store_with_prices()
+    body = _client(db).get("/v1/price/now").json()
+    assert "volume" not in _field_names(body)
+
+
+def test_price_now_on_an_empty_store_answers_503():
+    d = Path(tempfile.mkdtemp(prefix="qdr_price_"))
+    Store(d / "qdr.db").close()
+    assert _client(d / "qdr.db").get("/v1/price/now").status_code == 503

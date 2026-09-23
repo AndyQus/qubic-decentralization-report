@@ -872,6 +872,8 @@ body[data-chart-style="flow"] .leg-swatch.price {
 
     <p class="desc" style="margin-top:14px" data-i18n="apiMore">Three more endpoints carry the rest of this page:</p>
     <ul class="api-list">
+      <li><code>/v1/price/now</code> — <span data-i18n="apiNow">the last price and how long it has stood, in about a tenth of the bytes. For tickers and widgets.</span></li>
+      <li><code>/v1/price/average?days=50</code> — <span data-i18n="apiAverage">the moving average over daily prices. Says how many days actually stand behind it, and refuses to call a short window a long one.</span></li>
       <li><code>/v1/price/series?range=24h</code> — <span data-i18n="apiSeries">the step series behind the chart. Each row is an interval: the price held from <code>at</code> until <code>until</code>. Draw it as steps, never as a curve.</span></li>
       <li><code>/v1/price/epochs</code> — <span data-i18n="apiEpochs">the study of what the price does around the computor payouts.</span></li>
       <li><code>/v1/price/at?t=&lt;unix&gt;</code> — <span data-i18n="apiAt">the price at one moment, with the reading it came from.</span></li>
@@ -1009,6 +1011,8 @@ body[data-chart-style="flow"] .leg-swatch.price {
       apiCmtAt: "// when it was read",
       apiCmtHeld: "// how long it has stood",
       apiMore: "Three more endpoints carry the rest of this page:",
+      apiNow: "the last price and how long it has stood, in about a tenth of the bytes. For tickers and widgets.",
+      apiAverage: "the moving average over daily prices. Says how many days actually stand behind it, and refuses to call a short window a long one.",
       apiSeries: "the step series behind the chart. Each row is an interval: the price held from at until until. Draw it as steps, never as a curve.",
       apiEpochs: "the study of what the price does around the computor payouts.",
       apiAt: "the price at one moment, with the reading it came from.",
@@ -1114,6 +1118,8 @@ body[data-chart-style="flow"] .leg-swatch.price {
       apiCmtAt: "// wann gemessen wurde",
       apiCmtHeld: "// wie lange er schon steht",
       apiMore: "Drei weitere Endpunkte tragen den Rest dieser Seite:",
+      apiNow: "der letzte Kurs und wie lange er schon steht, in etwa einem Zehntel der Bytes. Für Ticker und Widgets.",
+      apiAverage: "der gleitende Durchschnitt über Tagespreise. Nennt, wie viele Tage tatsächlich dahinterstehen, und gibt ein kurzes Fenster nicht als langes aus.",
       apiSeries: "die Stufenreihe hinter dem Diagramm. Jede Zeile ist ein Intervall: Der Preis galt von at bis until. Als Stufen zeichnen, nie als Kurve.",
       apiEpochs: "die Auswertung, was der Kurs rund um die Computor-Auszahlungen tut.",
       apiAt: "der Preis zu einem Zeitpunkt, mitsamt der Messung, aus der er stammt.",
