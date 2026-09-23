@@ -1565,9 +1565,29 @@ body[data-chart-style="flow"] .leg-swatch.price {
     }
     if (drop) digits = digits.map(d => d === null ? null : d.slice(0, d.length - drop));
 
+    /* Tausendertrennung, sobald die Ziffernfolge lang genug ist, um davon zu
+       profitieren. Bei drei Ziffern gibt es nichts zu gruppieren; eng
+       zusammenliegende Marken lassen die Beschriftung aber auf fünf oder sechs
+       Stellen wachsen, und "407 150" liest sich dort deutlich schneller als
+       "407150".
+
+       Das Trennzeichen kommt aus der Sprache der Seite, nicht fest aus dem
+       Code: im Deutschen ist es der Punkt, im Englischen das Komma — und ein
+       Punkt in einer englischen Beschriftung sähe wie ein Dezimalpunkt aus,
+       also wie ein ganz anderer Wert. `toLocaleString` mit einer Zahl zu
+       fragen wäre hier falsch, weil die Ziffern KEINE Zahl mehr sind, sondern
+       der Rest nach dem abgetrennten Faktor. Deshalb wird nur das Zeichen
+       erfragt und die Gruppierung selbst gesetzt. */
+    const group = (1234).toLocaleString(locale()).replace(/[0-9]/g, "");
+    function grouped(d) {
+      if (d === null) return "–";
+      if (d.length <= 4 || !group) return d;
+      return d.replace(/\B(?=(\d{3})+(?!\d))/g, group);
+    }
+
     return {
       prefix: "0" + sep + "0".repeat(zeros + drop),
-      labels: digits.map(d => d === null ? "–" : d)
+      labels: digits.map(grouped)
     };
   }
 
