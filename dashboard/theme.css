@@ -338,7 +338,11 @@ a:hover { text-decoration: underline; }
   mask-image: linear-gradient(#000, #000), var(--qr-mark);
   -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
   -webkit-mask-position: center, center; mask-position: center, center;
-  -webkit-mask-size: 100% 100%, 48% 48%; mask-size: 100% 100%, 48% 48%;
+  /* Die Marke füllt die Kachel zu 62 %, nicht mehr zu 48 %. Bei 48 % stand sie
+     als kleines Zeichen in viel Farbfläche und war in der Kopfzeile kaum als
+     Qubics Wortmarke zu erkennen; die Kachel selbst bleibt 32 px, damit die
+     Höhe der Kopfzeile und der mobilen Leiste unverändert bleibt. */
+  -webkit-mask-size: 100% 100%, 62% 62%; mask-size: 100% 100%, 62% 62%;
   -webkit-mask-composite: xor; mask-composite: exclude;
 }
 .qs-link, .how-link {
