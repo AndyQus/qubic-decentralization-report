@@ -116,15 +116,33 @@
   @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
   @media (prefers-reduced-motion:reduce){
     .live.loading .lc-val,.live.loading .lc-sub,.live.loading .live-epoch{animation:none} }
-  .live-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-  .live-running{font-size:11.5px;color:var(--muted);white-space:nowrap}
+  /* Wraps rather than overflows: the sentence beside the epoch badge is a full
+     clause, and on a phone it does not fit on one line. It used to be pinned
+     by white-space:nowrap inside a nowrap row, so it pushed the rule and the
+     pulse past the card's edge and the whole page could be dragged sideways. */
+  .live-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-bottom:12px}
+  /* min-width:0 lets it actually shrink inside the flex row; without it a flex
+     item refuses to go below its longest word and overflows instead. */
+  .live-running{font-size:11.5px;color:var(--muted);min-width:0}
   .live-epoch{font-size:.8125rem;font-weight:700;font-variant-numeric:tabular-nums;
     letter-spacing:.02em;padding:.15rem .5rem;border-radius:6px;white-space:nowrap;
+    flex:0 0 auto;
     color:var(--live-edge);background:color-mix(in srgb,var(--live-edge) 16%,transparent)}
-  .live-rule{flex:1 1 auto;height:1px;min-width:20px;
+  /* The rule is decoration: it takes what is left over and collapses to
+     nothing once the row has wrapped and there is nothing left over. */
+  .live-rule{flex:1 1 auto;height:1px;min-width:0;
     background:linear-gradient(90deg,color-mix(in srgb,var(--live-edge) 55%,transparent),transparent)}
   .live-pulse{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;
     font-size:.75rem;font-weight:600;color:var(--live-edge)}
+  /* On a phone the clause gets its own line, with the "live" marker ending the
+     first one next to the badge. Wide enough and nothing reorders: the row
+     stays badge - sentence - rule - pulse on one line, as before. */
+  @media (max-width:560px){
+    .live-epoch{order:1}
+    .live-rule{order:2}
+    .live-pulse{order:3}
+    .live-running{order:4;flex:1 1 100%}
+  }
   .live-pulse i{width:8px;height:8px;border-radius:50%;background:var(--live-edge);
     box-shadow:0 0 0 0 color-mix(in srgb,var(--live-edge) 70%,transparent);
     animation:livepulse 2s ease-out infinite}
