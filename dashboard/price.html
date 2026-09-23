@@ -1491,9 +1491,35 @@ body[data-chart-style="flow"] .leg-swatch.price {
     };
   }
 
+  /* Der Preis liegt bei ~4e-7. Eine feste Nachkommastelle würde ihn zu 0,00
+     runden, eine Exponentialschreibweise ist für die meisten Leser unlesbar.
+     Also so viele Stellen, dass die signifikanten Ziffern übrig bleiben.
+
+     Drei davon, nicht vier. Qubics RPC liefert genau diese Auflösung: die
+     Messwerte gehen in Schritten von 0,01e-7 (4,06e-7 · 4,07e-7 · 4,10e-7),
+     und die vierte Stelle war deshalb IMMER eine Null. Sie anzuzeigen behauptet
+     eine Genauigkeit, die in der Quelle nicht steht — aus 0,000000407 wurde
+     0,0000004070, und die letzte Ziffer war keine Messung, sondern Füllung.
+
+     `SIG` ist dabei eine Untergrenze, keine feste Breite: steigt der Kurs
+     einmal in einen Bereich, in dem die Quelle mehr Ziffern trägt, werden sie
+     gezeigt. Gemessen wird das am Wert selbst — was er an Nachkommastellen
+     wirklich braucht, bis 12 Stellen. So verliert 0,00003234 seine vierte
+     Ziffer nicht, sollte QU je dort stehen. */
+  const PRICE_SIG = 3;
+
   function fmtPrice(x) {
     if (x == null || !isFinite(x) || x <= 0) return "–";
-    const digits = Math.min(18, Math.max(2, Math.ceil(-Math.log10(x)) + 3));
+    /* Die Zehnerstelle der ERSTEN signifikanten Ziffer. `floor`, nicht `ceil`:
+       4,07e-7 hat den Exponenten -7 und damit sechs führende Nullen, `ceil`
+       lieferte hier eine Stelle zu viel und hängte die überzählige Null an. */
+    const exp = Math.floor(Math.log10(x));
+    /* Wie viele Nachkommastellen der Wert tatsächlich belegt: die kürzeste
+       Schreibweise, die ihn noch exakt trifft. */
+    let used = 0;
+    while (used < 12
+           && Math.abs(Number(x.toFixed(used)) - x) > Math.abs(x) * 1e-9) used++;
+    const digits = Math.min(18, Math.max(2, -exp + (PRICE_SIG - 1), used));
     return x.toLocaleString(locale(), {
       minimumFractionDigits: digits, maximumFractionDigits: digits
     });
