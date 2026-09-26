@@ -239,3 +239,28 @@ def test_every_content_card_is_translucent_over_the_moving_background():
     opaque = [c for c in content if "qs-card--translucent" not in c]
     assert not opaque, (
         f"content card(s) without --translucent over a moving canvas: {opaque}")
+
+
+# -- trend lines (docs/CONCEPT_TRENDLINES.de.md) ------------------------------
+
+def test_trend_lines_say_they_are_not_a_forecast_in_both_languages():
+    """Lines on a price chart read as a prediction unless the page says
+    otherwise. They are geometry from past swings, and both languages say so."""
+    src = page_text()
+    block = src[src.index("const I18N"):src.index("let lang =")]
+    en = block[block.index("en: {"):block.index("de: {")]
+    de = block[block.index("de: {"):]
+    assert "not a forecast" in en
+    assert "keine Prognose" in de
+
+
+def test_trend_lines_come_from_the_stored_lines_and_skip_minute_windows():
+    """The page draws what the worker stored -- it never fits lines itself, or
+    a reload would move them -- and has no scale for 1 h and 6 h."""
+    src = page_text()
+    assert "/v1/price/trendlines?scale=" in src
+    scale_fn = src[src.index("function trendScale()"):]
+    scale_fn = scale_fn[:scale_fn.index("}\n")]
+    for w, sc in (("86400", "short"), ("604800", "hour"), ("0", "day")):
+        assert f"windowSecs === {w}) return \"{sc}\"" in scale_fn
+    assert "return null" in scale_fn

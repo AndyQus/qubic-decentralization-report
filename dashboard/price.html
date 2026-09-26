@@ -472,6 +472,15 @@
    die Legende der Seite vollständig ist, nimmt aber keine Klicks mehr an. */
 .sma-toggle[disabled] { opacity: .45; cursor: not-allowed; }
 .sma-toggle[disabled]:hover { color: var(--muted); border-color: var(--border); }
+/* Der Trendlinien-Schalter ist derselbe Kippschalter, mit durchgezogenem
+   Plättchen: die Linien sind aus gemessenen Hochs und Tiefs gesetzt, nicht
+   gemittelt. Seine Farbe ist die Akzentfarbe, weil er zwei Farben schaltet
+   (Widerstand rot, Unterstützung grün) und keine davon für beide stehen kann. */
+.trend-toggle::before { border-top-style: solid; }
+.sma-toggle.trend-toggle[aria-pressed="true"] {
+  color: var(--accent); border-color: currentColor;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
 .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .chart-svg { display: block; width: 100%; min-width: 320px; height: 360px; }
 .chart-svg[hidden] { display: none; }
@@ -530,6 +539,34 @@ body[data-chart-style="flow"] .leg-swatch.price {
 }
 .leg-swatch.extreme::before { background: var(--price-up); }
 .leg-swatch.extreme::after  { background: var(--price-down); }
+/* Die Trendlinien-Einträge sind Schalter: ein Klick blendet die Linienart aus
+   oder ein. Ausgeblendet bleibt der Eintrag stehen, nur blass und
+   durchgestrichen — verschwände er, gäbe es keinen Weg zurück. */
+button.leg-toggle {
+  border: 0; background: none; padding: 0; font: inherit; color: inherit;
+  cursor: pointer;
+}
+button.leg-toggle:hover { color: var(--text); }
+button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-through; }
+.leg-swatch.trend-res { background: var(--price-down); height: 2px; }
+.leg-swatch.trend-sup { background: var(--price-up); height: 2px; }
+.leg-swatch.trend-chan {
+  background: none; height: 0; border-top: 2px dashed var(--muted); border-radius: 0;
+}
+.leg-swatch.trend-old { background: var(--faint); height: 2px; }
+
+/* Das Linienarchiv: eingeklappt, damit der Chart der Blickfang bleibt. */
+.trend-archive { margin-top: 12px; font-size: 13px; }
+.trend-archive[hidden] { display: none; }
+.trend-archive summary { cursor: pointer; color: var(--muted); }
+.trend-archive summary:hover { color: var(--text); }
+.trend-archive .desc { margin: 8px 0 0; }
+.trend-archive tbody tr { cursor: pointer; }
+.trend-archive tbody tr:hover td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.trend-archive tbody tr.focus td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.trend-archive td.res { color: var(--price-down); }
+.trend-archive td.sup { color: var(--price-up); }
+.trend-archive .arch-since { margin-top: 8px; color: var(--faint); font-size: 12px; }
 .leg-swatch.gap {
   height: 10px; width: 14px; border-radius: 2px;
   background: repeating-linear-gradient(45deg,
@@ -944,6 +981,11 @@ body[data-chart-style="flow"] .leg-swatch.price {
            ist diese Frage sinnlos. Die Wahl bleibt in localStorage. -->
       <button class="sma-toggle" id="sma-btn" type="button"
               aria-pressed="false" data-i18n="smaToggle">50-day average</button>
+      <!-- Trendlinien (docs/CONCEPT_TRENDLINES.de.md). Voreinstellung AN; die
+           Wahl bleibt in localStorage. In 1 h und 6 h stumm geschaltet: dort
+           gibt es keine Linien, und der title sagt, warum. -->
+      <button class="sma-toggle trend-toggle" id="trend-btn" type="button"
+              aria-pressed="true" data-i18n="trendToggle">Trend lines</button>
     </div>
 
     <!-- Sagt, wenn die Ansicht auf Stundenzusammenfassungen umgeschaltet hat:
@@ -963,6 +1005,10 @@ body[data-chart-style="flow"] .leg-swatch.price {
       <span class="leg-item" id="leg-gap" hidden><span class="leg-swatch gap" aria-hidden="true"></span><span data-i18n="legGap">Not observed</span></span>
       <span class="leg-item" id="leg-extreme" hidden><span class="leg-swatch extreme" aria-hidden="true"></span><span data-i18n="legExtreme">High and low in view</span></span>
       <span class="leg-item" id="leg-sma" hidden><span class="leg-swatch sma" aria-hidden="true"></span><span id="leg-sma-text">50-day average</span></span>
+      <button type="button" class="leg-item leg-toggle" id="leg-trend-res" data-trend-kind="resistance" aria-pressed="true" hidden><span class="leg-swatch trend-res" aria-hidden="true"></span><span data-i18n="legTrendRes">Resistance</span></button>
+      <button type="button" class="leg-item leg-toggle" id="leg-trend-sup" data-trend-kind="support" aria-pressed="true" hidden><span class="leg-swatch trend-sup" aria-hidden="true"></span><span data-i18n="legTrendSup">Support</span></button>
+      <button type="button" class="leg-item leg-toggle" id="leg-trend-chan" data-trend-kind="channel" aria-pressed="true" hidden><span class="leg-swatch trend-chan" aria-hidden="true"></span><span data-i18n="legTrendChan">Channel</span></button>
+      <button type="button" class="leg-item leg-toggle" id="leg-trend-old" data-trend-kind="old" aria-pressed="false" hidden><span class="leg-swatch trend-old" aria-hidden="true"></span><span data-i18n="legTrendOld">Ended lines</span></button>
 
       <!-- Der Refresh-Ticker läuft in der Legendenzeile mit, ohne eigenen
            Rahmen: er ist wie die Legende eine Fußnote zum Bild darüber, und
@@ -993,6 +1039,32 @@ body[data-chart-style="flow"] .leg-swatch.price {
          des Workers. Ein 50-Tage-Schnitt aus sieben Tagen wäre eine erfundene
          Zahl, also steht hier stattdessen, wie weit die Aufzeichnung ist. -->
     <p class="agg-locked" id="sma-note" hidden></p>
+
+    <!-- Warum Trendlinien fehlen, oder was sie sind. Wie beim Durchschnitt:
+         lieber ein Satz als eine Linie aus zu wenig Daten. -->
+    <p class="agg-locked" id="trend-note" hidden></p>
+
+    <!-- Das Archiv der Linien dieses Fensters: welche hielten, welche brachen. -->
+    <details class="trend-archive" id="trend-archive" hidden>
+      <summary data-i18n="archiveTitle">Line archive</summary>
+      <p class="desc" data-i18n="archiveDesc">Every line set for this range, newest first. Anchors never move; a line only ends — broken, or replaced by a better one. Click a row to show it in the chart.</p>
+      <div class="table-wrap">
+        <table class="study-table" id="trend-table">
+          <thead>
+            <tr>
+              <th data-i18n="thLine">Line</th>
+              <th data-i18n="thAnchors">Anchors</th>
+              <th data-i18n="thTouches">Touches</th>
+              <th data-i18n="thSlope">Slope</th>
+              <th data-i18n="thResult">Result</th>
+            </tr>
+          </thead>
+          <tbody id="trend-body"></tbody>
+        </table>
+      </div>
+      <div class="chart-empty" id="trend-archive-empty" hidden>–</div>
+      <p class="arch-since" id="trend-since" hidden></p>
+    </details>
   </section>
 
   <!-- Ehrlichkeitshinweis: steht direkt UNTER dem Diagramm, als Fußnote zu dem,
@@ -1187,6 +1259,8 @@ body[data-chart-style="flow"] .leg-swatch.price {
   const LS_THEME = "qdr.theme";
   const LS_STYLE = "qdr.price.chartStyle";
   const LS_SMA = "qdr.price.sma";
+  const LS_TREND = "qdr.price.trend";
+  const LS_TREND_HIDE = "qdr.price.trendHide";
   /* Was beim letzten Besuch auf dieser Seite zu sehen war: Preis und Zeitpunkt.
      Daraus wird beim nächsten Besuch die Bewegung seit damals gezeigt. */
   const LS_LAST_SEEN = "qdr.price.lastSeen";
@@ -1254,6 +1328,45 @@ body[data-chart-style="flow"] .leg-swatch.price {
       smaShort: "The average is drawn over {have} days, not {days}: that is the whole record so far. It carries the name it will have once {days} days are on record.",
       smaOffscale: "The {days}-day average lies outside this window’s price range and is drawn at the edge. Choose a wider range to see it in place.",
       tipSma: "{days}-day avg.",
+      trendToggle: "Trend lines",
+      trendNoScale: "Trend lines are drawn in the 24 h, 7 d and All ranges. On minute data every line would be noise.",
+      trendNotReady: "Trend lines for this range need {need} {unit} on record; {have} are so far. This page has no backfill, so the lines appear once the record is long enough.",
+      unitHours: "hours",
+      unitDays: "days",
+      trendNone: "No line qualifies in this range yet: no two swing points lie far enough apart without the price crossing between them.",
+      trendAbove: "The {kind} lies above this range, at {price} now.",
+      trendBelow: "The {kind} lies below this range, at {price} now.",
+      trendDisclaimer: "The lines are geometry from past highs and lows, set by a fixed rule and stored as found. They are not a forecast.",
+      legTrendRes: "Resistance",
+      legTrendSup: "Support",
+      legTrendChan: "Channel",
+      legTrendOld: "Ended lines",
+      kindResistance: "Resistance",
+      kindSupport: "Support",
+      kindParallel: "Channel parallel",
+      kindMid: "Channel mid line",
+      tipAnchor1: "Anchor 1",
+      tipAnchor2: "Anchor 2",
+      tipTouches: "Touches",
+      tipSlope: "Slope per day",
+      tipFound: "Set",
+      trendHolds: "Holds",
+      trendBrokeUp: "Broken upwards {at}",
+      trendBrokeDown: "Broken downwards {at}",
+      trendReplaced: "Replaced {at}",
+      shapeChannel: "Resistance and support run parallel: a channel.",
+      shapeConverging: "Resistance and support converge: a wedge or triangle, so there is no mid line.",
+      shapeDiverging: "Resistance and support diverge.",
+      trendChannelTip: "Derived from the active resistance and support on every load; not stored.",
+      archiveTitle: "Line archive",
+      archiveDesc: "Every line set for this range, newest first. Anchors never move; a line only ends — broken, or replaced by a better one. Click a row to show it in the chart.",
+      archiveSince: "Lines have been recorded since {date}. There is no backfill: earlier lines were never set.",
+      archiveEmpty: "No line has been set for this range yet.",
+      thLine: "Line",
+      thAnchors: "Anchors",
+      thTouches: "Touches",
+      thSlope: "Slope",
+      thResult: "Result",
 
       studyTitle: "Around the computor payouts",
       studyDesc: "Once a week, when the epoch turns (Wednesday 12:00 UTC), the protocol pays 676 computors at once. Those payouts are emission, not transfers — the public RPC does not carry them at all, so this comparison exists nowhere else. The table reports what the price did; it does not claim the payout caused it.",
@@ -1376,6 +1489,45 @@ body[data-chart-style="flow"] .leg-swatch.price {
       smaShort: "Der Durchschnitt läuft über {have} Tage, nicht über {days}: mehr ist bisher nicht aufgezeichnet. Er trägt den Namen, den er hat, sobald {days} Tage vorliegen.",
       smaOffscale: "Der {days}-Tage-Durchschnitt liegt außerhalb der Preisspanne dieses Ausschnitts und wird am Rand gezeichnet. Ein weiteres Zeitfenster zeigt ihn an seinem Platz.",
       tipSma: "{days}-Tage-Schnitt",
+      trendToggle: "Trendlinien",
+      trendNoScale: "Trendlinien gibt es in den Zeiträumen 24 h, 7 d und Alle. Auf Minutendaten wäre jede Linie Rauschen.",
+      trendNotReady: "Trendlinien für diesen Zeitraum brauchen {need} {unit} Aufzeichnung; vorhanden sind {have}. Diese Seite füllt nichts zurück, die Linien erscheinen also, sobald die Aufzeichnung lang genug ist.",
+      unitHours: "Stunden",
+      unitDays: "Tage",
+      trendNone: "In diesem Zeitraum erfüllt noch keine Linie die Regel: Es gibt keine zwei Wendepunkte, die weit genug auseinanderliegen, ohne dass der Kurs dazwischen durch die Linie ging.",
+      trendAbove: "Die Linie „{kind}“ liegt oberhalb dieses Ausschnitts, derzeit bei {price}.",
+      trendBelow: "Die Linie „{kind}“ liegt unterhalb dieses Ausschnitts, derzeit bei {price}.",
+      trendDisclaimer: "Die Linien sind Geometrie aus den bisherigen Hochs und Tiefs, gesetzt nach einer festen Regel und so gespeichert, wie sie gefunden wurden. Sie sind keine Prognose.",
+      legTrendRes: "Widerstand",
+      legTrendSup: "Unterstützung",
+      legTrendChan: "Kanal",
+      legTrendOld: "Beendete Linien",
+      kindResistance: "Widerstand",
+      kindSupport: "Unterstützung",
+      kindParallel: "Kanal-Parallele",
+      kindMid: "Kanal-Mittellinie",
+      tipAnchor1: "Anker 1",
+      tipAnchor2: "Anker 2",
+      tipTouches: "Berührungen",
+      tipSlope: "Steigung pro Tag",
+      tipFound: "Gesetzt",
+      trendHolds: "Hält",
+      trendBrokeUp: "Nach oben gebrochen {at}",
+      trendBrokeDown: "Nach unten gebrochen {at}",
+      trendReplaced: "Ersetzt {at}",
+      shapeChannel: "Widerstand und Unterstützung laufen parallel: ein Kanal.",
+      shapeConverging: "Widerstand und Unterstützung laufen zusammen: ein Keil oder Dreieck, darum keine Mittellinie.",
+      shapeDiverging: "Widerstand und Unterstützung laufen auseinander.",
+      trendChannelTip: "Bei jedem Laden aus dem aktiven Widerstand und der aktiven Unterstützung abgeleitet, nicht gespeichert.",
+      archiveTitle: "Linienarchiv",
+      archiveDesc: "Alle Linien dieses Zeitraums, die neueste oben. Anker verschieben sich nie; eine Linie endet nur — gebrochen oder durch eine bessere ersetzt. Ein Klick auf eine Zeile zeigt sie im Chart.",
+      archiveSince: "Linien werden seit {date} aufgezeichnet. Es gibt keine Rückfüllung: frühere Linien wurden nie gesetzt.",
+      archiveEmpty: "Für diesen Zeitraum wurde noch keine Linie gesetzt.",
+      thLine: "Linie",
+      thAnchors: "Anker",
+      thTouches: "Berührungen",
+      thSlope: "Steigung",
+      thResult: "Ergebnis",
 
       studyTitle: "Rund um die Computor-Auszahlungen",
       studyDesc: "Einmal pro Woche, beim Epochenwechsel (mittwochs 12:00 UTC), zahlt das Protokoll 676 Computors auf einmal aus. Diese Auszahlungen sind Emission, keine Überweisungen — die öffentliche RPC führt sie gar nicht, deshalb gibt es diesen Vergleich sonst nirgends. Die Tabelle berichtet, was der Kurs tat; sie behauptet nicht, die Auszahlung habe es verursacht.",
@@ -1793,6 +1945,30 @@ body[data-chart-style="flow"] .leg-swatch.price {
      im Diagramm steht. */
   let calData = null;
 
+  /* Trendlinien (docs/CONCEPT_TRENDLINES.de.md §6). Jedes Zeitfenster hat seine
+     eigene Skala — 24 h `short`, 7 d `hour`, Alle `day` —, und 1 h / 6 h haben
+     keine: auf Minutendaten wäre jede Linie Rauschen. Geladen wird je Skala
+     einmal mit dem ganzen Archiv (`status=all`); die aktiven Linien sind darin
+     enthalten. `trendHidden` hält die per Legende ausgeblendeten Linienarten;
+     beendete Linien sind anfangs aus, sonst läge die Vergangenheit über dem
+     Jetzt. `trendFocus` ist die im Archiv angeklickte Linie. */
+  let showTrend = safeGet(LS_TREND) !== "0";
+  let trendHidden = (function () {
+    try {
+      const v = JSON.parse(safeGet(LS_TREND_HIDE) || "null");
+      if (Array.isArray(v)) return new Set(v);
+    } catch (e) {}
+    return new Set(["old"]);
+  })();
+  const trendData = {};
+  let trendFocus = null;
+  function trendScale() {
+    if (windowSecs === 86400) return "short";
+    if (windowSecs === 604800) return "hour";
+    if (windowSecs === 0) return "day";
+    return null;
+  }
+
   /* ─── Der letzte Besuch ────────────────────────────────────────────────────
      Beim Verlassen der Seite wird der zuletzt gezeigte Kurs gespeichert. Beim
      nächsten Besuch beginnt die Zahl im Hero NICHT beim aktuellen Wert, sondern
@@ -1975,8 +2151,13 @@ body[data-chart-style="flow"] .leg-swatch.price {
        Linie interpoliert, und "Kurs (Stufen)" darunter wäre schlicht falsch. */
     const legText = document.getElementById("leg-price-text");
     if (legText) legText.textContent = t(chartStyle === "flow" ? "legPriceFlow" : "legPrice");
-    if (chartStyle === "flow") { drawFlow(payload, pulse); runWelcomeDraw(); return; }
-    drawSteps(payload, pulse);
+    if (chartStyle === "flow") drawFlow(payload, pulse); else drawSteps(payload, pulse);
+    /* Die Treffflächen der Trendlinien nach oben: beide Zeichenarten legen ihre
+       Kurs-Treffflächen erst NACH den Linien an, und darunter bekäme eine Linie
+       nie einen Tooltip. Ein 14-px-Band entlang der Linie; daneben antwortet
+       weiter der Kurs. Aus der beschnittenen Gruppe gelöst ist das Band nur
+       unsichtbar breiter, nicht sichtbar. */
+    chart.querySelectorAll(".trend-hit").forEach(n => chart.appendChild(n));
     runWelcomeDraw();
   }
 
@@ -2122,6 +2303,284 @@ body[data-chart-style="flow"] .leg-swatch.price {
     tip.innerHTML = rows.join("");
     tip.classList.add("show");
     positionTip(evt);
+  }
+
+  /* ─── Trendlinien ──────────────────────────────────────────────────────────
+     Widerstand und Unterstützung, wie der Worker sie gesetzt hat: zwei Anker,
+     die sich nie verschieben, und die Gerade durch sie bis "jetzt". Zwischen den
+     Ankern kräftig, danach dünner — das ist die Strecke, auf der die Linie sich
+     seit ihrem zweiten Anker bewährt hat. In die Zukunft wird nichts verlängert.
+
+     Eine Linie, die ganz außerhalb der Preisspanne des Ausschnitts liegt, wird
+     weggelassen statt an den Rand geklemmt (anders als der Durchschnitt): eine
+     geklemmte Schräge zeigte eine falsche Steigung. Was teilweise hineinragt,
+     schneidet ein clipPath an der Plotfläche ab. */
+  function trendAt(ln, ts) {
+    return ln.p1 + (ln.p2 - ln.p1) * (ts - ln.t1) / (ln.t2 - ln.t1);
+  }
+
+  function drawTrend(ctx) {
+    const note = document.getElementById("trend-note");
+    const btn = document.getElementById("trend-btn");
+    const legs = {
+      resistance: document.getElementById("leg-trend-res"),
+      support: document.getElementById("leg-trend-sup"),
+      channel: document.getElementById("leg-trend-chan"),
+      old: document.getElementById("leg-trend-old")
+    };
+    Object.keys(legs).forEach(k => {
+      const b = legs[k];
+      if (!b) return;
+      b.hidden = true;
+      b.setAttribute("aria-pressed", trendHidden.has(k) ? "false" : "true");
+    });
+    if (note) { note.hidden = true; note.textContent = ""; }
+
+    const sc = trendScale();
+    if (btn) {
+      btn.disabled = !sc;
+      btn.title = sc ? "" : t("trendNoScale");
+      btn.setAttribute("aria-pressed", showTrend && sc ? "true" : "false");
+    }
+    const data = sc ? trendData[sc] : null;
+    renderTrendArchive(data);
+    if (!sc || !showTrend || !data) return;
+
+    if (!data.ready) {
+      if (note) {
+        const days = data.period_s >= 86400;
+        note.hidden = false;
+        note.textContent = t("trendNotReady", {
+          need: data.bars_needed, have: data.bars_on_record,
+          unit: t(days ? "unitDays" : "unitHours")
+        });
+      }
+      return;
+    }
+
+    const { chart, X, Y, W, padL, padR, padT, plotH, tMin, tMax, pMin, pMax, narrow } = ctx;
+    /* Anker liegen auf dem BEGINN ihrer Stunde bzw. ihres Tages — so speichert
+       der Server die Kerzen. Das Hoch fiel aber irgendwann in diese Periode,
+       und im 24-h-Fenster stand der Kreis sichtbar eine Stunde links neben der
+       Spitze. Gezeichnet wird deshalb zur Periodenmitte: die beste Schätzung,
+       wann das Hoch war, denn die Stundenzusammenfassung kennt nur seinen Wert.
+       Es ist eine Verschiebung der ganzen Geraden, die Steigung bleibt. */
+    const half = (data.period_s || 0) / 2;
+    const shift = ln => Object.assign({}, ln, {
+      t1: ln.t1 + half, t2: ln.t2 + half,
+      touch_at: (ln.touch_at || []).map(ts => ts + half),
+      ended_at: ln.ended_at != null ? ln.ended_at + half : ln.ended_at,
+      orig: ln          /* der Tooltip nennt die gespeicherten Anker, nicht die gezeichneten */
+    });
+    const lines = (data.lines || []).map(shift);
+    const active = lines.filter(l => l.status === "active");
+    const ended = lines.filter(l => l.status !== "active").slice(0, 3);
+    const channel = data.shape === "channel" ? (data.channel || []).map(shift) : [];
+    const focus = trendFocus != null ? lines.find(l => l.id === trendFocus) : null;
+
+    /* Eine aktive Linie, die ganz neben der Preisspanne dieses Ausschnitts
+       liegt, wird nicht gezeichnet (siehe oben) — aber gesagt: wo sie liegt und
+       auf welchem Kurs sie jetzt steht. Ohne den Satz nennte die Legende eine
+       Linie, die im Bild fehlt. */
+    const inView = ln => {
+      const a = Math.max(ln.t1, tMin), b = tMax;
+      if (!(b > a)) return false;
+      const pa = trendAt(ln, a), pb = trendAt(ln, b);
+      return !((pa > pMax && pb > pMax) || (pa < pMin && pb < pMin));
+    };
+    const offscale = active.filter(l => !inView(l));
+    const visible = active.filter(inView);
+
+    /* Legende: ein Eintrag je Linienart, die im Bild ist — oder die gerade
+       ausgeblendet ist, sonst gäbe es keinen Weg, sie zurückzuholen. */
+    const legFor = kind => visible.some(l => l.kind === kind);
+    if (legs.resistance) legs.resistance.hidden = !legFor("resistance");
+    if (legs.support) legs.support.hidden = !legFor("support");
+    if (legs.channel) legs.channel.hidden = !channel.some(inView);
+    if (legs.old) legs.old.hidden = !ended.length;
+
+    const clip = el("clipPath", { id: "trend-clip" });
+    clip.appendChild(el("rect", { x: padL, y: padT, width: Math.max(0, W - padL - padR), height: plotH }));
+    const defs = el("defs");
+    defs.appendChild(clip);
+    chart.appendChild(defs);
+    const layer = el("g", { "clip-path": "url(#trend-clip)", class: "trend-layer" });
+    chart.appendChild(layer);
+
+    const colOf = k => k === "resistance" ? (cssVar("--price-down") || "#ef4444")
+      : k === "support" ? (cssVar("--price-up") || "#22c55e")
+      : (cssVar("--muted") || "#9aa4b2");
+    const halo = cssVar("--chart-halo") || "#0b0f14";
+    let drawn = 0;
+
+    /* Ein Stück der Geraden zwischen zwei Zeitpunkten, auf den Ausschnitt
+       gekürzt — oder null, wenn es ganz neben dem Bild liegt. */
+    function seg(ln, from, to) {
+      const a = Math.max(from, tMin), b = Math.min(to, tMax);
+      if (!(b > a)) return null;
+      const pa = trendAt(ln, a), pb = trendAt(ln, b);
+      if ((pa > pMax && pb > pMax) || (pa < pMin && pb < pMin)) return null;
+      return { x1: X(a), y1: Y(pa), x2: X(b), y2: Y(pb) };
+    }
+    function stroke(sg, attrs) {
+      layer.appendChild(el("line", Object.assign({
+        x1: sg.x1.toFixed(2), y1: sg.y1.toFixed(2), x2: sg.x2.toFixed(2), y2: sg.y2.toFixed(2),
+        "stroke-linecap": "round"
+      }, attrs)));
+    }
+    /* Trefffläche entlang der ganzen sichtbaren Linie für den Tooltip. */
+    function hit(sg, fn) {
+      const h = el("line", {
+        x1: sg.x1, y1: sg.y1, x2: sg.x2, y2: sg.y2,
+        stroke: "transparent", "stroke-width": 14, "pointer-events": "stroke",
+        class: "trend-hit"
+      });
+      h.style.cursor = "pointer";
+      h.addEventListener("mousemove", fn);
+      h.addEventListener("mouseleave", hideTip);
+      layer.appendChild(h);
+    }
+
+    /* Beendete Linien zuerst, blass, bis zu ihrem Ende; ein Bruch trägt ein ×. */
+    function drawEnded(ln, strong) {
+      const sg = seg(ln, ln.t1, ln.ended_at || tMax);
+      if (!sg) return;
+      const col = colOf(ln.kind);
+      stroke(sg, { stroke: col, "stroke-width": strong ? 2.6 : 1.4, opacity: strong ? .9 : .35 });
+      if (ln.status === "broken" && ln.ended_at >= tMin && ln.ended_at <= tMax) {
+        const x = X(ln.ended_at), y = Y(trendAt(ln, ln.ended_at)), r = 4;
+        const d = `M ${x - r} ${y - r} L ${x + r} ${y + r} M ${x - r} ${y + r} L ${x + r} ${y - r}`;
+        layer.appendChild(el("path", { d: d, stroke: col, "stroke-width": 1.8, opacity: strong ? 1 : .6 }));
+      }
+      hit(sg, e => showTrendTip(e, ln, data));
+      drawn++;
+    }
+    if (!trendHidden.has("old")) ended.forEach(ln => { if (!focus || ln.id !== focus.id) drawEnded(ln, false); });
+
+    /* Kanal: Parallele dünn, Mittellinie gestrichelt — beide abgeleitet. */
+    if (!trendHidden.has("channel")) {
+      channel.forEach(ln => {
+        const sg = seg(ln, ln.t1, tMax);
+        if (!sg) return;
+        stroke(sg, ln.kind === "mid"
+          ? { stroke: colOf("mid"), "stroke-width": 1.2, "stroke-dasharray": "6 5", opacity: .85 }
+          : { stroke: colOf("parallel"), "stroke-width": 1.2, opacity: .75 });
+        hit(sg, e => showTrendTip(e, ln, data));
+        drawn++;
+      });
+    }
+
+    active.forEach(ln => {
+      if (trendHidden.has(ln.kind) && !(focus && focus.id === ln.id)) return;
+      const col = colOf(ln.kind);
+      const strong = focus && focus.id === ln.id;
+      const body = seg(ln, ln.t1, ln.t2);
+      const tail = seg(ln, ln.t2, tMax);
+      if (body) stroke(body, { stroke: col, "stroke-width": strong ? 2.8 : (narrow ? 1.8 : 2), opacity: .95 });
+      if (tail) stroke(tail, { stroke: col, "stroke-width": strong ? 2.2 : 1.3, opacity: .8 });
+      /* Die Berührungen: die Pfeile einer von Hand gezogenen Linie. */
+      (ln.touch_at || []).forEach(ts => {
+        if (ts < tMin || ts > tMax) return;
+        const p = trendAt(ln, ts);
+        if (p < pMin || p > pMax) return;
+        layer.appendChild(el("circle", {
+          cx: X(ts).toFixed(2), cy: Y(p).toFixed(2), r: narrow ? 3 : 3.5,
+          fill: halo, stroke: col, "stroke-width": 1.6
+        }));
+      });
+      const whole = seg(ln, ln.t1, tMax);
+      if (whole) { hit(whole, e => showTrendTip(e, ln, data)); drawn++; }
+    });
+
+    /* Eine im Archiv angeklickte, beendete Linie wird gezeigt, auch wenn
+       beendete Linien sonst aus sind. */
+    if (focus && focus.status !== "active") drawEnded(focus, true);
+
+    /* Unter dem Bild steht, was die Linien sind — oder, wenn die Regel noch
+       keine gefunden hat, warum keine da ist. */
+    if (note) {
+      const msgs = offscale.map(l => {
+        const now = trendAt(l, tMax);
+        return t(now > pMax ? "trendAbove" : "trendBelow", {
+          kind: t(l.kind === "resistance" ? "kindResistance" : "kindSupport"),
+          price: fmtPrice(now)
+        });
+      });
+      msgs.push(t(drawn || lines.length ? "trendDisclaimer" : "trendNone"));
+      note.hidden = false;
+      note.textContent = msgs.join(" ");
+    }
+  }
+
+  function showTrendTip(evt, ln, data) {
+    ln = ln.orig || ln;
+    const kindKey = { resistance: "kindResistance", support: "kindSupport",
+                      parallel: "kindParallel", mid: "kindMid" }[ln.kind];
+    const rows = [];
+    const row = (k, v) => rows.push(`<div class="tip-row"><span>${escapeHtml(k)}</span><span>${escapeHtml(v)}</span></div>`);
+    rows.push(`<div class="tip-key">${escapeHtml(t(kindKey))}</div>`);
+    if (ln.kind === "parallel" || ln.kind === "mid") {
+      row(t("tipSlope"), fmtPct(ln.slope_pct_per_day, 2));
+      rows.push(`<div class="tip-note">${escapeHtml(t("shapeChannel"))} ${escapeHtml(t("trendChannelTip"))}</div>`);
+    } else {
+      row(t("tipAnchor1"), `${fmtClock(ln.t1)} · ${fmtPrice(ln.p1)}`);
+      row(t("tipAnchor2"), `${fmtClock(ln.t2)} · ${fmtPrice(ln.p2)}`);
+      row(t("tipTouches"), String(ln.touches));
+      row(t("tipSlope"), fmtPct(ln.slope_pct_per_day, 2));
+      if (ln.found_at) row(t("tipFound"), fmtClock(ln.found_at));
+      rows.push(`<div class="tip-note">${escapeHtml(trendResult(ln))}</div>`);
+      const shapeKey = { channel: "shapeChannel", converging: "shapeConverging",
+                         diverging: "shapeDiverging" }[data && data.shape];
+      if (ln.status === "active" && shapeKey) {
+        rows.push(`<div class="tip-note">${escapeHtml(t(shapeKey))}</div>`);
+      }
+    }
+    tip.innerHTML = rows.join("");
+    tip.classList.add("show");
+    positionTip(evt);
+  }
+
+  function trendResult(ln) {
+    if (ln.status === "broken") {
+      return t(ln.kind === "resistance" ? "trendBrokeUp" : "trendBrokeDown", { at: fmtClock(ln.ended_at) });
+    }
+    if (ln.status === "replaced") return t("trendReplaced", { at: fmtClock(ln.ended_at) });
+    return t("trendHolds");
+  }
+
+  /* Das Archiv: höchstens zehn Linien der Skala dieses Fensters, die neueste
+     oben. Ein Klick hebt die Linie im Chart hervor, ein zweiter nimmt die
+     Hervorhebung zurück. */
+  function renderTrendArchive(data) {
+    const box = document.getElementById("trend-archive");
+    const body = document.getElementById("trend-body");
+    const empty = document.getElementById("trend-archive-empty");
+    const since = document.getElementById("trend-since");
+    if (!box || !body) return;
+    if (!data || !showTrend || !trendScale()) { box.hidden = true; return; }
+    box.hidden = false;
+    const lines = (data.lines || []).slice(0, 10);
+    body.innerHTML = "";
+    empty.hidden = lines.length > 0;
+    if (!lines.length) empty.textContent = t("archiveEmpty");
+    lines.forEach(ln => {
+      const tr = document.createElement("tr");
+      if (trendFocus === ln.id) tr.className = "focus";
+      const cls = ln.kind === "resistance" ? "res" : "sup";
+      tr.innerHTML =
+        `<td class="${cls}">${escapeHtml(t(ln.kind === "resistance" ? "kindResistance" : "kindSupport"))}</td>` +
+        `<td class="num">${escapeHtml(fmtClock(ln.t1))} → ${escapeHtml(fmtClock(ln.t2))}</td>` +
+        `<td class="num">${escapeHtml(String(ln.touches))}</td>` +
+        `<td class="num">${escapeHtml(fmtPct(ln.slope_pct_per_day, 2))}</td>` +
+        `<td>${escapeHtml(trendResult(ln))}</td>`;
+      tr.addEventListener("click", () => {
+        trendFocus = trendFocus === ln.id ? null : ln.id;
+        if (series) drawChart(series);
+      });
+      body.appendChild(tr);
+    });
+    since.hidden = !data.recording_since;
+    if (data.recording_since) since.textContent = t("archiveSince", { date: fmtClock(data.recording_since) });
   }
 
   function drawSteps(payload, pulse) {
@@ -2474,6 +2933,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
        für Hoch, Tief und "jetzt": er ist Bezug, nicht Messwert, und darf die
        Punkte nicht verdecken, die es sind. */
     drawSma({ chart, X, Y, W, padL, padR, padT, plotH, tMin, tMax, pMin, pMax, narrow });
+    drawTrend({ chart, X, Y, W, padL, padR, padT, plotH, tMin, tMax, pMin, pMax, narrow });
 
     /* Hoch und Tief des SICHTBAREN Ausschnitts, jeweils mit dem Kurs
        beschriftet. Bezugsgröße sind die gezeichneten Stufen, nicht `valid`:
@@ -2945,6 +3405,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
 
     /* Gleiche Lage wie in der Stufenansicht: über der Kurve, unter den Marken. */
     drawSma({ chart, X, Y, W, padL, padR, padT, plotH, tMin, tMax, pMin, pMax, narrow });
+    drawTrend({ chart, X, Y, W, padL, padR, padT, plotH, tMin, tMax, pMin, pMax, narrow });
 
     /* Hoch und Tief, gleiche Regel und gleiche Farben wie in der Stufenansicht. */
     let hasExtremes = false;
@@ -3489,6 +3950,19 @@ body[data-chart-style="flow"] .leg-swatch.price {
     renderCalendar();
   }
 
+  /* Die Linien der Skala des gewählten Fensters, mit Archiv. Ein 503 heißt
+     "noch keine Kurshistorie"; dann bleibt der Eintrag leer und der Chart
+     zeichnet keine Linien. */
+  async function loadTrend() {
+    const sc = trendScale();
+    if (!sc) return;
+    try {
+      trendData[sc] = await getJSON(`/v1/price/trendlines?scale=${sc}&status=all&limit=40`);
+    } catch (e) {
+      trendData[sc] = null;
+    }
+  }
+
   async function loadSeries(pulse) {
     /* Unter 24 Stunden lohnt die Intervall-Auflösung, darüber wird die
        Stundenzusammenfassung geladen — sonst liefert ein Jahresfenster
@@ -3599,6 +4073,7 @@ body[data-chart-style="flow"] .leg-swatch.price {
     /* Vor loadSeries: das Diagramm zeichnet die Durchschnittslinie mit, und ein
        Abruf danach hätte sie erst beim nächsten Zeichnen im Bild. */
     await loadSma();
+    await loadTrend();
     await loadCalendar();
     await loadSeries(changed);
     /* Früher wurde hier der Hintergrund neu ausgerichtet, sobald der Hero seine
@@ -3630,6 +4105,12 @@ body[data-chart-style="flow"] .leg-swatch.price {
     if (!b) return;
     windowSecs = Number(b.dataset.window);
     syncWindowSeg();
+    trendFocus = null;
+    /* Die Linien hängen am Fenster (eigene Skala je Zeitraum). Sind sie für
+       diese Skala schon geladen, zeichnet loadSeries sie gleich mit; sonst
+       kommen sie mit dem Nachladen. */
+    const sc = trendScale();
+    if (sc && !(sc in trendData)) loadTrend().then(() => { if (series) drawChart(series); });
     loadSeries();
   });
 
@@ -3669,6 +4150,26 @@ body[data-chart-style="flow"] .leg-swatch.price {
       if (series) drawChart(series);
     });
   }
+
+  /* Trendlinien: der Schalter blendet alle ein oder aus, die Legende einzelne
+     Linienarten. Beides zeichnet nur neu — die Linien sind schon geladen. */
+  const trendBtn = document.getElementById("trend-btn");
+  if (trendBtn) {
+    trendBtn.addEventListener("click", () => {
+      if (trendBtn.disabled) return;
+      showTrend = !showTrend;
+      safeSet(LS_TREND, showTrend ? "1" : "0");
+      if (series) drawChart(series);
+    });
+  }
+  document.querySelector(".chart-legend").addEventListener("click", e => {
+    const b = e.target.closest("[data-trend-kind]");
+    if (!b) return;
+    const k = b.dataset.trendKind;
+    if (trendHidden.has(k)) trendHidden.delete(k); else trendHidden.add(k);
+    safeSet(LS_TREND_HIDE, JSON.stringify(Array.from(trendHidden)));
+    if (series) drawChart(series);
+  });
 
   function applyLang() {
     root.setAttribute("lang", lang);

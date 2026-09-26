@@ -5,8 +5,8 @@ höchsten und die zwei tiefsten Punkte verbinden“ zu einer Regel wird, die ein
 reproduzierbar anwenden kann, wie die Linien gespeichert werden, und wie die Seite mit zu
 vielen Linien umgeht.*
 
-Status: v0.2 — Entscheidungen getroffen (§10), Phase 1 umgesetzt und an echten Daten
-kalibriert (§11) · Sprache: Deutsch (eine englische Fassung folgt, sobald das Konzept steht)
+Status: v0.3 — Entscheidungen getroffen (§10), Phasen 1–3 umgesetzt, an echten Daten
+kalibriert (§11, §12) und im Browser geprüft (§13) · Sprache: Deutsch (eine englische Fassung folgt, sobald das Konzept steht)
 
 ---
 
@@ -306,7 +306,7 @@ nicht.
 |---|---|---|
 | 1 ✅ | Pivot- und Hüllenalgorithmus als reine Funktion, mit Tests auf synthetischen Reihen (fallender Kanal, Dreieck, Zufallsreihe, Plateau, zu wenig Daten) | `qdr/trendlines.py`, `tests/test_trendlines.py` |
 | 2 ✅ | Tabelle, Lebenszyklus im Worker nach dem Stunden-Rollup, API-Endpunkt mit `ready` | `qdr/store.py`, `qdr/pipeline.py`, `api/server.py` |
-| 3 | Zeichnen in `drawSteps`/`drawFlow`, Schalter, Legenden-Toggles, Tooltip, Archivtabelle (§8), Hinweistext DE/EN | `dashboard/price.html` |
+| 3 ✅ | Zeichnen in `drawSteps`/`drawFlow`, Schalter, Legenden-Toggles, Tooltip, Archivtabelle (§8), Hinweistext DE/EN | `dashboard/price.html` |
 | 4 | Tagesskala freischalten, sobald ≈ 30 Tage aufgezeichnet sind (läuft automatisch über `ready`) | — |
 | 5 (optional) | Handlinien pro Betrachter | `dashboard/price.html` |
 
@@ -369,3 +369,28 @@ Die Stundenskala ergibt ein ruhiges Archiv. Ihr wichtigster Eintrag ist der Wide
 22.09. 05:00 zum 23.09. 13:00: 4 Berührungen, gefunden am 24.09. 13:00, gebrochen am 25.09.
 08:00. Die kurze Skala ist in einer so bewegten Woche naturgemäß lebhafter, mit etwa 3,5
 Linien pro Tag. Die Archivtabelle (§8) zeigt deshalb nur die Linien des gewählten Fensters.
+
+## 13. Anzeige im Browser (Phase 3)
+
+Geprüft mit einer lokalen Datenbank aus den echten 116 Stunden (Lebenszyklus stündlich
+nachgespielt), in 24 h, 7 d und Alle, Fluss und Stufen, hell und dunkel, Deutsch und
+Englisch, Desktop (1280 px) und Telefon (390 px). Keine Konsolenfehler, kein seitlicher
+Überlauf. Drei Dinge wurden erst am Bild sichtbar und sind geändert:
+
+1. **Anker zur Periodenmitte gezeichnet.** Der Server speichert eine Kerze unter dem Beginn
+   ihrer Stunde. Das Hoch fiel aber irgendwann in diese Stunde, und im 24-h-Fenster stand
+   der Ankerkreis sichtbar eine Stunde links neben der Spitze. Die Seite verschiebt die
+   Gerade beim Zeichnen deshalb um eine halbe Periode, die Steigung bleibt dieselbe. Der
+   Tooltip und das Archiv nennen weiterhin die gespeicherten Anker.
+2. **Linien außerhalb des Ausschnitts werden benannt.** Im 24-h-Fenster lag die
+   Unterstützung unterhalb der Preisspanne. Die Legende nannte sie trotzdem, im Bild fehlte
+   sie. Jetzt nennt die Legende nur Linien, die im Bild sind, und unter dem Chart steht,
+   wo die fehlende liegt und auf welchem Kurs sie jetzt steht.
+3. **Tooltip über dem Kurs.** Beide Zeichenarten legen die Maus-Fläche des Kurses nach den
+   Linien an, sodass eine Linie nie einen Tooltip bekam. Die Treffflächen der Linien
+   (ein 14-px-Band) werden nach dem Zeichnen nach oben geholt.
+
+**Farben:** Widerstand in `--price-down`, Unterstützung in `--price-up`, wie die Richtungs-
+farben der Seite. Im hellen Design ist `--price-up` zugleich die Farbe der Kurslinie. Die
+Unterstützung unterscheidet sich dort nur durch Strichstärke und Berührungskreise. Sollte
+das im Alltag verwechselt werden, ist eine eigene Farbe für Trendlinien der nächste Schritt.
