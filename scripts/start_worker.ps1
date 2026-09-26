@@ -18,7 +18,8 @@
 # cannot run worker.sh's mkfifo/tee logging at all.
 
 param(
-    [switch]$NoBurnBackfill = $true
+    [switch]$NoBurnBackfill = $true,
+    [switch]$NoLiveSync
 )
 
 $ErrorActionPreference = 'Stop'
@@ -118,6 +119,17 @@ if ($NoBurnBackfill) {
 # Backfill fewer epochs than the container's 10: locally the point is a working
 # page within a minute, not a full archive, and each epoch costs real calls.
 if (-not $env:QDR_BACKFILL_EPOCHS) { $env:QDR_BACKFILL_EPOCHS = "2" }
+
+# Fill the hours this machine was off from the live deployment: price and mining
+# readings describe a moment and cannot be fetched afterwards, but live was
+# watching. Runs only here, after the lock -- never beside a running worker,
+# whose open price interval the copy would replace -- and never fails the
+# launch: offline, it warns and the worker starts as before.
+# -NoLiveSync skips it, for testing what the local worker alone produces.
+if (-not $NoLiveSync) {
+    Push-Location $repo
+    try { python scripts/sync_from_live.py --days 7 } finally { Pop-Location }
+}
 
 Write-Host "Starting ingest worker (worker.sh via $bash) ..."
 

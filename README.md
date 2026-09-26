@@ -215,7 +215,9 @@ uvicorn api.server:app --port 8000
 
 Press **F5** → *Dashboard (Chrome · sample data)* opens it in Chrome instantly (no setup).
 The *Dashboard + live API (Chrome)* config starts the API (`uvicorn`) first and opens the
-live dashboard. *Dashboard + Live-Daten (Chrome · report.qubic.tools)* serves the local
+live dashboard. Before its worker starts, `scripts/sync_from_live.py` copies the last
+7 days of price and mining readings from the live deployment — the data a local
+worker cannot fetch for hours the machine was off. *Dashboard + Live-Daten (Chrome · report.qubic.tools)* serves the local
 pages on port 8001 and forwards every API call to the live deployment
 (`scripts/dev_live_proxy.py`) — full history for frontend work, no local store, but
 backend changes are not exercised. Tasks for install / tests / sample-data are in the Command Palette →
