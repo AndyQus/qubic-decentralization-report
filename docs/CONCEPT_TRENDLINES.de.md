@@ -163,18 +163,26 @@ galt. Deshalb berechnet der **Worker** sie und schreibt sie fest.
 CREATE TABLE IF NOT EXISTS price_trendlines (
     id           INTEGER PRIMARY KEY,
     scale        TEXT NOT NULL,     -- 'short' | 'hour' | 'day'
-    kind         TEXT NOT NULL,     -- 'resistance' | 'support' | 'parallel' | 'mid'
+    kind         TEXT NOT NULL,     -- 'resistance' | 'support'
     t1 INTEGER NOT NULL, p1 REAL NOT NULL,   -- Anker 1 (unix, USD/QU)
     t2 INTEGER NOT NULL, p2 REAL NOT NULL,   -- Anker 2
     touches      INTEGER NOT NULL,  -- Berührungen inkl. Anker
+    touch_at     TEXT,              -- JSON: Zeitpunkte der Berührungen
     found_at     INTEGER NOT NULL,  -- wann der Worker sie gesetzt hat
     status       TEXT NOT NULL,     -- 'active' | 'broken' | 'replaced'
     ended_at     INTEGER,           -- Bruch- bzw. Ersetzungszeitpunkt
-    channel_id   INTEGER            -- verbindet die Linien eines Kanals
+    replaced_by  INTEGER,           -- id der Nachfolgerin
+    UNIQUE (scale, kind, t1, t2)
 );
 ```
 
-**Lebenszyklus** (einmal pro Stunde, direkt nach `rollup_price_hours`):
+**Parallele und Mittellinie werden nicht gespeichert.** Sie sind reine Geometrie aus dem
+aktiven Paar und den Kerzen und werden bei jedem Abruf neu berechnet. So können sie nie von
+den Linien abweichen, zu denen sie gehören. Das Archiv besteht aus Widerstand und
+Unterstützung, denn nur diese beiden sind Ereignisse mit festen Ankern.
+
+**Lebenszyklus** (`pipeline.update_trendlines`, nach jedem `rollup_price_hours`; der Lauf
+ist idempotent und ändert nichts, solange keine neue Stunde abgeschlossen ist):
 
 1. **Anker sind unveränderlich.** Eine gespeicherte Linie wird nie verschoben, nur beendet.
 2. **Bruch:** Zwei aufeinanderfolgende Stundenschlusskurse (bei der Tagesskala zwei
@@ -183,7 +191,13 @@ CREATE TABLE IF NOT EXISTS price_trendlines (
    das Bild zeigt genau solche Dochte.
 3. **Ersetzung:** Findet die Regel aus §3 mit neuen Daten ein anderes Ankerpaar (z. B. ein
    neues Hoch über Anker 1), wird die alte Linie `replaced` und die neue eingefügt.
-4. **Sonst** bleibt alles, wie es ist. Nur `touches` darf wachsen.
+4. **Wiederkehr:** Findet die Regel eine ersetzte Linie erneut, wird sie wieder aktiv. Eine
+   gebrochene Linie bleibt gebrochen, denn der Kurs ist durch sie hindurch.
+5. **Nicht gespeichert** wird eine Linie, durch die der Kurs beim ersten Fund schon hindurch
+   ist oder jenseits derer bereits ein Schlusskurs liegt (ein halber Bruch). Sie hat nie
+   sichtbar gehalten. In der Nachsimulation wären das drei von 19 Einträgen der kurzen Skala
+   gewesen, die eine Stunde nach ihrem Fund schon endeten.
+6. **Sonst** bleibt alles, wie es ist. Nur `touches` darf wachsen.
 
 So entsteht nebenbei ein **Archiv**: welche Linien es gab, wie lange sie hielten und wie oft
 sie berührt wurden. Das kann keine Börsenseite, auf der jemand Linien von Hand zieht.
@@ -291,7 +305,7 @@ nicht.
 | Phase | Inhalt | Dateien |
 |---|---|---|
 | 1 ✅ | Pivot- und Hüllenalgorithmus als reine Funktion, mit Tests auf synthetischen Reihen (fallender Kanal, Dreieck, Zufallsreihe, Plateau, zu wenig Daten) | `qdr/trendlines.py`, `tests/test_trendlines.py` |
-| 2 | Tabelle, Lebenszyklus im Worker nach dem Stunden-Rollup, API-Endpunkt mit `ready` | `qdr/store.py`, `qdr/pipeline.py`, `api/server.py` |
+| 2 ✅ | Tabelle, Lebenszyklus im Worker nach dem Stunden-Rollup, API-Endpunkt mit `ready` | `qdr/store.py`, `qdr/pipeline.py`, `api/server.py` |
 | 3 | Zeichnen in `drawSteps`/`drawFlow`, Schalter, Legenden-Toggles, Tooltip, Archivtabelle (§8), Hinweistext DE/EN | `dashboard/price.html` |
 | 4 | Tagesskala freischalten, sobald ≈ 30 Tage aufgezeichnet sind (läuft automatisch über `ready`) | — |
 | 5 (optional) | Handlinien pro Betrachter | `dashboard/price.html` |
@@ -340,3 +354,18 @@ Geändert gegenüber v0.1: Wendepunkte statt Kerzen als Anker (§3.2), eine drit
 `min_sep` für `short` von 8 auf 5 Stunden (bei 8 fand sich die fallende Linie von der
 Spitze aus nicht), und die Kanalregeln (zwei Berührungen der Parallele, keine doppelte
 Linie).
+
+## 12. Nachsimulation des Lebenszyklus (Phase 2)
+
+Die 116 Stunden wurden Stunde für Stunde in einen leeren Store geschrieben, und nach jeder
+Stunde lief `update_trendlines`. Das Archiv danach:
+
+| Skala | Linien gesamt | aktiv | gebrochen | ersetzt |
+|---|---|---|---|---|
+| `hour` (7 d) | 4 | 2 | 1 | 1 |
+| `short` (24 h) | 17 | 2 | 4 | 11 |
+
+Die Stundenskala ergibt ein ruhiges Archiv. Ihr wichtigster Eintrag ist der Widerstand vom
+22.09. 05:00 zum 23.09. 13:00: 4 Berührungen, gefunden am 24.09. 13:00, gebrochen am 25.09.
+08:00. Die kurze Skala ist in einer so bewegten Woche naturgemäß lebhafter, mit etwa 3,5
+Linien pro Tag. Die Archivtabelle (§8) zeigt deshalb nur die Linien des gewählten Fensters.

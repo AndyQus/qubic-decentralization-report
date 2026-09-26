@@ -101,6 +101,8 @@ def start_price_sampler(client, store: Store, interval: int) -> threading.Thread
     def loop() -> None:
         last_rollup = 0.0
         last_prune = 0.0
+        last_trend = 0.0
+        n_rolled_since_trend = 0
         while True:
             started = time.time()
             try:
@@ -120,10 +122,24 @@ def start_price_sampler(client, store: Store, interval: int) -> threading.Thread
                 if time.time() - last_rollup > 600:
                     n = store.rollup_price_hours(since=int(time.time()) - 86400 * 2)
                     last_rollup = time.time()
+                    n_rolled_since_trend += n
                     if n:
                         print(f"[price] rolled up {n} hour(s) from measured readings")
             except Exception as e:
                 print(f"[price] rollup failed: {e}", file=sys.stderr)
+            try:
+                # Trend lines follow the hours they are drawn on. Idempotent, so
+                # running it with every rollup costs a read and changes nothing
+                # until an hour closes (docs/CONCEPT_TRENDLINES.de.md §5).
+                if n_rolled_since_trend or time.time() - last_trend > 3600:
+                    n_rolled_since_trend = 0
+                    last_trend = time.time()
+                    for scale, c in pipeline.update_trendlines(store).items():
+                        moved = {k: v for k, v in c.items() if v}
+                        if moved:
+                            print(f"[price] trend lines {scale}: {moved}")
+            except Exception as e:
+                print(f"[price] trend lines failed: {e}", file=sys.stderr)
             try:
                 if time.time() - last_prune > 3600:
                     dropped = store.prune_price()

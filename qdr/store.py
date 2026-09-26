@@ -326,6 +326,36 @@ CREATE TABLE IF NOT EXISTS price_hours (
     polls       INTEGER NOT NULL DEFAULT 0,  -- readings behind those changes
     updated_at  INTEGER NOT NULL
 );
+
+-- Trend lines (docs/CONCEPT_TRENDLINES.de.md §5): resistance and support as
+-- the worker found them, with anchors that never move. A line is only ever
+-- ENDED -- broken by two closes beyond it, or replaced when a new swing made a
+-- better one -- so this table is also the archive of which lines held.
+--
+-- Parallel and mid line are not stored: they are geometry derived from the
+-- active pair and the bars, computed when served, so they cannot disagree with
+-- the lines they belong to.
+--
+-- (scale, kind, t1, t2) is unique. A line the rule finds again after it was
+-- replaced is the SAME line and comes back to life rather than being written
+-- twice; one found again after it broke stays broken.
+CREATE TABLE IF NOT EXISTS price_trendlines (
+    id           INTEGER PRIMARY KEY,
+    scale        TEXT NOT NULL,     -- 'short' | 'hour' | 'day'
+    kind         TEXT NOT NULL,     -- 'resistance' | 'support'
+    t1           INTEGER NOT NULL,  -- anchor 1: unix second of the bar
+    p1           REAL NOT NULL,     -- anchor 1: USD per QU
+    t2           INTEGER NOT NULL,
+    p2           REAL NOT NULL,
+    touches      INTEGER NOT NULL,  -- swing points on the line, anchors included
+    touch_at     TEXT,              -- json array of their bar times
+    found_at     INTEGER NOT NULL,  -- when the worker first set it
+    status       TEXT NOT NULL,     -- 'active' | 'broken' | 'replaced'
+    ended_at     INTEGER,           -- first bar of the break, or replacement time
+    replaced_by  INTEGER,           -- id of the line that replaced it
+    UNIQUE (scale, kind, t1, t2)
+);
+CREATE INDEX IF NOT EXISTS ix_trend_scale_status ON price_trendlines(scale, status);
 """
 
 
@@ -1585,6 +1615,94 @@ class Store:
             return c.execute("DELETE FROM price_points WHERE until < ?",
                              (cutoff,)).rowcount or 0
 
+    # -- trend lines -------------------------------------------------------
+
+    @staticmethod
+    def _trend_row(r) -> dict:
+        d = dict(r)
+        d["touch_at"] = json.loads(d["touch_at"]) if d.get("touch_at") else []
+        return d
+
+    def trendlines(self, scale: Optional[str] = None,
+                   status: Optional[str] = None,
+                   since: Optional[int] = None,
+                   limit: Optional[int] = None) -> list[dict]:
+        """Stored trend lines, newest first.
+
+        `since` keeps lines still relevant at that time: active ones, and ended
+        ones that ended after it. A line found long ago and still holding
+        belongs in today's window.
+        """
+        where, args = [], []
+        if scale is not None:
+            where.append("scale=?")
+            args.append(scale)
+        if status is not None:
+            where.append("status=?")
+            args.append(status)
+        if since is not None:
+            where.append("(ended_at IS NULL OR ended_at>=?)")
+            args.append(int(since))
+        sql = "SELECT * FROM price_trendlines"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY found_at DESC, id DESC"
+        if limit is not None:
+            sql += f" LIMIT {int(limit)}"
+        with self._lock:
+            return [self._trend_row(r) for r in self._conn.execute(sql, args)]
+
+    def trendline_by_anchors(self, scale: str, kind: str,
+                             t1: int, t2: int) -> Optional[dict]:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM price_trendlines WHERE scale=? AND kind=? "
+                "AND t1=? AND t2=?", (scale, kind, int(t1), int(t2))).fetchone()
+        return self._trend_row(r) if r else None
+
+    def put_trendline(self, scale: str, line: dict, found_at: int,
+                      status: str = "active",
+                      ended_at: Optional[int] = None) -> int:
+        """Insert a line and return its id. Anchors are written once and never
+        updated; see `touch_trendline` for the one field allowed to grow."""
+        with self._tx() as c:
+            cur = c.execute(
+                "INSERT INTO price_trendlines (scale,kind,t1,p1,t2,p2,touches,"
+                "touch_at,found_at,status,ended_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (scale, line["kind"], int(line["t1"]), float(line["p1"]),
+                 int(line["t2"]), float(line["p2"]), int(line["touches"]),
+                 json.dumps(list(line.get("touch_at") or [])), int(found_at),
+                 status, ended_at))
+            return int(cur.lastrowid)
+
+    def touch_trendline(self, line_id: int, touches: int, touch_at) -> None:
+        with self._tx() as c:
+            c.execute("UPDATE price_trendlines SET touches=?, touch_at=? WHERE id=?",
+                      (int(touches), json.dumps(list(touch_at)), int(line_id)))
+
+    def end_trendline(self, line_id: int, status: str, ended_at: int,
+                      replaced_by: Optional[int] = None) -> None:
+        if status not in ("broken", "replaced"):
+            raise ValueError("a line ends as 'broken' or 'replaced'")
+        with self._tx() as c:
+            c.execute("UPDATE price_trendlines SET status=?, ended_at=?, "
+                      "replaced_by=? WHERE id=? AND status='active'",
+                      (status, int(ended_at), replaced_by, int(line_id)))
+
+    def revive_trendline(self, line_id: int) -> None:
+        """A replaced line the rule finds again is active again. Broken lines
+        are never revived: the price went through them."""
+        with self._tx() as c:
+            c.execute("UPDATE price_trendlines SET status='active', ended_at=NULL, "
+                      "replaced_by=NULL WHERE id=? AND status='replaced'",
+                      (int(line_id),))
+
+    def trendlines_first_found(self) -> Optional[int]:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT MIN(found_at) FROM price_trendlines").fetchone()
+        return int(r[0]) if r and r[0] is not None else None
+
     def stats(self) -> dict:
         with self._lock:
             def one(q: str, *a) -> int:
@@ -1604,4 +1722,5 @@ class Store:
                 "mining_epochs": one("SELECT COUNT(*) FROM mining_epochs"),
                 "price_points": one("SELECT COUNT(*) FROM price_points"),
                 "price_hours": one("SELECT COUNT(*) FROM price_hours"),
+                "price_trendlines": one("SELECT COUNT(*) FROM price_trendlines"),
             }

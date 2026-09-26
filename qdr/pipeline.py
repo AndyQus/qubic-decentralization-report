@@ -13,11 +13,12 @@ whichever snapshot was built last.
 """
 from __future__ import annotations
 
+import dataclasses
 import os
 import time
 from typing import Optional
 
-from . import __version__, burn, dating
+from . import __version__, burn, dating, trendlines
 from .client import CachedClient, QubicRPCError
 from .clustering import (
     Cluster,
@@ -675,6 +676,173 @@ def price_summary(store: Store) -> dict:
         if ch:
             out.setdefault("change", {})[label] = ch
     return out
+
+
+# -- trend lines -----------------------------------------------------------
+#
+# docs/CONCEPT_TRENDLINES.de.md §5. The rule lives in qdr/trendlines.py and is
+# pure; this is the part with a memory. The worker runs `update_trendlines`
+# after each hourly rollup, and every line it sets keeps its anchors for good:
+# it can only end, as broken or replaced. That is what lets the page show an
+# archive of which lines held, and what keeps a line from jumping on reload.
+
+
+def trend_bars(store: Store, scale: "trendlines.Scale",
+               now: Optional[int] = None) -> list[dict]:
+    """The bars a scale reads, from the permanent hourly summary.
+
+    `price_hours` holds finished hours only, so the hourly scales never see an
+    hour still being written. The day scale drops the running UTC day for the
+    same reason: a half day's high and low are not the day's.
+    """
+    rows = store.price_series(resolution="hour")
+    hours = [{"at": int(r["at"]), "high": float(r["high"]),
+              "low": float(r["low"]), "close": float(r["close"])} for r in rows]
+    if scale.period_s == trendlines.DAY:
+        now = int(time.time()) if now is None else int(now)
+        today = now // trendlines.DAY * trendlines.DAY
+        return [d for d in trendlines.daily_bars(hours) if d["at"] < today]
+    return hours
+
+
+def update_trendlines(store: Store, now: Optional[int] = None) -> dict:
+    """Bring the stored lines of every scale in line with the bars on record.
+
+    Per scale, in this order:
+
+      1. Every active line is checked for a break since its second anchor.
+         A broken line ends at the first bar of the break.
+      2. The rule runs on the bars. For resistance and support separately:
+         the same anchors as the active line -> only its touches are updated;
+         different anchors -> the active line is replaced; no line found -> the
+         active one stays (it has not broken, so it still stands).
+      3. A line found again after it was replaced comes back to life; one
+         found again after it broke is left broken. The price went through it.
+         A line the price is already through -- or one close into -- when the
+         rule first finds it is not stored at all.
+
+    Idempotent: running it twice on the same bars changes nothing, so the
+    worker may call it as often as it rolls up. Returns counts per scale.
+    """
+    now = int(time.time()) if now is None else int(now)
+    summary: dict = {}
+    for scale in trendlines.SCALES.values():
+        bars = trend_bars(store, scale, now)
+        counts = {"found": 0, "broken": 0, "replaced": 0, "revived": 0}
+        summary[scale.name] = counts
+
+        active = {}
+        for row in store.trendlines(scale=scale.name, status="active"):
+            ln = _as_line(row)
+            at = trendlines.broken_at(ln, bars, scale)
+            if at is not None:
+                store.end_trendline(row["id"], "broken", at)
+                counts["broken"] += 1
+            else:
+                active[row["kind"]] = row
+
+        found = trendlines.detect(bars, scale)
+        if not found["ready"]:
+            continue
+        for d in found["lines"]:
+            if d["kind"] not in ("resistance", "support"):
+                continue   # channel lines are derived when served, never stored
+            cur = active.get(d["kind"])
+            if cur and (cur["t1"], cur["t2"]) == (d["t1"], d["t2"]):
+                if cur["touches"] != d["touches"]:
+                    store.touch_trendline(cur["id"], d["touches"], d["touch_at"])
+                continue
+            known = store.trendline_by_anchors(scale.name, d["kind"], d["t1"], d["t2"])
+            if known and known["status"] == "broken":
+                continue
+            if known:   # replaced earlier, found again
+                store.revive_trendline(known["id"])
+                store.touch_trendline(known["id"], d["touches"], d["touch_at"])
+                new_id = known["id"]
+                counts["revived"] += 1
+            elif d["broken_at"] is not None or _half_broken(d, bars, scale):
+                # Already through the line, or one close into a break, in the
+                # bars too young to anchor it. Such a line never held while
+                # anyone could see it; stored, it ended an hour after it was
+                # found -- three of 19 rows on the first replay's short scale.
+                continue
+            else:
+                new_id = store.put_trendline(scale.name, d, found_at=now)
+                counts["found"] += 1
+            if cur:
+                store.end_trendline(cur["id"], "replaced", now, replaced_by=new_id)
+                counts["replaced"] += 1
+    return summary
+
+
+def _half_broken(d: dict, bars: list[dict], scale: "trendlines.Scale") -> bool:
+    """True when the newest close is already beyond the line: half a break."""
+    one = dataclasses.replace(scale, break_bars=1)
+    return bool(bars) and trendlines.broken_at(_as_line(d), bars[-1:], one) is not None
+
+
+def _as_line(row: dict) -> "trendlines.Line":
+    return trendlines.Line(row["kind"], int(row["t1"]), float(row["p1"]),
+                           int(row["t2"]), float(row["p2"]), int(row["touches"]),
+                           tuple(row.get("touch_at") or ()))
+
+
+def _trend_view(row: dict) -> dict:
+    ln = _as_line(row)
+    out = dict(row)
+    out["slope_pct_per_day"] = round(ln.slope_pct_per_day(), 4)
+    if row["status"] == "broken":
+        # Which way it broke follows from the kind; said outright so a reader
+        # of the archive does not have to know that.
+        out["broke"] = "up" if row["kind"] == "resistance" else "down"
+    return out
+
+
+def build_trendlines(store: Store, scale_name: str, status: str = "active",
+                     since: Optional[int] = None, limit: int = 50,
+                     now: Optional[int] = None) -> dict:
+    """What `/v1/price/trendlines` serves: stored lines plus the derived channel.
+
+    The channel (parallel and mid line) is computed here from the ACTIVE pair
+    and the bars, never stored, so it always belongs to the lines on screen.
+    `shape` names what the active pair forms, for the tooltip: a channel, a
+    converging wedge or triangle, or diverging lines.
+    """
+    scale = trendlines.SCALES[scale_name]
+    bars = trend_bars(store, scale, now)
+    rows = store.trendlines(scale=scale_name,
+                            status=None if status == "all" else status,
+                            since=since, limit=limit)
+    act = {r["kind"]: r for r in store.trendlines(scale=scale_name, status="active")}
+    res = _as_line(act["resistance"]) if "resistance" in act else None
+    sup = _as_line(act["support"]) if "support" in act else None
+    channel = [dict(ln.as_dict(), broken_at=None)
+               for ln in trendlines.channel(bars, res, sup, scale)] if bars else []
+    shape = None
+    if res and sup:
+        if channel:
+            shape = "channel"
+        else:
+            # Gap between the lines now vs at the older first anchor.
+            t_old = min(res.t1, sup.t1)
+            t_new = bars[-1]["at"] if bars else max(res.t2, sup.t2)
+            shape = "converging" if (res.at(t_new) - sup.at(t_new)) < \
+                (res.at(t_old) - sup.at(t_old)) else "diverging"
+    return {
+        "scale": scale.name,
+        "ready": len(bars) >= scale.ready_bars,
+        "bars_on_record": len(bars),
+        "bars_needed": scale.ready_bars,
+        "period_s": scale.period_s,
+        "params": {"k": scale.k, "min_sep": scale.min_sep, "tol": scale.tol,
+                   "lookback": scale.lookback, "break_bars": scale.break_bars},
+        "recording_since": store.trendlines_first_found(),
+        "lines": [_trend_view(r) for r in rows],
+        "channel": channel,
+        "shape": shape,
+        "measured": True,
+        "note": "Geometry from past highs and lows, set by a fixed rule. Not a forecast.",
+    }
 
 
 # -- the epoch payout study ------------------------------------------------

@@ -231,6 +231,7 @@ def api_index():
             "/v1/price/change",
             "/v1/price/at",
             "/v1/price/average",
+            "/v1/price/trendlines",
             "/v1/price/days",
             "/v1/price/coverage",
             "/v1/price/epochs",
@@ -1143,6 +1144,60 @@ def price_average(
     _price_avg_cache.clear()
     _price_avg_cache[key] = {"at": now, "data": return_data}
     return return_data
+
+
+_price_trend_cache: dict = {}
+PRICE_TREND_TTL_S = float(os.environ.get("QDR_PRICE_TREND_TTL", "60"))
+
+
+@app.get("/v1/price/trendlines", tags=["price"],
+         summary="Resistance and support lines, and the archive of past ones")
+def price_trendlines(
+    scale: str = Query("hour", pattern="^(short|hour|day)$",
+                       description="'short' (hourly bars, 48 h search) for a "
+                                   "24 h chart, 'hour' (hourly, 14 days) for "
+                                   "7 d, 'day' (daily bars, all) for the "
+                                   "whole record."),
+    status: str = Query("active", pattern="^(active|all)$",
+                        description="'active' for the lines that hold now, "
+                                    "'all' to include broken and replaced "
+                                    "ones -- the archive."),
+    since: int | None = Query(None, ge=0,
+                              description="Only lines still standing at this "
+                                          "unix second or ended after it."),
+    limit: int = Query(50, ge=1, le=500),
+):
+    """Trend lines as the worker set them (docs/CONCEPT_TRENDLINES.de.md).
+
+    Each line is two **anchors** -- `(t1, p1)` and `(t2, p2)`, both swing points
+    of the bars -- and is drawn as the straight line through them, extended to
+    now: `p(t) = p1 + (p2 - p1)·(t - t1)/(t2 - t1)`. Anchors never move. A line
+    ends as `broken` (two closes beyond it; `ended_at` is the first) or
+    `replaced` (a new swing made a better one; `replaced_by` names it).
+
+    `channel` holds the parallel and mid line when resistance and support run
+    roughly parallel. They are derived from the active pair on every request
+    and never stored. `shape` names what the pair forms.
+
+    **No backfill.** Lines exist from `recording_since` on, and `ready` is
+    false until the scale has `bars_needed` bars on record: a line drawn from
+    fewer would be a guess. These lines are geometry, not a forecast.
+    """
+    import time as _t
+
+    key = (scale, status, since, limit)
+    now = _t.time()
+    hit = _price_trend_cache.get(key)
+    if hit and now - hit["at"] < PRICE_TREND_TTL_S:
+        return hit["data"]
+    data = pipeline.build_trendlines(get_store(), scale, status=status,
+                                     since=since, limit=limit)
+    if not data["bars_on_record"]:
+        raise _no_data("price history")
+    if len(_price_trend_cache) > 64:
+        _price_trend_cache.clear()
+    _price_trend_cache[key] = {"at": now, "data": data}
+    return data
 
 
 _payout_study_cache: dict = {"at": 0.0, "key": None, "data": None}
