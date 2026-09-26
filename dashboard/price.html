@@ -477,6 +477,22 @@
    gemittelt. Seine Farbe ist die Akzentfarbe, weil er zwei Farben schaltet
    (Widerstand rot, Unterstützung grün) und keine davon für beide stehen kann. */
 .trend-toggle::before { border-top-style: solid; }
+/* Nur-Icon auf dem Telefon. Mit Beschriftung brauchten die Bedienelemente dort
+   drei Zeilen — "Trendlinien" stand allein in der dritten. Als Icons passen
+   beide Schalter neben Fluss/Stufen. Die Beschriftung wird nicht entfernt,
+   sondern nur unsichtbar: sie bleibt der zugängliche Name des Knopfes. */
+.tg-icon { display: none; width: 20px; height: 20px; flex: none; }
+/* Die Ankerringe decken die Linie ab, statt mit ihr zu verschwimmen. */
+.tg-icon .tg-ring { fill: var(--surface); }
+@media (max-width: 620px) {
+  .sma-toggle { padding: 5px 9px; }
+  .sma-toggle::before { display: none; }
+  .tg-icon { display: block; }
+  .tg-label {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+  }
+}
 .sma-toggle.trend-toggle[aria-pressed="true"] {
   color: var(--accent); border-color: currentColor;
   background: color-mix(in srgb, var(--accent) 12%, transparent);
@@ -979,13 +995,16 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
            beantwortet eine andere Frage als der Kurs selbst ("wo steht er
            gegenüber den letzten 50 Tagen?"), und auf einem Ein-Stunden-Fenster
            ist diese Frage sinnlos. Die Wahl bleibt in localStorage. -->
-      <button class="sma-toggle" id="sma-btn" type="button"
-              aria-pressed="false" data-i18n="smaToggle">50-day average</button>
+      <!-- Auf dem Telefon zeigen beide Schalter nur ihr Icon (siehe CSS): mit
+           Text brach die Zeile dort in drei Reihen um. Der Text bleibt als
+           unsichtbare Beschriftung für Screenreader und als title stehen. Das
+           i18n-Attribut sitzt deshalb auf dem <span>, nicht auf dem Knopf —
+           renderI18nText ersetzt den ganzen Inhalt und nähme das Icon mit. -->
+      <button class="sma-toggle" id="sma-btn" type="button" aria-pressed="false"><svg class="tg-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M2 9 L6 4 L9 7 L13 2.5 L18 6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" opacity=".55"/><path d="M2 14.5 L18 14.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-dasharray="3.2 2.4"/></svg><span class="tg-label" data-i18n="smaToggle">50-day average</span></button>
       <!-- Trendlinien (docs/CONCEPT_TRENDLINES.de.md). Voreinstellung AN; die
            Wahl bleibt in localStorage. In 1 h und 6 h stumm geschaltet: dort
            gibt es keine Linien, und der title sagt, warum. -->
-      <button class="sma-toggle trend-toggle" id="trend-btn" type="button"
-              aria-pressed="true" data-i18n="trendToggle">Trend lines</button>
+      <button class="sma-toggle trend-toggle" id="trend-btn" type="button" aria-pressed="true"><svg class="tg-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M2 17 L18 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="6" cy="13.5" r="2.6" class="tg-ring" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="6.5" r="2.6" class="tg-ring" stroke="currentColor" stroke-width="1.6"/></svg><span class="tg-label" data-i18n="trendToggle">Trend lines</span></button>
     </div>
 
     <!-- Sagt, wenn die Ansicht auf Stundenzusammenfassungen umgeschaltet hat:
@@ -2339,7 +2358,7 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
     const sc = trendScale();
     if (btn) {
       btn.disabled = !sc;
-      btn.title = sc ? "" : t("trendNoScale");
+      btn.title = sc ? t("trendToggle") : t("trendNoScale");
       btn.setAttribute("aria-pressed", showTrend && sc ? "true" : "false");
     }
     const data = sc ? trendData[sc] : null;
@@ -4139,7 +4158,8 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
     const btn = document.getElementById("sma-btn");
     if (!btn) return;
     btn.setAttribute("aria-pressed", showSma ? "true" : "false");
-    btn.textContent = t("smaToggle");
+    /* title: auf dem Telefon ist das Icon alles, was sichtbar ist. */
+    btn.title = t("smaToggle");
   }
   const smaBtn = document.getElementById("sma-btn");
   if (smaBtn) {
