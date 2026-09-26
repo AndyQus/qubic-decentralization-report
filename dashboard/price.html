@@ -1350,6 +1350,7 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
       trendToggle: "Trend lines",
       trendNoScale: "Trend lines are drawn in the 24 h, 7 d and All ranges. On minute data every line would be noise.",
       trendNotReady: "Trend lines for this range need {need} {unit} on record; {have} are so far. This page has no backfill, so the lines appear once the record is long enough.",
+      trendDayPending: "These are the 7-day lines, found on hourly bars: lines on daily bars need {need} days on record, and {have} are so far. Until then this range shows the same hours as 7 d.",
       unitHours: "hours",
       unitDays: "days",
       trendNone: "No line qualifies in this range yet: no two swing points lie far enough apart without the price crossing between them.",
@@ -1511,6 +1512,7 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
       trendToggle: "Trendlinien",
       trendNoScale: "Trendlinien gibt es in den Zeiträumen 24 h, 7 d und Alle. Auf Minutendaten wäre jede Linie Rauschen.",
       trendNotReady: "Trendlinien für diesen Zeitraum brauchen {need} {unit} Aufzeichnung; vorhanden sind {have}. Diese Seite füllt nichts zurück, die Linien erscheinen also, sobald die Aufzeichnung lang genug ist.",
+      trendDayPending: "Das sind die 7-Tage-Linien, gefunden auf Stundenwerten: Linien auf Tageswerten brauchen {need} Tage Aufzeichnung, vorhanden sind {have}. Bis dahin zeigt dieser Zeitraum dieselben Stunden wie 7 Tage.",
       unitHours: "Stunden",
       unitDays: "Tage",
       trendNone: "In diesem Zeitraum erfüllt noch keine Linie die Regel: Es gibt keine zwei Wendepunkte, die weit genug auseinanderliegen, ohne dass der Kurs dazwischen durch die Linie ging.",
@@ -2265,6 +2267,13 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
     let pts;
     if (span.length >= 2) {
       pts = span.map(r => ({ x: X(r.at), y: clampY(r.sma), row: r }));
+      /* Der jüngste Punkt ist der Beginn des letzten ABGESCHLOSSENEN Tages —
+         der laufende Tag zählt nicht mit. Sein Wert ist aber der Durchschnitt,
+         der jetzt gilt, also läuft er waagerecht bis an den rechten Rand, statt
+         mehr als einen Tag vor "jetzt" aufzuhören. Dieselbe Regel wie die
+         Bezugslinie unten, nur ab dem letzten Punkt. */
+      const end = span[span.length - 1];
+      if (end.at < tMax) pts.push({ x: X(tMax), y: clampY(end.sma), row: end });
     } else {
       /* Kein Punkt im Fenster: der jüngste Wert als waagerechte Bezugslinie. */
       const r = span.length ? span[0] : rows[rows.length - 1];
@@ -2525,6 +2534,7 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
           price: fmtPrice(now)
         });
       });
+      if (data.dayPending) msgs.push(t("trendDayPending", data.dayPending));
       msgs.push(t(drawn || lines.length ? "trendDisclaimer" : "trendNone"));
       note.hidden = false;
       note.textContent = msgs.join(" ");
@@ -3975,8 +3985,23 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
   async function loadTrend() {
     const sc = trendScale();
     if (!sc) return;
+    const get = s => getJSON(`/v1/price/trendlines?scale=${s}&status=all&limit=40`);
     try {
-      trendData[sc] = await getJSON(`/v1/price/trendlines?scale=${sc}&status=all&limit=40`);
+      let data = await get(sc);
+      /* "Alle" hat Tageslinien erst ab 30 Tagen Aufzeichnung. Bis dahin ist
+         "Alle" nicht länger als "7 Tage" — dieselben Stunden im Bild —, und
+         die Linien der Stundenskala sind aus genau diesen Daten gefunden. Sie
+         werden gezeigt, mit dem Satz darunter, dass es die 7-Tage-Linien
+         sind; sobald die Tagesskala bereit ist, übernimmt sie von selbst. */
+      if (sc === "day" && !data.ready) {
+        const hour = await get("hour");
+        if (hour.ready) {
+          data = Object.assign({}, hour, {
+            dayPending: { need: data.bars_needed, have: data.bars_on_record }
+          });
+        }
+      }
+      trendData[sc] = data;
     } catch (e) {
       trendData[sc] = null;
     }
@@ -4201,6 +4226,10 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
     renderHero();
     renderStudy();
     renderCalendar();
+    /* Der Auflösungshinweis wird nur beim Laden der Reihe gesetzt; ohne das
+       stünde er nach einem Sprachwechsel weiter in der alten Sprache. */
+    const resNote = document.getElementById("res-note");
+    if (resNote && !resNote.hidden) resNote.textContent = t("resNote");
     if (series) drawChart(series);
   }
   document.getElementById("lang-seg").addEventListener("click", e => {
