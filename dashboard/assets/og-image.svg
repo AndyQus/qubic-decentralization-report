@@ -53,13 +53,13 @@
        tragen die Akzentfarben der jeweiligen Seite. -->
   <g font-family="Segoe UI, DejaVu Sans, Helvetica, Arial, sans-serif" font-size="29" font-weight="600">
     <circle cx="110" cy="386" r="7" fill="#4ee0fc"/>
-    <text x="132" y="396" fill="#c9d4e0">Dezentralisierung</text>
+    <text x="132" y="396" fill="#c9d4e0">Decentralization</text>
 
     <circle cx="420" cy="386" r="7" fill="#f59e0b"/>
-    <text x="442" y="396" fill="#c9d4e0">Verbrannte Supply</text>
+    <text x="442" y="396" fill="#c9d4e0">Burned Supply</text>
 
-    <circle cx="784" cy="386" r="7" fill="#7e6fff"/>
-    <text x="806" y="396" fill="#c9d4e0">Kurs</text>
+    <circle cx="710" cy="386" r="7" fill="#7e6fff"/>
+    <text x="732" y="396" fill="#c9d4e0">Price</text>
 
     <circle cx="110" cy="452" r="7" fill="#22c55e"/>
     <text x="132" y="462" fill="#c9d4e0">Mining Live</text>
@@ -67,7 +67,7 @@
 
   <!-- Die Zeile, die den Report von einem Blog-Post unterscheidet. -->
   <text x="96" y="548" font-family="Segoe UI, DejaVu Sans, Helvetica, Arial, sans-serif"
-        font-size="25" font-weight="400" fill="#8aa0ab">Gemessen aus der Kette. Offene API, versiegelte Epochen, nichts interpoliert.</text>
+        font-size="25" font-weight="400" fill="#8aa0ab">Measured on-chain. Open API, sealed epochs, nothing interpolated.</text>
 
   <rect x="0" y="618" width="1200" height="12" fill="url(#og-grad)"/>
 </svg>

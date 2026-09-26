@@ -41,7 +41,7 @@ preexisting: list[str] = []
 def check_assets() -> None:
     """Every URL the meta tags and the manifest promise must actually answer."""
     for path, kind in (
-        ("/dashboard/assets/og-image.png", "image/png"),
+        ("/dashboard/assets/og-image-en.png", "image/png"),
         ("/dashboard/assets/icon.svg", "image/svg+xml"),
         ("/dashboard/assets/icon-192.png", "image/png"),
         ("/dashboard/assets/icon-512.png", "image/png"),

@@ -54,7 +54,7 @@ def test_the_share_card_is_a_png_of_the_right_size():
     """X does not render SVG, and it reads the declared dimensions."""
     from PIL import Image  # dev-only dependency; the runtime never needs it
 
-    with Image.open(ASSETS / "og-image.png") as im:
+    with Image.open(ASSETS / "og-image-en.png") as im:
         assert (im.width, im.height) == (1200, 630)
 
     for page in sorted(DASH.glob("*.html")):

@@ -245,7 +245,7 @@ PAGE = """<!doctype html>
 <meta property="og:title" content="How it works \u2014 Qubic Report" />
 <meta property="og:description" content="{desc}" />
 <meta property="og:url" content="https://report.qubic.tools/how-it-works" />
-<meta property="og:image" content="https://report.qubic.tools/dashboard/assets/og-image.png" />
+<meta property="og:image" content="https://report.qubic.tools/dashboard/assets/og-image-en.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
@@ -253,7 +253,7 @@ PAGE = """<!doctype html>
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="How it works \u2014 Qubic Report" />
 <meta name="twitter:description" content="{desc}" />
-<meta name="twitter:image" content="https://report.qubic.tools/dashboard/assets/og-image.png" />
+<meta name="twitter:image" content="https://report.qubic.tools/dashboard/assets/og-image-en.png" />
 <style>
   :root{{
     --bg:#0c141b; --bg2:#101820; --surface:#16232e; --surface2:#1b2c38;

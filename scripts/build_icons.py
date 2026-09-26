@@ -190,9 +190,9 @@ def og_image() -> Image.Image:
     # What the report measures, in navigation order, each dot in its page's
     # accent colour.
     bullets = [
-        (110, 386, CYAN, "Dezentralisierung"),
-        (420, 386, (245, 158, 11), "Verbrannte Supply"),
-        (784, 386, VIOLET, "Kurs"),
+        (110, 386, CYAN, "Decentralization"),
+        (420, 386, (245, 158, 11), "Burned Supply"),
+        (710, 386, VIOLET, "Price"),
         (110, 452, (34, 197, 94), "Mining Live"),
     ]
     bf = _font(29, bold=True)
@@ -202,7 +202,7 @@ def og_image() -> Image.Image:
 
     d.text(
         (96, 530),
-        "Gemessen aus der Kette. Offene API, versiegelte Epochen, nichts interpoliert.",
+        "Measured on-chain. Open API, sealed epochs, nothing interpolated.",
         font=_font(25),
         fill=MUTED,
     )
@@ -233,9 +233,12 @@ def build() -> None:
         img.save(ASSETS / name)
         print(f"  {name:24} {size}x{size}")
 
+    # The file name is part of the cache key: X and Discord keep a card's
+    # picture per image URL for days. When the card's text changes, rename the
+    # file (and the og:image/twitter:image tags) or the old picture lingers.
     og = og_image()
-    og.save(ASSETS / "og-image.png", optimize=True)
-    print(f"  {'og-image.png':24} {og.width}x{og.height}")
+    og.save(ASSETS / "og-image-en.png", optimize=True)
+    print(f"  {'og-image-en.png':24} {og.width}x{og.height}")
 
     # favicon.ico: still the only thing some feed readers and older crawlers
     # look for, and it costs one line.
@@ -253,13 +256,13 @@ def verify() -> int:
     a fresh one without opening each file.
     """
     bad = []
-    for name, size in {**OUTPUTS, "og-image.png": None, "favicon.ico": None}.items():
+    for name, size in {**OUTPUTS, "og-image-en.png": None, "favicon.ico": None}.items():
         p = ASSETS / name
         if not p.exists():
             bad.append(f"missing: {name}")
             continue
         with Image.open(p) as im:
-            if name == "og-image.png" and (im.width, im.height) != (1200, 630):
+            if name == "og-image-en.png" and (im.width, im.height) != (1200, 630):
                 bad.append(f"{name}: {im.width}x{im.height}, expected 1200x630")
             elif size and (im.width, im.height) != (size, size):
                 bad.append(f"{name}: {im.width}x{im.height}, expected {size}x{size}")
