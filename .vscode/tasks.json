@@ -69,6 +69,27 @@
       "presentation": { "reveal": "always", "panel": "dedicated", "group": "dev" }
     },
     {
+      // Frontend work against real data: the pages come from the working tree,
+      // everything else (/v1, /health, ...) is forwarded to report.qubic.tools.
+      // No local API, worker or store involved, so no gaps from hours the
+      // laptop was off. Port 8001, so it can run beside a local API on 8000.
+      "label": "Start live proxy",
+      "type": "shell",
+      "command": "python",
+      "args": ["scripts/dev_live_proxy.py", "--port", "8001"],
+      "isBackground": true,
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": {
+        "pattern": { "regexp": "^\\s*$", "file": 1, "location": 2, "message": 3 },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*Starting live proxy.*",
+          "endsPattern": ".*Live proxy running on.*"
+        }
+      },
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
       "label": "Install deps",
       "type": "shell",
       "command": "python -m pip install -r requirements.txt",

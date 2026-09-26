@@ -215,7 +215,10 @@ uvicorn api.server:app --port 8000
 
 Press **F5** → *Dashboard (Chrome · sample data)* opens it in Chrome instantly (no setup).
 The *Dashboard + live API (Chrome)* config starts the API (`uvicorn`) first and opens the
-live dashboard. Tasks for install / tests / sample-data are in the Command Palette →
+live dashboard. *Dashboard + Live-Daten (Chrome · report.qubic.tools)* serves the local
+pages on port 8001 and forwards every API call to the live deployment
+(`scripts/dev_live_proxy.py`) — full history for frontend work, no local store, but
+backend changes are not exercised. Tasks for install / tests / sample-data are in the Command Palette →
 *Run Task*. (Configs live in `.vscode/`.)
 
 > Note on live data: `rpc.qubic.org` must be reachable from wherever the API/`build_report`

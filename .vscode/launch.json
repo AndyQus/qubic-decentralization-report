@@ -16,6 +16,17 @@
       "preLaunchTask": "Start API + worker"
     },
     {
+      // Local pages, live data: /v1 is forwarded to report.qubic.tools by
+      // scripts/dev_live_proxy.py. For layout and frontend work with complete
+      // history; backend changes are not exercised here — use the entry above.
+      "name": "Dashboard + Live-Daten (Chrome · report.qubic.tools)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:8001/dashboard/",
+      "webRoot": "${workspaceFolder}/dashboard",
+      "preLaunchTask": "Start live proxy"
+    },
+    {
       // The live mining view. Unlike index.html it has no bundled-data fallback —
       // every number is read from a Qubic node over TCP at request time — so it
       // only works through the API. Opened as a file:// the page says exactly that
