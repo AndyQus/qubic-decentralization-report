@@ -103,6 +103,14 @@ def start_price_sampler(client, store: Store, interval: int) -> threading.Thread
         last_prune = 0.0
         last_trend = 0.0
         n_rolled_since_trend = 0
+        try:
+            # Every start brings the stored record up to the current rules:
+            # this is how a data fix reaches a server we have no shell on.
+            r = pipeline.repair_price_history(store)
+            if r["echo_from"] is not None or r["hours_changed"]:
+                print(f"[price] repaired history: {r}")
+        except Exception as e:
+            print(f"[price] repair failed: {e}", file=sys.stderr)
         while True:
             started = time.time()
             try:
@@ -115,6 +123,21 @@ def start_price_sampler(client, store: Store, interval: int) -> threading.Thread
                           "no price in the response", file=sys.stderr)
             except Exception as e:
                 print(f"[price] sample failed: {e}", file=sys.stderr)
+            try:
+                # A backend that stopped updating is only recognisable by the
+                # pattern its echoes leave, so every pass looks at the last day
+                # (qdr/price_echo.py). Echoes in hours already folded force a
+                # refold, and the lines drawn on those hours are replayed.
+                first = pipeline.reject_price_echoes(
+                    store, since=int(time.time()) - 86400)
+                if first is not None:
+                    print(f"[price] set aside echoes of a frozen backend "
+                          f"from {first}", file=sys.stderr)
+                    if first < int(time.time()) // 3600 * 3600:
+                        store.rollup_price_hours(since=first)
+                        pipeline.replay_trendlines(store)
+            except Exception as e:
+                print(f"[price] echo check failed: {e}", file=sys.stderr)
             try:
                 # Fold finished intervals into hours every 10 min. The rollup
                 # only touches hours that are over, so running it often costs

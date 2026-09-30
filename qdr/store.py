@@ -301,6 +301,31 @@ CREATE TABLE IF NOT EXISTS price_points (
 );
 CREATE INDEX IF NOT EXISTS ix_price_until ON price_points(until);
 
+-- Readings set aside because a frozen upstream backend echoed them (see
+-- qdr/price_echo.py). Kept rather than deleted: they were really served, and
+-- keeping them is also what lets the detector keep recognising an incident
+-- that is still going on after its first readings left the series.
+--
+-- When a reading moves here the interval before it is healed: merged with the
+-- one after when both carry the same price, or else extended across the
+-- rejected stretch. The upstream was asked in those minutes and answered with
+-- an echo, which says nothing about the real price -- the last real figure is
+-- the best statement of it, and `polls` still counts real readings only.
+CREATE TABLE IF NOT EXISTS price_rejects (
+    at            INTEGER PRIMARY KEY,
+    until         INTEGER NOT NULL,
+    polls         INTEGER NOT NULL,
+    price         REAL NOT NULL,
+    market_cap    INTEGER,
+    circulating   INTEGER,
+    epoch         INTEGER,
+    tick          INTEGER,
+    rpc_timestamp INTEGER,
+    fetched_at    INTEGER NOT NULL,
+    reason        TEXT NOT NULL,
+    rejected_at   INTEGER NOT NULL
+);
+
 -- Hourly summary: the permanent record. Price points are pruned to a rolling
 -- window (PRICE_KEEP_DAYS); these are not, so a chart zoomed out to a year keeps
 -- drawing at the resolution that survives. Same detail/summary split as
@@ -1501,6 +1526,9 @@ class Store:
                      "first_at": int(hr["lo"]) if hr["lo"] is not None else None,
                      "last_at": int(hr["hi"]) if hr["hi"] is not None else None},
             "detail_from": lo,
+            # Readings set aside as a frozen backend's echoes (price_rejects).
+            # Published so the cleaning is visible rather than silent.
+            "rejected": self.price_rejected_count(),
         }
 
     def rollup_price_hours(self, since: Optional[int] = None) -> int:
@@ -1517,9 +1545,18 @@ class Store:
         hour_now = (int(time.time()) // 3600) * 3600
         where = ["at < ?"]
         args: list = [hour_now]
+        # Hours are rewritten whole or not at all. `since` is widened to its
+        # hour, and the rows read reach one hour further back: an interval
+        # last confirmed at 10:58 and replaced at 11:02 still stood in the
+        # 11:00 hour. Until 2026-09-30 the cut was taken at `since` itself, and
+        # the worker's rolling `since = now - 48h` rewrote each hour one last
+        # time from only the rows after the cut -- every hour older than two
+        # days was left summarising its final few minutes.
+        first_hour = None
         if since is not None:
+            first_hour = (int(since) // 3600) * 3600
             where.append("until >= ?")
-            args.append(int(since))
+            args.append(first_hour - 3600)
         sql = ("SELECT * FROM price_points WHERE " + " AND ".join(where)
                + " ORDER BY at ASC")
         with self._lock:
@@ -1554,6 +1591,8 @@ class Store:
             if stop < start:
                 continue
             h = (start // 3600) * 3600
+            if first_hour is not None:
+                h = max(h, first_hour)
             while h <= (stop // 3600) * 3600 and h < hour_now:
                 lo = max(start, h)
                 hi = min(stop, h + 3599)
@@ -1597,6 +1636,99 @@ class Store:
                      e["market_cap"], e["moves"], e["polls"], now),
                 )
         return len(hours)
+
+    def rebuild_price_hours(self) -> int:
+        """Refold every hour the stored points still cover. Returns hours changed.
+
+        The first hour is left alone when points before it were pruned: its
+        early rows are gone, and refolding it would replace a whole hour with
+        its remainder. The hours before it are the permanent record and have no
+        points left to be rebuilt from.
+        """
+        with self._lock:
+            lo = self._conn.execute("SELECT MIN(at) FROM price_points").fetchone()[0]
+            hlo = self._conn.execute("SELECT MIN(at) FROM price_hours").fetchone()[0]
+        if lo is None:
+            return 0
+        since = (int(lo) // 3600) * 3600
+        if hlo is not None and int(hlo) < since:
+            since += 3600
+        cols = "at,open,high,low,close,avg_price,market_cap,moves,polls"
+        with self._lock:
+            before = {r[0]: tuple(r) for r in self._conn.execute(
+                f"SELECT {cols} FROM price_hours WHERE at>=?", (since,))}
+        self.rollup_price_hours(since=since)
+        with self._lock:
+            after = {r[0]: tuple(r) for r in self._conn.execute(
+                f"SELECT {cols} FROM price_hours WHERE at>=?", (since,))}
+        return sum(1 for k, v in after.items() if before.get(k) != v)
+
+    def price_check_rows(self, since: Optional[int] = None) -> list[dict]:
+        """Stored intervals AND rejected readings, by `at`, for the echo check.
+
+        Each row carries `rejected` (0/1). Rejected ones are included because
+        they are the evidence an ongoing incident is recognised by.
+        """
+        cols = "at, until, polls, price"
+        where, args = "", []
+        if since is not None:
+            where, args = " WHERE until>=?", [int(since), int(since)]
+        sql = (f"SELECT {cols}, 0 AS rejected FROM price_points{where} UNION ALL "
+               f"SELECT {cols}, 1 AS rejected FROM price_rejects{where} ORDER BY at")
+        with self._lock:
+            return [dict(r) for r in self._conn.execute(sql, args)]
+
+    def reject_prices(self, ats, reason: str) -> Optional[int]:
+        """Move price rows to `price_rejects` and heal the series around them.
+
+        Returns the earliest `at` touched, or None when nothing moved. For each
+        row taken out, the interval before it is merged with the one after when
+        both carry the same price and cap, and is otherwise extended to where
+        the rejected reading was last confirmed -- see the price_rejects schema
+        for why that is the honest reading of those minutes.
+        """
+        now = int(time.time())
+        earliest = None
+        cols = ("at,until,polls,price,market_cap,circulating,epoch,tick,"
+                "rpc_timestamp,fetched_at")
+        with self._tx() as c:
+            for at in sorted(int(a) for a in ats):
+                row = c.execute("SELECT * FROM price_points WHERE at=?", (at,)).fetchone()
+                if row is None:
+                    continue
+                c.execute(
+                    f"INSERT OR REPLACE INTO price_rejects ({cols},reason,rejected_at) "
+                    f"SELECT {cols}, ?, ? FROM price_points WHERE at=?",
+                    (reason, now, at))
+                c.execute("DELETE FROM price_points WHERE at=?", (at,))
+                earliest = at if earliest is None else min(earliest, at)
+
+                prev = c.execute("SELECT * FROM price_points WHERE at<? "
+                                 "ORDER BY at DESC LIMIT 1", (at,)).fetchone()
+                if prev is None:
+                    continue
+                nxt = c.execute("SELECT * FROM price_points WHERE at>? "
+                                "ORDER BY at ASC LIMIT 1", (at,)).fetchone()
+                if (nxt is not None and float(nxt["price"]) == float(prev["price"])
+                        and (nxt["market_cap"] or 0) == (prev["market_cap"] or 0)):
+                    c.execute(
+                        "UPDATE price_points SET until=?, polls=polls+?, "
+                        "epoch=COALESCE(?,epoch), tick=COALESCE(?,tick), "
+                        "rpc_timestamp=COALESCE(?,rpc_timestamp), "
+                        "fetched_at=MAX(fetched_at,?) WHERE at=?",
+                        (max(int(prev["until"]), int(nxt["until"])), int(nxt["polls"]),
+                         nxt["epoch"], nxt["tick"], nxt["rpc_timestamp"],
+                         int(nxt["fetched_at"]), int(prev["at"])))
+                    c.execute("DELETE FROM price_points WHERE at=?", (int(nxt["at"]),))
+                else:
+                    c.execute("UPDATE price_points SET until=MAX(until,?) WHERE at=?",
+                              (int(row["until"]), int(prev["at"])))
+        return earliest
+
+    def price_rejected_count(self) -> int:
+        with self._lock:
+            return int(self._conn.execute(
+                "SELECT COUNT(*) FROM price_rejects").fetchone()[0] or 0)
 
     def prune_price(self, keep_days: Optional[int] = None) -> int:
         """Drop price points older than the window. Returns rows deleted.
@@ -1696,6 +1828,11 @@ class Store:
             c.execute("UPDATE price_trendlines SET status='active', ended_at=NULL, "
                       "replaced_by=NULL WHERE id=? AND status='replaced'",
                       (int(line_id),))
+
+    def clear_trendlines(self) -> int:
+        """Drop every stored line, for a replay over corrected bars only."""
+        with self._tx() as c:
+            return c.execute("DELETE FROM price_trendlines").rowcount or 0
 
     def trendlines_first_found(self) -> Optional[int]:
         with self._lock:

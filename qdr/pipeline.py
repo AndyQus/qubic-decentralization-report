@@ -18,7 +18,7 @@ import os
 import time
 from typing import Optional
 
-from . import __version__, burn, dating, trendlines
+from . import __version__, burn, dating, price_echo, trendlines
 from .client import CachedClient, QubicRPCError
 from .clustering import (
     Cluster,
@@ -698,6 +698,10 @@ def trend_bars(store: Store, scale: "trendlines.Scale",
     rows = store.price_series(resolution="hour")
     hours = [{"at": int(r["at"]), "high": float(r["high"]),
               "low": float(r["low"]), "close": float(r["close"])} for r in rows]
+    if now is not None:
+        # Only hours over by `now`. Live that is every stored hour already;
+        # a replay (replay_trendlines) needs it to see the record as it stood.
+        hours = [h for h in hours if h["at"] + trendlines.HOUR <= int(now)]
     if scale.period_s == trendlines.DAY:
         now = int(time.time()) if now is None else int(now)
         today = now // trendlines.DAY * trendlines.DAY
@@ -773,6 +777,85 @@ def update_trendlines(store: Store, now: Optional[int] = None) -> dict:
                 store.end_trendline(cur["id"], "replaced", now, replaced_by=new_id)
                 counts["replaced"] += 1
     return summary
+
+
+def replay_trendlines(store: Store) -> int:
+    """Rebuild every stored line from the hourly record, hour by hour.
+
+    Lines are otherwise never rewritten, and that rule is right for lines found
+    on correct bars. It cannot stand for lines found on bars that were wrong:
+    a support "broken" by a frozen backend's echo was never broken by the
+    market. So when the bars are corrected, the archive is replayed as the
+    worker would have written it had the bars been right from the start -- one
+    pass per finished hour, stamped with the moment that hour closed.
+
+    Returns the number of lines on record afterwards.
+    """
+    hours = [int(r["at"]) for r in store.price_series(resolution="hour")]
+    store.clear_trendlines()
+    for h in hours:
+        update_trendlines(store, now=h + trendlines.HOUR)
+    return len(store.trendlines())
+
+
+PRICE_ECHO_REASON = "frozen upstream backend echoed an old price"
+
+
+def reject_price_echoes(store: Store, since: Optional[int] = None) -> Optional[int]:
+    """Take readings a frozen backend echoed out of the series.
+
+    Returns the earliest `at` removed, or None when the series is clean. See
+    qdr/price_echo.py for how an echo is told from a real move.
+    """
+    rows = _echo_sequence(store.price_check_rows(since=since))
+    bad = [rows[i]["at"] for i in price_echo.frozen_rows(rows)
+           if not rows[i]["rejected"]]
+    if not bad:
+        return None
+    return store.reject_prices(bad, PRICE_ECHO_REASON)
+
+
+def _echo_sequence(rows: list[dict]) -> list[dict]:
+    """The stored rows as the upstream served them, for the echo check.
+
+    Healing merges the real intervals on either side of a rejected reading, so
+    in storage the real price stands once, before a run of rejected echoes --
+    and the alternation that identifies them is gone. Here the real interval
+    is repeated right after every rejected reading it spans, restoring the
+    turn-taking. The copies are marked rejected so they are never removed.
+    """
+    import bisect
+    real = [r for r in rows if not r["rejected"]]
+    starts = [int(r["at"]) for r in real]
+    out = list(rows)
+    for j in rows:
+        if not j["rejected"]:
+            continue
+        k = bisect.bisect_left(starts, int(j["at"])) - 1
+        if k >= 0 and int(real[k]["until"]) >= int(j["until"]):
+            out.append({**real[k], "at": int(j["until"]) + 1, "rejected": 1})
+    out.sort(key=lambda r: int(r["at"]))
+    return out
+
+
+def repair_price_history(store: Store) -> dict:
+    """Bring the whole stored price record up to the current rules.
+
+    Idempotent, and cheap when there is nothing to do, so the worker runs it
+    on every start. That is how a fix reaches data already on a server this
+    project has no shell on: the next image to start applies it.
+
+      1. Echoes of a frozen backend leave the series (the 2026-09-29 incident).
+      2. Every hour the points still cover is refolded -- which also repairs
+         the hours the old rollup had cut down to their last minutes.
+      3. When any hour changed, the trend lines are replayed over the
+         corrected hours.
+    """
+    first = reject_price_echoes(store)
+    changed = store.rebuild_price_hours()
+    lines = replay_trendlines(store) if (changed or first is not None) else None
+    return {"echo_from": first, "rejected": store.price_rejected_count(),
+            "hours_changed": changed, "trendlines": lines}
 
 
 def _half_broken(d: dict, bars: list[dict], scale: "trendlines.Scale") -> bool:
