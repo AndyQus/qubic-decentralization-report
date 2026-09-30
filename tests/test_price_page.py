@@ -123,7 +123,7 @@ def test_every_figure_placeholder_starts_empty():
     slow or failed load never shows a stale or invented number."""
     src = page_text()
     body = src[src.index("<body"):]
-    for el_id in ("hero-price", "f-cap", "f-change", "f-supply", "f-epoch", "f-watch"):
+    for el_id in ("hero-price", "f-cap", "f-change", "f-supply", "f-watch"):
         m = re.search(rf'id="{el_id}"[^>]*>([^<]*)<', body)
         assert m, f"#{el_id} not found in the markup"
         assert m.group(1).strip() in ("–", "-", ""), \

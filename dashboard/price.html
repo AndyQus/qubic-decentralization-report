@@ -824,7 +824,7 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
   .hero-price:has(+ .welcome-note:not([hidden])) { margin-bottom: 10px; }
   .hero-facts { margin-top: 0; margin-bottom: 18px; }
 
-  /* Zwei Spalten statt einer: fünf gestapelte Kacheln sind auf einem Telefon
+  /* Zwei Spalten statt einer: vier gestapelte Kacheln sind auf einem Telefon
      eine lange, gleichförmige Strecke. Zu zweit nebeneinander bleiben sie
      lesbar und kosten die halbe Höhe. minmax(0,1fr) statt 150px, damit sie
      auch auf 320 px nicht wieder einspaltig werden. */
@@ -957,11 +957,6 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
         <div class="s-label" data-i18n="supplyLabel">Circulating</div>
         <div class="s-val small" id="f-supply">–</div>
         <div class="s-sub" id="f-supply-sub">–</div>
-      </div>
-      <div class="qs-stat glass-card themed">
-        <div class="s-label" data-i18n="epochLabel">Epoch</div>
-        <div class="s-val small" id="f-epoch">–</div>
-        <div class="s-sub" data-i18n="epochSub">at the last reading</div>
       </div>
       <div class="qs-stat glass-card">
         <div class="s-label" data-i18n="watchLabel">Observed</div>
@@ -1304,8 +1299,6 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
       capSub: "price × circulating",
       changeLabel: "Change, 24 h",
       supplyLabel: "Circulating",
-      epochLabel: "Epoch",
-      epochSub: "at the last reading",
       watchLabel: "Observed",
       watchSub: "{pct} % of minutes measured",
 
@@ -1466,8 +1459,6 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
       capSub: "Preis × Umlauf",
       changeLabel: "Änderung, 24 h",
       supplyLabel: "Umlauf",
-      epochLabel: "Epoche",
-      epochSub: "bei der letzten Messung",
       watchLabel: "Beobachtet",
       watchSub: "{pct} % der Minuten gemessen",
 
@@ -3726,8 +3717,6 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
 
     document.getElementById("f-supply").textContent = fmtBig(latest.circulating);
     document.getElementById("f-supply-sub").textContent = "QU";
-    document.getElementById("f-epoch").textContent =
-      latest.epoch != null ? String(latest.epoch) : "–";
 
     /* "Beobachtet" trägt zwei Angaben: wie weit die Historie reicht, und wie
        lückenlos sie erhoben wurde. Die Unterzeile sagt das in Worten statt in
@@ -4085,8 +4074,8 @@ button.leg-toggle[aria-pressed="false"] { opacity: .45; text-decoration: line-th
         const dirCol = dir === "up" ? "var(--price-up)" : "var(--price-down)";
         flashEl(document.getElementById("hero-price"), dirCol);
         /* Marktkapitalisierung und 24-Stunden-Änderung folgen unmittelbar aus
-           dem Preis, also leuchten sie mit. Umlauf und Epoche nicht: die
-           bewegen sich nach eigener Uhr und hätten hier nichts zu melden. */
+           dem Preis, also leuchten sie mit. Der Umlauf nicht: er
+           bewegt sich nach eigener Uhr und hätte hier nichts zu melden. */
         flashEl(document.getElementById("f-cap"), dirCol);
         flashEl(document.getElementById("f-change"), dirCol);
       }
