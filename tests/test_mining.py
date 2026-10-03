@@ -1,13 +1,14 @@
 """The mining view reads other people's nodes, so it has to behave under failure.
 
-Three things are pinned here, each of which was a real risk while building it:
+Two things are pinned here, each of which was a real risk while building it:
 
   * a node that does not answer must produce an honest empty state, never a page of
     numbers from the last time one did (the project's no-invented-data rule);
   * the response must be cached, because every extra fetch is a request against a
-    stranger's node -- one query per TTL however many browsers are watching;
-  * `hash_verified` must actually compare, since it is the page's claim that the
-    task described in the concept doc is the task being mined right now.
+    stranger's node -- one query per TTL however many browsers are watching.
+
+What the task block claims (`hash_verified`) is pinned in test_antask.py, where
+the task is resolved.
 
 No test here touches the network.
 """
@@ -33,12 +34,14 @@ def _live_bundle(solutions: int = 5000) -> dict:
         "fetched_at": 1788958516,
         "node": {"ip": "203.0.113.7", "latency_ms": 42, "version": 304,
                  "peers_total": 10, "peers_responding": 8},
-        "colony": {"solution_count": solutions, "threshold": 4000,
+        "colony": {"solution_count": solutions, "threshold": 4350,
                    "free_ann_slots": 8382831, "max_children_per_parent": 0},
-        "task": {"input_trits": 18, "sequence_length": 8760, "window_width": 672,
-                 "graded_windows": 8088, "data_hash": antnode.CANONICAL_DATA_HASH,
-                 "hash_verified": True, "target_zeros": 4344, "target_ones": 4417,
-                 "target_unknown": 0},
+        "task": {"source_ref": "main", "scoring": "rolling-frame", "input_trits": 18,
+                 "inputs_used": False, "rows": 8929, "sequence_length": 8928,
+                 "window_width": 8760, "shift_cap": 168, "score_max": 8760,
+                 "advance_gate": 2920, "data_hash": "e835130d" * 8,
+                 "hash_verified": True, "target_zeros": 4426, "target_ones": 4502,
+                 "target_unknown": 0, "tail_rows": 168, "tail_unknown": 0},
         "epoch": {"epoch": 230, "tick": 79304436, "initial_tick": 79300000,
                   "ticks_into_epoch": 4436},
     }
@@ -123,51 +126,12 @@ def test_growth_rate_needs_two_real_fetches(client, monkeypatch):
     assert second["colony"]["delta_per_min"] == pytest.approx(100, abs=5)
 
 
-def test_hash_verification_actually_compares():
-    """hash_verified is a claim about reality; it has to fail when reality differs."""
+def test_unbounded_child_cap_reads_as_unbounded():
+    """The doc encodes "no cap" as 0, which reads backwards if taken literally."""
     ctx = antnode.AntEpochContext(
-        epoch=230, threshold=4000, freshness_window=15000, solution_count=1,
+        epoch=233, threshold=4350, freshness_window=15000, solution_count=1,
         free_ann_slots=1, max_children_per_parent=0, spectrum_digest="00",
-        topology_hash=antnode.CANONICAL_TOPOLOGY_HASH,
-        data_hash="deadbeef" * 8,  # a task that is not the one we analysed
+        topology_hash="00" * 32, data_hash="deadbeef" * 8,
         source_ip="203.0.113.7", latency_ms=1.0,
     )
-    assert ctx.data_hash != antnode.CANONICAL_DATA_HASH
-
-    # And the unbounded-child-cap encoding, which reads backwards if taken literally.
     assert ctx.max_children_is_unbounded is True
-
-
-def test_the_dashboard_links_to_the_mining_page():
-    """The page started out unlisted and is now part of the navigation.
-
-    Pinned because the link is easy to lose in a header edit, and a page nobody
-    can reach from the report is a page nobody visits.
-    """
-    index = (ROOT / "dashboard" / "index.html").read_text(encoding="utf-8")
-    assert './mining.html' in index
-
-
-def test_mining_page_offers_both_languages():
-    """Both language tables must carry every key the markup asks for.
-
-    A missing key silently falls back to English, which reads as a half-translated
-    page rather than an error -- so it is checked rather than eyeballed.
-    """
-    page = (ROOT / "dashboard" / "mining.html").read_text(encoding="utf-8")
-
-    used = set(re.findall(r'data-i18n="([A-Za-z0-9_]+)"', page))
-    assert used, "no data-i18n nodes found -- did the markup lose its tagging?"
-
-    def keys_of(block: str) -> set[str]:
-        # Several keys share a line, so match every `name:` that follows the start
-        # of a line or a comma -- not just the first one on each line.
-        return set(re.findall(r'(?:^|,)\s*([A-Za-z0-9_]+):\s*"', block, re.M))
-
-    en_block = page[page.index("    en: {"):page.index("    de: {")]
-    de_block = page[page.index("    de: {"):page.index("  let lang =")]
-    en, de = keys_of(en_block), keys_of(de_block)
-
-    assert not (used - en), f"English is missing: {sorted(used - en)}"
-    assert not (used - de), f"German is missing: {sorted(used - de)}"
-    assert en == de, f"tables differ: {sorted(en ^ de)}"

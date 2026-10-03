@@ -445,6 +445,16 @@ html { scroll-behavior: smooth; }
 .peer-pip.off { background: color-mix(in srgb, var(--danger) 45%, transparent); }
 
 /* ─── Task Section ──────────────────────────────────────────────────────────── */
+.task-explain {
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+  font-size: 13px; line-height: 1.55; color: var(--muted);
+}
+.task-explain p { margin: 0 0 8px; }
+.task-explain p:last-child { margin-bottom: 0; }
+.task-explain p:empty { display: none; }
+.task-explain a { color: var(--accent); white-space: nowrap; }
+.te-title { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.te-verdict { color: var(--text); font-weight: 600; }
 .task-params {
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
 }
@@ -780,20 +790,22 @@ html { scroll-behavior: smooth; }
       </p>
       <div class="sc-body">
         <div class="task-params">
-          <div class="tp-row">
-            <span class="tp-label" data-i18n="inputTrits">Eingangs-Trits</span>
-            <span class="tp-val"><span id="t-inputs">–</span></span>
-          </div>
+          <!-- Labels for the window rows depend on the scoring model the core runs
+               (task.scoring); renderTask sets them, these are the rolling-frame ones. -->
           <div class="tp-row">
             <span class="tp-label" data-i18n="seqLen">Sequenzlänge</span>
             <span class="tp-val"><span id="t-seq">–</span><span class="tp-unit">h</span></span>
           </div>
           <div class="tp-row">
-            <span class="tp-label" data-i18n="ctxWin">Kontextfenster</span>
+            <span class="tp-label" id="t-win-label" data-i18n="frameWin">Bewerteter Rahmen</span>
             <span class="tp-val"><span id="t-win">–</span><span class="tp-unit">h</span></span>
           </div>
           <div class="tp-row">
-            <span class="tp-label" data-i18n="gradedWin">Bew. Fenster</span>
+            <span class="tp-label" data-i18n="shiftCap">Max. Verschiebung</span>
+            <span class="tp-val"><span id="t-shift">–</span><span class="tp-unit">h</span></span>
+          </div>
+          <div class="tp-row">
+            <span class="tp-label" data-i18n="scoreMax">Score-Obergrenze</span>
             <span class="tp-val"><span id="t-graded">–</span></span>
           </div>
           <div class="tp-row">
@@ -827,6 +839,19 @@ html { scroll-behavior: smooth; }
           <div class="trit-note">
             <span data-i18n="tritNote">„Weiß nicht" (Trit 2) ist interner Netzwerkzustand, aber niemals Zielwert — Abweichung zählt schlicht als Fehler.</span>
           </div>
+        </div>
+
+        <!-- What the series is comes from Qubic's own statement, not from the
+             protocol -- the task file carries trits, not labels -- so it is cited.
+             Whether the task asks for anything unknown is read from the file. -->
+        <div class="task-explain" id="task-explain">
+          <div class="te-title" data-i18n="teTitle">Was trainiert wird</div>
+          <p>
+            <span data-i18n="teWhat">Laut Qubic ist die Zielreihe die Richtung von Bitcoin-Stundenkerzen: schließt die nächste Stunde höher (1) oder tiefer (0)?</span>
+            <a href="https://qubic.org/blog-detail/anna-reached-zero-what-it-actually-means" target="_blank" rel="noreferrer" data-i18n="teSource">Quelle: Qubic-Blog</a>
+          </p>
+          <p id="te-how"></p>
+          <p class="te-verdict" id="te-forecast"></p>
         </div>
       </div>
     </section>
@@ -1003,12 +1028,19 @@ html { scroll-behavior: smooth; }
       peersSub: "answering of {n} peers",
       taskTitle: "The task",
       taskDesc: "These are the parameters the swarm computes against \u2014 the same for every node worldwide.",
-      inputTrits: "Input trits", seqLen: "Sequence length", ctxWin: "Context window",
-      gradedWin: "Graded windows", thrLabel: "Threshold (max. errors)",
+      seqLen: "Sequence length", ctxWin: "Context window", frameWin: "Graded frame",
+      shiftCap: "Max. shift", scoreMax: "Score ceiling", thrLabel: "Threshold (max. errors)",
       freeSlots: "Free ANN slots",
       hashLabel: "Data hash (byte-for-byte verification)",
-      hashOk: "\u2713 Matches the core byte for byte",
-      hashBad: "\u26A0 Differs from the core \u2014 the task has changed",
+      hashOk: "\u2713 Identical to the task file in qubic/core {ref}",
+      hashPending: "Looking up the task file for this hash in qubic/core \u2026",
+      teTitle: "What is being trained",
+      teWhat: "According to Qubic, the target series is the direction of Bitcoin hourly candles: does the next hour close higher (1) or lower (0)?",
+      teSource: "Source: Qubic blog",
+      teHowRolling: "The network generates the series on its own (the input trits in the file are not read) and is graded on a {win} h frame (\u2248 {years} year). With at most {gate} errors the frame moves one hour further, up to {cap} h; the best computors are those that got furthest.",
+      teHowWindows: "The network sees {win} h of history at a time and has to match the hour after it; {graded} positions are graded.",
+      teNoForecast: "Not a forecast: all {n} hours the frame can move into are already in the file and known. The network reproduces the past \u2014 it does not publish a prediction for the coming hours.",
+      teOpenHours: "The task contains {n} open hours (target unknown) \u2014 the network is graded on hours nobody knows yet.",
       tritLabel: "Target distribution \u2014 purely binary (0/1, no \u201Cunknown\u201D)",
       target0: "Target 0:", target1: "Target 1:", targetUnk: "Unknown (target):",
       tritNote: "\u201CUnknown\u201D (trit 2) is an internal network state, but never a target value \u2014 a deviation simply counts as an error.",
@@ -1064,12 +1096,19 @@ html { scroll-behavior: smooth; }
       peersSub: "antworten von {n} Peers",
       taskTitle: "Die Aufgabe",
       taskDesc: "Gegen diese Parameter rechnet der Schwarm \u2014 dieselben f\u00FCr alle Nodes weltweit.",
-      inputTrits: "Eingangs-Trits", seqLen: "Sequenzl\u00E4nge", ctxWin: "Kontextfenster",
-      gradedWin: "Bew. Fenster", thrLabel: "Schwelle (max. Fehler)",
+      seqLen: "Sequenzl\u00E4nge", ctxWin: "Kontextfenster", frameWin: "Bewerteter Rahmen",
+      shiftCap: "Max. Verschiebung", scoreMax: "Score-Obergrenze", thrLabel: "Schwelle (max. Fehler)",
       freeSlots: "Freie ANN-Slots",
       hashLabel: "Daten-Hash (byteweise Verifikation)",
-      hashOk: "\u2713 Stimmt byteweise mit dem Core \u00FCberein",
-      hashBad: "\u26A0 Weicht vom Core ab \u2014 die Aufgabe hat sich ge\u00E4ndert",
+      hashOk: "\u2713 Identisch mit der Task-Datei in qubic/core {ref}",
+      hashPending: "Task-Datei zu diesem Hash wird in qubic/core gesucht \u2026",
+      teTitle: "Was trainiert wird",
+      teWhat: "Laut Qubic ist die Zielreihe die Richtung von Bitcoin-Stundenkerzen: schlie\u00DFt die n\u00E4chste Stunde h\u00F6her (1) oder tiefer (0)?",
+      teSource: "Quelle: Qubic-Blog",
+      teHowRolling: "Das Netz erzeugt die Reihe selbst (die Eingangs-Trits der Datei werden nicht gelesen) und wird auf einem Rahmen von {win} h (\u2248 {years} Jahr) bewertet. Bei h\u00F6chstens {gate} Fehlern r\u00FCckt der Rahmen eine Stunde weiter, bis zu {cap} h; vorn liegt, wer am weitesten gekommen ist.",
+      teHowWindows: "Das Netz sieht jeweils {win} h Vergangenheit und muss die Stunde danach treffen; bewertet werden {graded} Positionen.",
+      teNoForecast: "Keine Prognose: Alle {n} Stunden, in die der Rahmen vorr\u00FCcken kann, stehen bereits bekannt in der Datei. Das Netz bildet Vergangenheit nach \u2014 eine Vorhersage f\u00FCr die kommenden Stunden ver\u00F6ffentlicht es nicht.",
+      teOpenHours: "Die Aufgabe enth\u00E4lt {n} offene Stunden (Ziel unbekannt) \u2014 das Netz wird an Stunden gemessen, die noch niemand kennt.",
       tritLabel: "Zielverteilung \u2014 rein bin\u00E4r (0/1, kein \u201Ewei\u00DF nicht\u201C)",
       target0: "Ziel 0:", target1: "Ziel 1:", targetUnk: "Unbekannt (Ziel):",
       tritNote: "\u201EWei\u00DF nicht\u201C (Trit 2) ist interner Netzwerkzustand, aber niemals Zielwert \u2014 Abweichung z\u00E4hlt schlicht als Fehler.",
@@ -1348,7 +1387,7 @@ html { scroll-behavior: smooth; }
       /* The threshold is an upper bound on a single solution's ERROR COUNT, not a
          target the colony fills up. Relating it to solution_count would divide two
          unrelated quantities, so state what it means instead. */
-      const graded = d.task && d.task.graded_windows;
+      const graded = d.task && (d.task.score_max || d.task.graded_windows);
       if (graded && d.colony.threshold > 0) {
         const hit = ((graded - d.colony.threshold) / graded * 100).toFixed(1);
         thrPct.textContent = t("thresholdHint", { graded: fmtInt(graded), pct: hit });
@@ -1409,14 +1448,19 @@ html { scroll-behavior: smooth; }
   /* ── Render: Task ─────────────────────────────────────────────────────── */
   function renderTask(d) {
     const task = d.task;
-    if (!t) return;
+    if (!task) return;
 
-    document.getElementById("t-inputs").textContent   = task.input_trits != null ? task.input_trits : "–";
+    /* Every task figure comes from the core file whose hash the node reported
+       (qdr/antask.py). Until that lookup is done the task carries only the hash, and
+       these stay "–" rather than showing an earlier task's numbers. */
+    const rolling = task.scoring === "rolling-frame";
+    document.getElementById("t-win-label").textContent = t(rolling ? "frameWin" : "ctxWin");
     document.getElementById("t-seq").textContent      = fmtInt(task.sequence_length);
     document.getElementById("t-win").textContent      = fmtInt(task.window_width);
-    document.getElementById("t-graded").textContent   = fmtInt(task.graded_windows);
+    document.getElementById("t-shift").textContent    = fmtInt(task.shift_cap);
+    document.getElementById("t-graded").textContent   = fmtInt(task.score_max);
     /* The accept bound comes from the node's epoch context, not from the task's row
-       count -- those are different numbers (4000 vs 8761) and confusing them made the
+       count -- those are different numbers (4350 vs 8929) and confusing them made the
        page state a threshold the network does not use. */
     document.getElementById("t-threshold").textContent = fmtInt(
       d.colony ? d.colony.threshold : null);
@@ -1437,14 +1481,30 @@ html { scroll-behavior: smooth; }
 
       if (task.hash_verified === true) {
         hashCheck.className = "hash-check";
-        hashCheck.textContent = t("hashOk");
-      } else if (task.hash_verified === false) {
-        hashCheck.className = "hash-check unverified";
-        hashCheck.textContent = t("hashBad");
+        hashCheck.textContent = t("hashOk", { ref: task.source_ref || "" });
       } else {
-        hashCheck.className = "hash-check";
-        hashCheck.innerHTML = "Hash-Verifikation ausstehend";
+        hashCheck.className = "hash-check unverified";
+        hashCheck.textContent = t("hashPending");
       }
+    }
+
+    /* Was trainiert wird */
+    const how = document.getElementById("te-how");
+    const verdict = document.getElementById("te-forecast");
+    if (task.hash_verified !== true) {
+      how.textContent = "";
+      verdict.textContent = "";
+    } else {
+      how.textContent = rolling
+        ? t("teHowRolling", {
+            win: fmtInt(task.window_width),
+            years: (task.window_width / 8760).toLocaleString(lang === "de" ? "de-DE" : "en-US",
+                                                             { maximumFractionDigits: 1 }),
+            gate: fmtInt(task.advance_gate), cap: fmtInt(task.shift_cap) })
+        : t("teHowWindows", { win: fmtInt(task.window_width), graded: fmtInt(task.score_max) });
+      verdict.textContent = task.tail_unknown > 0
+        ? t("teOpenHours", { n: fmtInt(task.tail_unknown) })
+        : t("teNoForecast", { n: fmtInt(task.tail_rows) });
     }
 
     /* Trit-Distribution */

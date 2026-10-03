@@ -9,6 +9,40 @@ Erstellt: 2026-09-09 · Geprüft gegen: `qubic/core` @ `main`, Epoch 230, `rpc.q
 
 ---
 
+## 0. Nachtrag 2026-10-03 — Core v1.306.0, Epoch 233
+
+Die §§1–2 beschreiben den Stand von Epoch 230. Seit v1.306.0 (PR #1012) gilt:
+
+| | Epoch 230 (v1.304) | Epoch 233 (v1.306) |
+|---|---|---|
+| Bewertung | Fehler über alle 8088 Fenster nach dem ersten | Fehler in **einem** Rahmen von 8760 h (1 Jahr) |
+| Sequenzlänge | 8760 h | 8928 h (1 Jahr + 1 Woche) |
+| Eingangs-Trits | gelesen | stehen noch in der Datei, **werden nicht gelesen** — das Netz erzeugt die Reihe selbst |
+| Rahmenverschiebung | — | bei ≤ 2920 Fehlern rückt der Rahmen 1 h weiter, max. 168 h (`SHIFT_CAP`) |
+| Rangfolge | Fehler | erst Verschiebung, dann Fehler |
+| Schwelle | 4000 | 4350 |
+| Daten-Hash | `979cdc22…` | `e835130d…` |
+
+**Dass es BTC ist, ist jetzt offiziell** ([Qubic-Blog „Anna Reached 0“](https://qubic.org/blog-detail/anna-reached-zero-what-it-actually-means)):
+Zielreihe ist die Richtung von Bitcoin-Stundenkerzen. §2.2 ist damit in diesem Punkt überholt.
+
+**Eine Live-Prognose gibt es weiterhin nicht.** Der Code-Kommentar zu `SHIFT_CAP` lautet
+„production predicts one week ahead“, aber die angehängte Woche steht vollständig und
+bekannt in der Datei (86 × 1, 82 × 0, kein `UNKNOWN`). Das Netz wird an Vergangenheit
+gemessen; ein Ausgabeweg für eine Prognose (Nachricht, RPC-Feld, Transaktion) existiert
+nicht, und `REQUEST_ANT_IDENTITY_TREE` (jetzt mit `shift`) bleibt operator-signiert.
+Angekündigt ist ein „live Bitcoin prediction prototype … trained on live data through
+the new oracle“ (All-Hands Sept. 2026), ohne Termin.
+
+**Die Mining-Seite folgt Änderungen jetzt selbst.** Die Aufgabenwerte sind nicht mehr in
+`qdr/antnode.py` eingetragen: `qdr/antask.py` sucht in `qubic/core` (`main`, dann die
+Release-Tags) die Task-Datei, deren Header den Live-Hash trägt, und liest Datei und
+`public_settings.h` derselben Version aus. Über dieselbe Auswertung zeigt die Seite an,
+ob der Rahmen in unbekannte Stunden reichen würde (`tail_unknown`) — das wäre das erste
+Anzeichen einer echten Prognose.
+
+---
+
 ## 1. Was tatsächlich im Protokoll steht (verifiziert am Quellcode)
 
 Der seit Epoch 228 aktive Mining-Algorithmus heißt **BPP-9000** und läuft in einer

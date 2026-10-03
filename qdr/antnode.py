@@ -27,6 +27,8 @@ import time
 import urllib.request
 from dataclasses import dataclass
 
+from qdr import antask
+
 # The peer-to-peer port every node listens on.
 PEER_PORT = 21841
 
@@ -286,23 +288,6 @@ def best_epoch_context(
     return None
 
 
-# The task the network is mining against. These are compile-time constants in the
-# core (src/public_settings.h), not something a node reports, so they are mirrored
-# here -- and the live dataHash is what proves the mirror is still accurate.
-TASK_INPUT_TRITS = 18
-TASK_SEQUENCE_LENGTH = 24 * 365
-TASK_WINDOW_WIDTH = 24 * 28
-TASK_GRADED_WINDOWS = TASK_SEQUENCE_LENGTH - TASK_WINDOW_WIDTH
-CANONICAL_DATA_HASH = "979cdc2247d2ca4ed3d614bf27896384cb1c9c3d804af6ede6b59fc52c0e3dfa"
-CANONICAL_TOPOLOGY_HASH = "1dcc19941bb525e8a81fbdac612d3da92aba06e8753afb2974bcbea6a686d5da"
-
-# Target-trit distribution decoded from data/bpp9000.task (see the concept doc). The
-# point of carrying it is the zero: UNKNOWN is never a target, so the task is binary.
-TASK_TARGET_ZEROS = 4344
-TASK_TARGET_ONES = 4417
-TASK_TARGET_UNKNOWN = 0
-
-
 def collect(peers: list[str] | None = None, attempts: int = 5) -> dict:
     """One bundle of live mining state for the dashboard, or a reason it is missing.
 
@@ -359,20 +344,9 @@ def collect(peers: list[str] | None = None, attempts: int = 5) -> dict:
             "free_ann_slots": ctx.free_ann_slots,
             "max_children_per_parent": ctx.max_children_per_parent,
         },
-        "task": {
-            "input_trits": TASK_INPUT_TRITS,
-            "sequence_length": TASK_SEQUENCE_LENGTH,
-            "window_width": TASK_WINDOW_WIDTH,
-            "graded_windows": TASK_GRADED_WINDOWS,
-            "data_hash": ctx.data_hash,
-            # If this ever goes false the task changed and the mirrored constants
-            # above (and the concept doc's analysis) no longer describe reality.
-            "hash_verified": ctx.data_hash == CANONICAL_DATA_HASH
-            and ctx.topology_hash == CANONICAL_TOPOLOGY_HASH,
-            "target_zeros": TASK_TARGET_ZEROS,
-            "target_ones": TASK_TARGET_ONES,
-            "target_unknown": TASK_TARGET_UNKNOWN,
-        },
+        # The task's shape is not something a node reports and it changes between
+        # core releases; antask reads it from the core file carrying this hash.
+        "task": antask.task_block(ctx.data_hash),
     }
 
     if info is not None:
