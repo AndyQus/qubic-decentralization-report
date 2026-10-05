@@ -321,6 +321,53 @@ Cached for 24 h on disk (`$DATA_DIR/raw/smart_contracts.json`). An index the
 registry does not list gets **no** name and the page shows the bare index —
 never a guessed one. Override with `QDR_CONTRACTS_URL`.
 
+## 7.4 Bob WebSocket — live ticks (2026-10-05)
+
+The ticks page (`dashboard/ticks.html`, `qdr/tickstream.py`) needs every tick as it
+is produced. Bob serves that on a WebSocket next to its JSON-RPC:
+
+```
+wss://bob.qubic.li/ws/qubic      {"method":"qubic_subscribe","params":["tickStream"]}
+```
+
+Valid subscription types, as the node lists them on a wrong one: `newTicks`,
+`logs`, `transfers`, `tickStream`. Over HTTP POST, `qubic_subscribe` answers
+"only available over WebSocket". Measured over 20 s, ~1.8 ticks/s:
+
+| Subscription | per tick | Content |
+|---|---|---|
+| `tickStream` | ~20 KB | tick, leader index, flags, transactions (with input data) and logs |
+| `newTicks` | ~720 KB | tick header **plus all 676 quorum votes** |
+
+So the relay subscribes to `tickStream` once and sends browsers a condensed form
+(~1 KB). Never forward either raw.
+
+Facts the condensing depends on:
+
+* **A skipped tick** has `isSkipped` and `hasNoTickData` true and the timestamp
+  `2000-00-00T00:00:00Z` — a placeholder, not a time.
+* **A mining solution** is a transaction (input type 12) paying 1,000,000 QU to the
+  null address, with a custom-message log (`type 255`) whose payload starts with
+  the ASCII bytes `ANT_SOLU`, and the same amount paid straight back. In 159
+  recorded ticks: 1,196 of 1,685 transactions. Netted per transaction (§7.2b), so
+  never a burn.
+* **0 QU to the null address** from the tick's own computor (input types 1 and 9,
+  one each per tick) is a protocol transaction, counted but not shown as news.
+* **Random's `Reveal and Commit`** (contract 3) runs in every tick. The page treats
+  a contract seen in most ticks as routine, so a rare call stands out.
+* A transaction's `inputType` is the procedure id of the contract it is sent to;
+  the contract registry (§7.3) names the procedures too.
+
+Supporting JSON-RPC methods, all verified: `qubic_getTickNumber`,
+`qubic_getTickByNumber [tick]` (transactions as hashes only),
+`qubic_getTransactionByHash [hash]`, `qubic_getComputors [epoch]` — the 676
+identities **in index order**, which is what turns a tick's leader index into an
+identity. Each comes back with trailing bytes after its 60 letters (usually
+U+00F7, sometimes more); only the 60 letters are kept.
+
+The old *Qubic Star Rain* source, `wss://rt.qubic.li/live`, still delivered
+`{"Tick":…,"MessageType":"Tick"}` on the same day; it carries no tick content.
+
 ## 8. Update cadence — measured, not assumed
 
 | Quantity | Rate | Poll |

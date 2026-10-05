@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Ticks Live — Qubic Report</title>
+<meta name="description" content="Every Qubic tick as it is produced: leader, transactions, burns, mining solutions and contract calls, flying in live from a Bob node." />
+
+<link rel="icon" type="image/svg+xml" href="./assets/icon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
+<link rel="icon" type="image/x-icon" href="./assets/favicon.ico" sizes="48x48" />
+<link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
+<link rel="manifest" href="./assets/manifest.webmanifest" />
+<meta name="theme-color" content="#05070d" />
+<meta name="apple-mobile-web-app-title" content="Qubic Report" />
+<meta name="application-name" content="Qubic Report" />
+
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Qubic Report" />
+<meta property="og:locale" content="en_US" />
+<meta property="og:title" content="Ticks Live — every tick, as it happens" />
+<meta property="og:description" content="Each Qubic tick flies in as a cube: its number, its leader, its transactions, burns and mining solutions — live from a Bob node." />
+<meta property="og:url" content="https://report.qubic.tools/dashboard/ticks.html" />
+<meta property="og:image" content="https://report.qubic.tools/dashboard/assets/og-image-en.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Qubic Report — decentralization, burned supply, price and mining" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Ticks Live — every tick, as it happens" />
+<meta name="twitter:description" content="Each Qubic tick flies in as a cube, live from a Bob node." />
+<meta name="twitter:image" content="https://report.qubic.tools/dashboard/assets/og-image-en.png" />
+
+<!--
+  dashboard/ticks.html — Ticks Live, die Neuauflage von "Qubic Star Rain".
+
+  Datenquelle: GET /v1/ticks/stream (Server-Sent Events), Rückfall auf
+  GET /v1/ticks/recent (Polling). Details: GET /v1/ticks/{tick}.
+  Kennzahlen im Flug durch die Mitte (GET /v1/pulse): vorerst abgeschaltet.
+  Konzept: docs/CONCEPT_TICKS.de.md. Logik in ./ticks.js.
+
+  Eine Darstellung für alle Geräte: Sternenflug, Würfel, Terminal. Die früheren
+  Stufen für die Watch (kompakt, nur Text, ?probe) sind am 05.10.2026 entfallen.
+-->
+
+<link rel="stylesheet" href="./theme.css?v=6388e666">
+
+<style>
+/* The stage is space whatever the theme: a light sky would turn the star field
+   into dust on paper. Only header, footer and panels follow the theme. */
+:root {
+  --night:      #05070d;
+  --night-2:    #0b1020;
+  --ink:        #e8f6ff;
+  --ink-dim:    rgba(176, 250, 255, .55);
+  --ink-faint:  rgba(176, 250, 255, .32);
+  --c-tick:     #4ee0fc;
+  --c-empty:    #93a3bb;
+  --c-skip:     #ff5d6c;
+  --c-burn:     #ff9b3d;
+  --c-sol:      #3ddc97;
+  --c-contract: #a395ff;
+  --c-big:      #ffd166;
+  --hdr: 76px;
+}
+
+html, body { background: var(--night); }
+body { min-height: 100vh; }
+
+/* ─── Stage ──────────────────────────────────────────────────────────────── */
+.stage {
+  position: relative;
+  height: calc(100vh - var(--hdr));
+  height: calc(100svh - var(--hdr));
+  min-height: 240px;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 50%, var(--night-2) 0%, var(--night) 70%);
+  color: var(--ink);
+  -webkit-user-select: none; user-select: none;
+}
+#sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; }
+#sky.hover { cursor: pointer; }
+
+/* ─── Controls (top right of the stage) ──────────────────────────────────── */
+.stage-ctl {
+  position: absolute; top: 12px; right: 12px; z-index: 6;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+}
+.ctl-row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* Tick search: opens the same panel a click on a cube does. */
+.tick-search { display: flex; gap: 6px; }
+.tick-search input {
+  width: 170px; font: 500 12px/1 var(--mono); color: var(--ink);
+  background: rgba(11, 16, 32, .62); border: 1px solid rgba(78, 224, 252, .22);
+  border-radius: 8px; padding: 7px 10px; min-height: 30px; outline: none;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  -webkit-user-select: text; user-select: text;
+}
+.tick-search input::placeholder { color: var(--ink-faint); }
+.tick-search input:focus { border-color: rgba(78, 224, 252, .6); }
+.tick-search input.bad { border-color: var(--c-skip); }
+.sbtn {
+  font: 500 12px/1 var(--mono); color: var(--ink-dim);
+  background: rgba(11, 16, 32, .62); border: 1px solid rgba(78, 224, 252, .22);
+  border-radius: 8px; padding: 7px 10px; cursor: pointer; min-height: 30px;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.sbtn:hover { color: var(--ink); border-color: rgba(78, 224, 252, .5); }
+.sbtn[aria-pressed="true"] { color: var(--c-tick); border-color: rgba(78, 224, 252, .55); }
+.sbtn kbd { font: inherit; opacity: .55; margin-left: 4px; }
+.sbtn select { font: inherit; color: inherit; background: transparent; border: 0; cursor: pointer; }
+.sbtn select option { color: #111; }
+
+/* ─── Terminal (left) ────────────────────────────────────────────────────── */
+.term {
+  position: absolute; top: 0; left: 0; bottom: 0; z-index: 5;
+  /* Wide enough that a tick line with time, number, counts, contract, burn and
+     leader fits in one row on a desktop; below that it wraps rather than cut. */
+  width: min(600px, 94vw);
+  display: flex; flex-direction: column;
+  background: linear-gradient(90deg, rgba(5, 7, 13, .86) 0%, rgba(5, 7, 13, .62) 80%, rgba(5, 7, 13, 0) 100%);
+  font: 12px/1.45 var(--mono);
+  transition: transform .25s ease;
+}
+.term[hidden] { display: flex; transform: translateX(-105%); visibility: hidden; }
+.term-head {
+  display: flex; align-items: center; gap: 8px; padding: 12px 14px 6px;
+  color: var(--ink-faint); text-transform: uppercase; letter-spacing: .08em; font-size: 11px;
+}
+.term-head .grow { flex: 1; }
+.term-x { background: none; border: 0; color: var(--ink-faint); font: inherit; font-size: 15px; cursor: pointer; padding: 2px 6px; }
+.term-x:hover { color: var(--ink); }
+.term-filters { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 14px 8px; }
+.chip {
+  font: 500 11px/1 var(--mono); padding: 5px 8px; border-radius: 999px; cursor: pointer;
+  background: transparent; color: var(--ink-faint); border: 1px solid rgba(176, 250, 255, .18);
+}
+.chip[aria-pressed="true"] { color: var(--ink); border-color: currentColor; }
+.chip[data-k="tick"][aria-pressed="true"]     { color: var(--c-tick); }
+.chip[data-k="tx"][aria-pressed="true"]       { color: var(--c-big); }
+.chip[data-k="burn"][aria-pressed="true"]     { color: var(--c-burn); }
+.chip[data-k="contract"][aria-pressed="true"] { color: var(--c-contract); }
+.term-list {
+  flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 14px 14px;
+  overscroll-behavior: contain; contain: content;
+  /* Scrollable, but without a visible bar: it is a log, not a document. */
+  scrollbar-width: none; -ms-overflow-style: none;
+}
+.term-list::-webkit-scrollbar { display: none; width: 0; height: 0; }
+/* Never cut: everything on a line matters. A line too long for the panel wraps,
+   indented under its own start so it still reads as one entry. */
+.tl { color: var(--ink-faint); white-space: normal; overflow-wrap: anywhere; cursor: pointer; padding: 1px 0 1px 2.2em; text-indent: -2.2em; }
+.tl:hover { color: var(--ink); }
+.tl .tm { opacity: .7; }
+.tl .tn { color: var(--ink-dim); }
+.tl.k-tick .tn  { color: var(--c-tick); }
+.tl.s-empty .tn { color: var(--c-empty); }
+.tl.s-skipped .tn { color: var(--c-skip); text-decoration: line-through; }
+.tl.k-burn      { color: var(--c-burn); }
+.tl.k-tx        { color: var(--c-big); }
+.tl.k-contract  { color: var(--c-contract); }
+.tl.sub { padding-left: 4.4em; }
+.term-list.hide-tick .k-tick, .term-list.hide-tx .k-tx, .term-list.hide-burn .k-burn,
+.term-list.hide-contract .k-contract { display: none; }
+.term-empty { color: var(--ink-faint); padding: 8px 0; }
+
+/* ─── HUD (bottom right) ─────────────────────────────────────────────────── */
+.hud {
+  position: absolute; right: 14px; bottom: 12px; z-index: 4; text-align: right;
+  font-family: var(--mono); color: var(--ink-dim); pointer-events: none;
+  text-shadow: 0 0 18px rgba(5, 7, 13, .9);
+}
+.hud .big {
+  font: 700 clamp(22px, 3.2vw, 34px)/1.1 var(--display); color: var(--ink);
+  font-variant-numeric: tabular-nums; letter-spacing: .01em;
+}
+.hud .big.flash { animation: hudflash .6s ease-out; }
+@keyframes hudflash { from { color: var(--c-tick); } to { color: var(--ink); } }
+.hud .line { font-size: 12px; margin-top: 3px; }
+.hud .src { display: inline-flex; align-items: center; gap: 6px; }
+.hud .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c-empty); }
+.hud .dot.live { background: var(--c-sol); box-shadow: 0 0 8px var(--c-sol); }
+.hud .dot.poll { background: var(--c-tick); }
+.hud .dot.stale { background: var(--c-burn); }
+.hud .dot.off { background: var(--c-skip); }
+.hud .sess { opacity: .8; }
+
+/* ─── Legend: the last line of the HUD, under everything else ─────────── */
+.legend {
+  display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 12px;
+  margin-top: 6px; max-width: min(640px, 70vw); margin-left: auto;
+  font: 11px/1.3 var(--mono); color: var(--ink-faint);
+}
+.legend i { display: inline-block; width: 9px; height: 9px; border: 1.5px solid currentColor; margin-right: 5px; vertical-align: -1px; }
+.legend .l-tick { color: var(--c-tick); } .legend .l-empty { color: var(--c-empty); }
+.legend .l-skip { color: var(--c-skip); } .legend .l-burn { color: var(--c-burn); }
+.legend .l-sol { color: var(--c-sol); }   .legend .l-contract { color: var(--c-contract); }
+.legend .l-big { color: var(--c-big); }
+
+/* ─── Notice (no API, offline) ───────────────────────────────────────────── */
+.notice {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 7;
+  max-width: min(520px, 90vw); text-align: center; color: var(--ink-dim);
+  font: 13px/1.6 var(--sans); background: rgba(11, 16, 32, .8);
+  border: 1px solid rgba(78, 224, 252, .22); border-radius: 12px; padding: 16px 18px;
+}
+.notice[hidden] { display: none; }
+
+/* ─── Detail panel ───────────────────────────────────────────────────────── */
+.detail {
+  position: absolute; top: 0; right: 0; bottom: 0; z-index: 8;
+  width: min(460px, 100%);
+  background: color-mix(in srgb, var(--night-2) 94%, transparent);
+  border-left: 1px solid rgba(78, 224, 252, .22);
+  color: var(--ink); font: 13px/1.5 var(--sans);
+  display: flex; flex-direction: column;
+  transform: translateX(0); transition: transform .25s ease;
+  box-shadow: -20px 0 40px rgba(0, 0, 0, .45);
+  -webkit-user-select: text; user-select: text;
+}
+.detail[hidden] { display: flex; transform: translateX(105%); visibility: hidden; }
+.d-head { display: flex; align-items: flex-start; gap: 10px; padding: 16px 18px 10px; border-bottom: 1px solid rgba(78, 224, 252, .14); }
+.d-head h2 { margin: 0; font: 700 22px/1.2 var(--display); font-variant-numeric: tabular-nums; }
+.d-head .sub { color: var(--ink-dim); font-size: 12px; margin-top: 2px; }
+.d-head .grow { flex: 1; min-width: 0; }
+.d-body { flex: 1; overflow-y: auto; padding: 12px 18px 24px; overscroll-behavior: contain; }
+.d-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.d-kpi { background: rgba(78, 224, 252, .06); border: 1px solid rgba(78, 224, 252, .14); border-radius: 9px; padding: 8px 10px; }
+.d-kpi b { display: block; font: 700 16px/1.2 var(--display); font-variant-numeric: tabular-nums; }
+.d-kpi span { color: var(--ink-dim); font-size: 11px; }
+.d-sec { margin: 14px 0 6px; font: 600 11px/1 var(--mono); color: var(--ink-faint); text-transform: uppercase; letter-spacing: .08em; }
+.d-leader { font: 12px/1.5 var(--mono); word-break: break-all; color: var(--ink-dim); }
+.d-leader a, .d-tx a { color: var(--c-tick); text-decoration: none; }
+.d-leader a:hover, .d-tx a:hover { text-decoration: underline; }
+.d-tx { border-top: 1px solid rgba(176, 250, 255, .08); padding: 7px 0; font: 12px/1.45 var(--mono); }
+.d-tx .row1 { display: flex; gap: 8px; align-items: baseline; }
+.d-tx .amt { margin-left: auto; color: var(--ink); white-space: nowrap; }
+.d-tx .ids { color: var(--ink-dim); word-break: break-all; }
+.kind { font: 600 10px/1 var(--mono); padding: 3px 6px; border-radius: 5px; border: 1px solid currentColor; text-transform: uppercase; white-space: nowrap; }
+.kind.transfer { color: var(--c-big); } .kind.burn { color: var(--c-burn); }
+.kind.contract { color: var(--c-contract); } .kind.solution { color: var(--c-sol); }
+.kind.system, .kind.call, .kind.unknown { color: var(--c-empty); }
+.kind.failed { color: var(--c-skip); }
+.d-more { color: var(--ink-faint); font-size: 12px; padding: 8px 0; }
+.d-events summary { cursor: pointer; color: var(--ink-dim); font: 12px var(--mono); }
+.d-ev { font: 11.5px/1.45 var(--mono); color: var(--ink-dim); padding: 3px 0; word-break: break-all; }
+.d-note { color: var(--ink-faint); font-size: 12px; margin-top: 16px; }
+
+@media (max-width: 600px) {
+  .legend { display: none; }
+  .hud .sess { display: none; }
+  .d-kpis { grid-template-columns: repeat(2, 1fr); }
+  .detail { width: 100%; border-left: 0; }
+}
+</style>
+</head>
+<body>
+
+<header class="top qs-header" id="hdr">
+  <div class="top-inner qs-header-inner">
+    <div class="brand">
+      <div class="logo qs-logo" aria-hidden="true"></div>
+      <div>
+        <h1>Ticks Live</h1>
+        <div class="sub"><span data-i18n="subtitle">Every tick · Qubic Report</span></div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <button class="qs-icon-btn qs-burger" id="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">☰</button>
+    <div class="controls">
+      <nav class="qs-nav" id="site-nav" aria-label="Sections">
+        <a class="how-link qs-link" href="./" data-i18n="navReport">Report</a>
+        <a class="how-link qs-link" href="./burn.html" data-i18n="burnReport">Burn</a>
+        <a class="how-link qs-link" href="./price.html" data-i18n="priceReport">Price</a>
+        <a class="how-link qs-link" href="./mining.html" data-i18n="miningLive">Mining</a>
+        <a class="how-link qs-link" href="./ticks.html" aria-current="page" data-i18n="ticksLive">Ticks</a>
+      </nav>
+      <div class="qs-seg" id="lang-seg">
+        <button data-lang="en">EN</button><button data-lang="de">DE</button>
+      </div>
+      <button class="qs-icon-btn" id="theme-btn" title="Farbschema wechseln" aria-label="Farbschema wechseln">🌙</button>
+    </div>
+  </div>
+</header>
+
+<main class="stage" id="stage">
+  <canvas id="sky" aria-label="Live ticks flying in as cubes"></canvas>
+
+  <aside class="term" id="term" aria-label="Terminal">
+    <div class="term-head">
+      <span data-i18n="termTitle">new ticks in the network</span>
+      <span class="grow"></span>
+      <button class="term-x" id="term-x" type="button" aria-label="Close terminal">×</button>
+    </div>
+    <div class="term-filters" id="term-filters">
+      <button class="chip" type="button" data-k="tick" aria-pressed="true" data-i18n="fTick">Ticks</button>
+      <button class="chip" type="button" data-k="tx" aria-pressed="true" data-i18n="fTx">Transfers</button>
+      <button class="chip" type="button" data-k="burn" aria-pressed="true" data-i18n="fBurn">Burns</button>
+      <button class="chip" type="button" data-k="contract" aria-pressed="true" data-i18n="fContract">Contracts</button>
+    </div>
+    <div class="term-list" id="term-list" role="log" aria-live="off">
+      <div class="term-empty" id="term-empty" data-i18n="waiting">waiting for the first tick …</div>
+    </div>
+  </aside>
+
+
+  <div class="stage-ctl" id="stage-ctl">
+   <div class="ctl-row">
+    <button class="sbtn" id="term-btn" type="button" aria-pressed="true"><span data-i18n="btnTerm">Terminal</span><kbd>T</kbd></button>
+    <!-- Stats-Flug vorerst aus (siehe ticks.js, Scene.init):
+    <button class="sbtn" id="stats-btn" type="button" aria-pressed="true"><span data-i18n="btnStats">Stats</span><kbd>S</kbd></button>
+    -->
+    <button class="sbtn" id="pause-btn" type="button" aria-pressed="false" aria-label="Pause">⏸</button>
+    <label class="sbtn"><select id="layout-sel" aria-label="Layout">
+      <option value="free" data-i18n="layoutFree">Free</option>
+      <option value="worm" data-i18n="layoutWorm">Wormhole</option>
+    </select></label>
+   </div>
+    <form class="tick-search" id="tick-search" role="search" autocomplete="off">
+      <input id="tick-q" type="search" inputmode="numeric" enterkeyhint="search"
+             data-i18n-ph="searchPh" placeholder="Search tick" aria-label="Search tick">
+      <button class="sbtn" type="submit" data-i18n-aria="searchGo" aria-label="Open tick">→</button>
+    </form>
+  </div>
+
+  <div class="hud" id="hud" aria-live="polite">
+    <div class="big" id="hud-tick">–</div>
+    <div class="line keep"><span class="src"><span class="dot" id="hud-dot"></span><span id="hud-src">connecting</span></span></div>
+    <div class="line"><span id="hud-epoch">–</span> · <span id="hud-rate">–</span></div>
+    <div class="line sess" id="hud-sess"></div>
+    <div class="legend" id="legend" aria-hidden="true">
+      <span class="l-tick"><i></i><span data-i18n="lgTick">tick</span></span>
+      <span class="l-empty"><i></i><span data-i18n="lgEmpty">empty</span></span>
+      <span class="l-skip"><i></i><span data-i18n="lgSkip">skipped</span></span>
+      <span class="l-burn"><i></i><span data-i18n="lgBurn">burn</span></span>
+      <span class="l-big"><i></i><span data-i18n="lgBig">large transfer</span></span>
+      <span class="l-contract"><i></i><span data-i18n="lgContract">contract call</span></span>
+      <span class="l-sol"><i></i><span data-i18n="lgSol">⛏ mining solutions</span></span>
+    </div>
+  </div>
+
+
+  <div class="notice" id="notice" hidden></div>
+
+  <aside class="detail" id="detail" hidden aria-label="Tick detail">
+    <div class="d-head">
+      <div class="grow">
+        <h2 id="d-title">–</h2>
+        <div class="sub" id="d-sub"></div>
+      </div>
+      <button class="term-x" id="d-close" type="button" aria-label="Close">×</button>
+    </div>
+    <div class="d-body" id="d-body"></div>
+  </aside>
+
+</main>
+
+<footer class="qs-footer">
+  <div class="fdisc">
+    <b data-i18n="discLabel">Disclaimer:</b>
+    <span data-i18n="discBeta">This page is currently in beta status.</span>
+    <span data-i18n="discData">Ticks are relayed live from a Bob node; nothing on this page is stored or estimated.</span>
+    <span data-i18n="discNoGuarantee">We do not guarantee the completeness, accuracy, or availability of the data.</span>
+    <b data-i18n="discDemo">Use it for analysis purposes only — not as a basis for investment decisions.</b>
+  </div>
+  <div class="fbar">
+    <div class="fleft">
+      <span class="flogo" aria-hidden="true"></span>
+      <span>&copy; <span id="foot-year">2026</span> <span data-i18n="sponsored">Qubic – Sponsored by AndyQus</span></span>
+    </div>
+    <div class="flinks">
+      <a href="./how-it-works.html" data-i18n="howItWorks">How it works</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://qubic.org" target="_blank" rel="noreferrer">Qubic.org</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://github.com/AndyQus/qubic-decentralization-report"
+         target="_blank" rel="noreferrer">GitHub</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://qubic.org/terms-of-service" target="_blank" rel="noreferrer" data-i18n="tos">Terms of Service</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://qubic.org/privacy-policy" target="_blank" rel="noreferrer" data-i18n="privacy">Privacy Policy</a>
+    </div>
+    <div class="fright fright-wrap">
+      <span><span data-i18n="codeVersion">code</span> v.<code id="code-ver">–</code> (BETA)</span>
+      <button class="fwake" id="wake-btn" type="button" aria-pressed="false" hidden><span class="wdot" aria-hidden="true"></span><span class="wtext">Screen stays on</span></button>
+    </div>
+  </div>
+</footer>
+
+<script src="./ticks.js?v=987fa152"></script>
+<script src="./wake.js"></script>
+</body>
+</html>

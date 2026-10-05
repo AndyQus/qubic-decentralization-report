@@ -82,6 +82,10 @@ app = FastAPI(
                                          "steps. No trading volume: the RPC publishes none, "
                                          "and sourcing it from an exchange would breach "
                                          "their terms."},
+        {"name": "ticks", "description": "Every tick as it is produced, relayed from a Bob "
+                                         "node and condensed: leader, transactions, burns, "
+                                         "mining solutions, contract calls. Live only — "
+                                         "nothing here is stored."},
         {"name": "service", "description": "Index, health and store status."},
     ],
 )
@@ -225,6 +229,9 @@ def api_index():
             # it is not secret, so the endpoint is indexed like any other.
             "/v1/mining",
             "/v1/mining/series",
+            "/v1/ticks/stream",
+            "/v1/ticks/recent",
+            "/v1/ticks/{tick}",
             "/v1/price/latest",
             "/v1/price/now",
             "/v1/price/series",
@@ -654,6 +661,163 @@ def mining_series(
     _mining_series_cache.clear()      # one shape of this query is enough to hold
     _mining_series_cache[key] = {"at": now, "data": data}
     return data
+
+
+# -- live ticks ------------------------------------------------------------
+# One upstream connection to a Bob node, condensed and fanned out (qdr/tickstream).
+# The hub is created on first use and closes its upstream by itself once nobody
+# has watched for QDR_TICKS_IDLE seconds, so an unwatched page costs the node
+# nothing.
+_tick_hub = None
+_tick_detail_cache = None   # OrderedDict[int, dict], created on first use
+TICK_DETAIL_CACHE = 200
+# A status event this often keeps proxies from timing the stream out and lets the
+# page tell "quiet" from "gone".
+TICKS_HEARTBEAT_S = 15.0
+# Each stream ends after this long and the browser's EventSource reconnects with
+# Last-Event-ID, resuming from the buffer without a gap. Bounding the lifetime is
+# what guarantees a stream whose reader vanished without a word is released.
+TICKS_STREAM_MAX_S = float(os.environ.get("QDR_TICKS_STREAM_MAX", "600"))
+
+
+def _tick_leaders(epoch: int) -> list:
+    """Index → {id, cluster} for one epoch's computors.
+
+    The order comes from Bob (`qubic_getComputors`): a tick names its leader by
+    index, and only the ordered list turns that into an identity. The cluster is
+    read from the stored report of that epoch — a read, never a recompute — and
+    stays None for an unattributed computor, which is what the report says too.
+    """
+    from qdr import bob, tickstream
+    ids = tickstream.BobRPC(bob.BOB_URL, timeout=30).computors(epoch)
+    labels: dict[str, str] = {}
+    try:
+        store = get_store()
+        rep = store.get_report(epoch) or store.latest_report(settled_only=False)
+        for c in (rep or {}).get("clusters") or []:
+            if c.get("confidence") == "unattributed":
+                continue
+            for ident in c.get("computors") or []:
+                labels[ident] = c.get("label")
+    except Exception:
+        pass        # names only; the identity stands on its own
+    return [{"id": i, "cluster": labels.get(i)} for i in ids]
+
+
+def get_tick_hub():
+    global _tick_hub
+    if _tick_hub is None:
+        from qdr import bob, contracts, tickstream
+        _tick_hub = tickstream.TickHub(bob.BOB_URL, contracts_fn=contracts.by_address,
+                                       leaders_fn=_tick_leaders)
+    return _tick_hub
+
+
+def _sse(event: str, data: dict, event_id: int | None = None) -> str:
+    head = f"id: {event_id}\n" if event_id is not None else ""
+    return f"{head}event: {event}\ndata: {json.dumps(data, separators=(',', ':'))}\n\n"
+
+
+@app.get("/v1/ticks/stream", tags=["ticks"], summary="Live ticks as Server-Sent Events")
+async def ticks_stream(
+    request: Request,
+    after: int | None = Query(None, description="Resume after this tick. The "
+                                                "Last-Event-ID header does the same."),
+):
+    """Every tick as it is produced, condensed to what the ticks page shows.
+
+    Events: `tick` (id = tick number, so a reconnecting EventSource resumes from
+    the buffer by itself), and `status` at the start and with every 15 s
+    heartbeat. A browser that cannot hold a stream polls `/v1/ticks/recent`
+    instead and gets the same objects.
+    """
+    import asyncio
+    from fastapi.responses import StreamingResponse
+
+    hub = get_tick_hub()
+    await hub.ensure_running()
+    last_id = request.headers.get("last-event-id")
+    if last_id and last_id.isdigit():
+        after = int(last_id)
+    # Subscribe before reading the backlog, so no tick falls between the two;
+    # the page drops the duplicate that this can produce.
+    q = hub.subscribe()
+
+    async def gen():
+        import time as _t
+        ends = _t.monotonic() + TICKS_STREAM_MAX_S
+        try:
+            yield "retry: 3000\n\n"
+            yield _sse("status", hub.status())
+            backlog = hub.recent(after=after, limit=60 if after else 12)
+            for s in backlog:
+                yield _sse("tick", s, s["tick"])
+            while _t.monotonic() < ends:
+                wait = max(0.05, min(TICKS_HEARTBEAT_S, ends - _t.monotonic()))
+                try:
+                    s = await asyncio.wait_for(q.get(), timeout=wait)
+                    yield _sse("tick", s, s["tick"])
+                except asyncio.TimeoutError:
+                    if await request.is_disconnected():
+                        break
+                    yield _sse("status", hub.status())
+        finally:
+            hub.unsubscribe(q)
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache",
+        # nginx and friends buffer responses by default, which turns a stream
+        # into one late lump. The page falls back to polling if it hears nothing
+        # for 10 s, but this keeps it from having to.
+        "X-Accel-Buffering": "no",
+    })
+
+
+@app.get("/v1/ticks/recent", tags=["ticks"], summary="Recent ticks, for polling")
+async def ticks_recent(
+    after: int | None = Query(None, description="Only ticks newer than this."),
+    limit: int = Query(30, ge=1, le=300),
+):
+    """The stream's content as a plain list — for watches, old browsers and any
+    network path that buffers streams. Oldest first. The first call after a quiet
+    period starts the upstream, so it may come back empty; ask again."""
+    hub = get_tick_hub()
+    await hub.ensure_running()
+    return {"ticks": hub.recent(after=after, limit=limit), "status": hub.status()}
+
+
+@app.get("/v1/ticks/{tick}", tags=["ticks"], summary="One tick in full")
+async def tick_detail(tick: int):
+    """Every transaction and event of one tick.
+
+    Recent ticks come from the relay's buffer and cost the node nothing. Older
+    ones are read from Bob on demand — which only works inside the running epoch,
+    because Bob does not keep tick logs for closed ones (DATA_SOURCES §7.2).
+    """
+    import asyncio
+    from collections import OrderedDict
+    global _tick_detail_cache
+
+    hub = get_tick_hub()
+    hit = hub.detail(tick)
+    if hit is not None:
+        return hit
+    if _tick_detail_cache is None:
+        _tick_detail_cache = OrderedDict()
+    if tick in _tick_detail_cache:
+        return _tick_detail_cache[tick]
+    from qdr import bob, contracts, tickstream
+    try:
+        detail = await asyncio.to_thread(
+            tickstream.BobRPC(bob.BOB_URL).fetch_tick, tick, contracts.by_address())
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"tick {tick} unavailable: {e}")
+    if not detail.get("tick"):
+        raise HTTPException(status_code=404, detail=f"tick {tick} not known to the node")
+    _tick_detail_cache[tick] = detail
+    while len(_tick_detail_cache) > TICK_DETAIL_CACHE:
+        _tick_detail_cache.popitem(last=False)
+    return detail
 
 
 # -- market price ----------------------------------------------------------

@@ -31,6 +31,7 @@ PAGES = {
     "burn.html": None,
     "price.html": None,
     "mining.html": None,
+    "ticks.html": None,
 }
 
 issues: list[str] = []

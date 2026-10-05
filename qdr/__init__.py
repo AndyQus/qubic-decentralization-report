@@ -9,6 +9,7 @@ Modules:
   store       Persistent history: sealed epochs, live epoch, versioned recompute.
   pipeline    derive -> cluster -> persist, and the sealed-vs-live read path.
   report      Stateless single-epoch assembly (tests / ad-hoc recomputation).
+  tickstream  Live ticks from a Bob node, condensed and fanned out to viewers.
 """
 
 # Bumped whenever a change alters a published figure, and at a release. The
@@ -22,4 +23,4 @@ Modules:
 # marker and the recompute trigger; it is paid once per deployment, and the
 # alternative (a second, untriggering version string) is a second thing to keep
 # in sync and get wrong.
-__version__ = "0.12.0"
+__version__ = "0.13.0"

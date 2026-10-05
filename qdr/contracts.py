@@ -86,6 +86,19 @@ def _parse(payload: dict) -> dict[int, dict]:
         name = entry.get("name") or entry.get("label")
         if not name:
             continue
+        # Procedure id → name. A transaction's `inputType` IS this id when it is
+        # sent to the contract, which is what lets the ticks page say "Qx · Add
+        # to Ask Order" instead of "input type 5".
+        procedures: dict[int, str] = {}
+        for proc in entry.get("procedures") or []:
+            if not isinstance(proc, dict):
+                continue
+            try:
+                pid = int(proc.get("id"))
+            except (TypeError, ValueError):
+                continue
+            if proc.get("name"):
+                procedures[pid] = str(proc["name"])
         out[idx] = {
             "index": idx,
             "name": str(name),
@@ -93,8 +106,14 @@ def _parse(payload: dict) -> dict[int, dict]:
             # ("QSWAP"). The page wants the former and falls back to the latter.
             "label": str(entry.get("label") or name),
             "address": entry.get("address"),
+            "procedures": procedures,
         }
     return out
+
+
+def by_address() -> dict[str, dict]:
+    """Contract address → registry entry. Empty when the registry is unavailable."""
+    return {e["address"]: e for e in registry().values() if e.get("address")}
 
 
 def _read_cache() -> Optional[tuple[float, dict[int, dict]]]:

@@ -24,7 +24,7 @@ KEEPS_LONG_NAME = {
     "how-it-works.html",  # explains that concept by name, in prose
 }
 # Pages that must not carry it in their <title> or header subtitle.
-RENAMED = ["burn.html", "price.html", "mining.html", "log.html"]
+RENAMED = ["burn.html", "price.html", "mining.html", "ticks.html", "log.html"]
 
 
 def test_every_referenced_icon_exists():

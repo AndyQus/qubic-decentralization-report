@@ -28,6 +28,7 @@ publish at the resolution they need, and each with its own page:
 | **Report** (`/`) | How concentrated is the network, per epoch and over time? | The original request. |
 | **Burn** (`/dashboard/burn.html`) | How much QU is burned per day, and by which contract? | The RPC's `burnedQus` is a cumulative epoch aggregate — it does not move between boundaries, so it cannot answer "today". This counts the burn events themselves. |
 | **Mining Live** (`/dashboard/mining.html`) | What does the ant colony look like right now? | Live mining state is served from a node's peer port, not the RPC, and a node only answers for *now* — a reading not taken is gone. |
+| **Ticks Live** (`/dashboard/ticks.html`) | What is the network doing this second? | Every tick flies in as a cube — number, leader, transactions, burns, mining solutions, contract calls — relayed from a Bob node's WebSocket. Nothing is stored: it is the network as it happens. The successor of *Qubic Star Rain*, rebuilt to run on phones and, in a reduced form, on a watch. |
 | **Price** (`/dashboard/price.html`) | What does the price do around the computor payouts? | The payouts are protocol emission, so the public RPC carries no trace of them — this project derives them from a Bob node's end-epoch log, and is therefore the only place they can be lined up against a measured price series. |
 | **How it works** (`/how-it-works`) | What is measured, and how? | Generated from `docs/CONCEPT*.md` at build time, so the page cannot disagree with the concept it was built from. |
 
@@ -246,6 +247,7 @@ The API is FastAPI, so the interactive docs come with it — no extra setup:
 | **Metrics** | `/v1/metrics/timeseries`, `/v1/dashboard-data` |
 | **Burn** | `/v1/burn/latest`, `/v1/burn/series?by=day\|epoch\|year`, `/v1/burn/contracts`, `/v1/burn/coverage` |
 | **Mining** | `/v1/mining` (live reading), `/v1/mining/series` (stored history) |
+| **Ticks** | `/v1/ticks/stream` (Server-Sent Events), `/v1/ticks/recent?after=` (the same, for polling), `/v1/ticks/{tick}` (one tick in full) |
 | **Service** | `/v1/pulse`, `/v1/store`, `/v1/diagnostics` (*why is the report empty?*), `/v1/log` (worker tail), `/health` |
 
 Every endpoint answers `503` rather than inventing a figure the store cannot back
@@ -327,6 +329,11 @@ sudo systemctl reload caddy        # certificate is obtained automatically
 Caddy handles the Let's Encrypt certificate on its own. With nginx use a normal
 `proxy_pass http://127.0.0.1:8000;` plus certbot.
 
+The ticks page streams (`/v1/ticks/stream`, Server-Sent Events). The API sends
+`X-Accel-Buffering: no`, which nginx honours; a proxy that buffers anyway does not
+break the page — it hears nothing for 12 s and switches to polling
+`/v1/ticks/recent` by itself.
+
 **6. Keep it updated**
 
 ```bash
@@ -393,6 +400,10 @@ docker image prune -f              # remove the superseded image
 | `QDR_LIVE_MAX_AGE` | Seconds the running epoch may be stale before a request recomputes it | `300` |
 | `QDR_BOB_URL` | Bob node carrying the epoch-end payouts (use your own node) | `https://bob.qubic.li/qubic` |
 | `QDR_PULSE_TTL` | Seconds the live pulse is cached | `10` |
+| `QDR_BOB_WS` | Bob WebSocket for the ticks page | derived from `QDR_BOB_URL` (`https://h/qubic` → `wss://h/ws/qubic`) |
+| `QDR_TICKS_BUFFER` | Ticks kept in memory for late joiners and the detail view | `300` (~3 min) |
+| `QDR_TICKS_IDLE` | Seconds without a viewer before the Bob connection is closed | `60` |
+| `QDR_TICKS_STREAM_MAX` | Seconds one stream lives before the browser reconnects (and resumes) | `600` |
 | `QDR_MINING_TTL` | Seconds a live mining reading is cached before a node is queried again | `30` |
 | `QDR_MINING_SAMPLE_INTERVAL` | Seconds between mining samples written to the store by the ingest worker | `30` |
 | `QDR_BURN_BACKFILL_DAYS` | Days of burn history to count on start, from before the worker existed (see below) | `7` (one epoch; `0` disables) |
