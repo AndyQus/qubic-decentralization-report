@@ -401,6 +401,8 @@ docker image prune -f              # remove the superseded image
 | `QDR_BOB_URL` | Bob node carrying the epoch-end payouts (use your own node) | `https://bob.qubic.li/qubic` |
 | `QDR_PULSE_TTL` | Seconds the live pulse is cached | `10` |
 | `QDR_BOB_WS` | Bob WebSocket for the ticks page | derived from `QDR_BOB_URL` (`https://h/qubic` → `wss://h/ws/qubic`) |
+| `QDR_BOB_URLS` | Bob nodes for the ticks page, preferred first; a node that freezes or falls behind is replaced by the next | `QDR_BOB_URL`, then `bob.qubic.li` and `bob.qubic.global` |
+| `QDR_TICKS_BARE_WS` | Last resort when no Bob node delivers: tick numbers only (empty disables) | `wss://rt.qubic.li/live` |
 | `QDR_TICKS_BUFFER` | Ticks kept in memory for late joiners and the detail view | `300` (~3 min) |
 | `QDR_TICKS_IDLE` | Seconds without a viewer before the Bob connection is closed | `60` |
 | `QDR_TICKS_STREAM_MAX` | Seconds one stream lives before the browser reconnects (and resumes) | `600` |

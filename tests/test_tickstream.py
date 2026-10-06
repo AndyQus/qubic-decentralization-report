@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -288,3 +289,167 @@ def test_a_restart_after_idle_drops_ticks_from_before_the_gap(monkeypatch):
         await hub.ensure_running()
     asyncio.run(scenario())
     assert hub.recent() == [] and hub.detail(900) is None
+
+
+# -- node failover -------------------------------------------------------------
+# 2026-10-06: bob.qubic.li froze at tick 83,288,297 for hours while answering
+# every call normally; the page said "node silent" and had no other node to ask.
+
+A, B = "https://bob-a.invalid/qubic", "https://bob-b.invalid/qubic"
+
+
+class _FakeRPC:
+    def __init__(self, head):
+        self.head = head
+
+    def tick_number(self):
+        if isinstance(self.head, Exception):
+            raise self.head
+        return self.head
+
+
+def _failover_hub(heads: dict, network: int | None = 1000, **kw) -> tickstream.TickHub:
+    hub = tickstream.TickHub(urls=list(heads), buffer_ticks=50,
+                             network_fn=(lambda: network), **kw)
+    rpcs = {u: _FakeRPC(h) for u, h in heads.items()}
+    hub._rpc = lambda url: rpcs[url]
+    return hub
+
+
+def test_the_node_list_puts_your_own_node_first_then_the_public_ones(monkeypatch):
+    monkeypatch.delenv("QDR_BOB_URLS", raising=False)
+    monkeypatch.setattr(tickstream, "BOB_URL", "http://10.0.0.5:40420")
+    assert tickstream.bob_urls() == ["http://10.0.0.5:40420", *tickstream.PUBLIC_BOB_URLS]
+    # The public default is not listed twice.
+    monkeypatch.setattr(tickstream, "BOB_URL", tickstream.PUBLIC_BOB_URLS[0] + "/")
+    assert len(tickstream.bob_urls()) == len(tickstream.PUBLIC_BOB_URLS)
+
+
+def test_qdr_bob_urls_is_the_whole_list(monkeypatch):
+    monkeypatch.setenv("QDR_BOB_URLS", f" {A} ,{B},,")
+    assert tickstream.bob_urls() == [A, B]
+
+
+def test_qdr_bob_ws_belongs_to_qdr_bob_url_only(monkeypatch):
+    monkeypatch.setenv("QDR_BOB_WS", "ws://own-socket/ws")
+    monkeypatch.setattr(tickstream, "BOB_URL", A)
+    assert tickstream.TickHub._ws_url(A) == "ws://own-socket/ws"
+    assert tickstream.TickHub._ws_url(B) == "wss://bob-b.invalid/ws/qubic"
+
+
+def test_a_node_far_behind_the_network_is_skipped_for_the_next():
+    hub = _failover_hub({A: 1000 - tickstream.LAG_TICKS - 1, B: 999})
+    assert asyncio.run(hub._pick_node()) == B
+    st = hub.status()
+    down = st["nodes"][0]
+    assert down["state"] == "down" and "behind the network" in down["reason"]
+
+
+def test_an_unreachable_node_is_skipped_and_none_left_means_none():
+    hub = _failover_hub({A: ConnectionError("refused"), B: 1})
+    assert asyncio.run(hub._pick_node()) is None
+    assert all(n["state"] == "down" for n in hub.status()["nodes"])
+
+
+def test_without_a_network_reading_a_reachable_node_is_used():
+    """The yardstick is a nicety; its absence must not take every node out."""
+    hub = _failover_hub({A: 5}, network=None)
+    assert asyncio.run(hub._pick_node()) == A
+
+
+def _quiet_since(hub, node_head: int, seconds: float) -> None:
+    """The current node last made progress, at node_head, `seconds` ago."""
+    hub._node_head = node_head
+    hub._node_alive_at = hub._node_since = time.time() - seconds
+
+
+def test_a_node_frozen_at_one_tick_is_down_although_it_answers():
+    hub = _failover_hub({A: 500})
+    _quiet_since(hub, 500, tickstream.STALL_S + 1)
+    with pytest.raises(tickstream.NodeDown, match="stuck at tick 500"):
+        asyncio.run(hub._check_health(A))
+    # The same in poll mode: answering every poll with one tick is not health.
+    with pytest.raises(tickstream.NodeDown, match="stuck at tick 500"):
+        asyncio.run(hub._check_health(A, socket=False))
+
+
+def test_a_silent_socket_on_an_advancing_node_retries_the_socket_not_the_node():
+    hub = _failover_hub({A: 520})
+    _quiet_since(hub, 500, tickstream.STALL_S + 1)
+    with pytest.raises(RuntimeError) as err:
+        asyncio.run(hub._check_health(A))
+    assert not isinstance(err.value, tickstream.NodeDown)
+
+
+def test_an_advancing_node_in_poll_mode_is_healthy():
+    """Review finding: this raised out of the poll loop and ended the relay."""
+    hub = _failover_hub({A: 520}, network=530)
+    _quiet_since(hub, 500, tickstream.STALL_S + 1)
+    asyncio.run(hub._check_health(A, socket=False))
+    assert hub._node_head == 520
+
+
+def test_ticks_the_buffer_already_holds_still_count_as_progress():
+    """After a switch the new node may replay ticks the buffer has (from the old
+    node or the bare feed). That is a working node, not a stuck one."""
+    hub = _failover_hub({A: 600}, network=610)
+    for t in range(600, 610):
+        hub.ingest(*tickstream.condense_bare(t))
+    _quiet_since(hub, 590, tickstream.STALL_S + 1)
+    raw = ticks()[min(ticks())]
+    asyncio.run(hub._ingest_raw({**raw, "tick": 605}))
+    asyncio.run(hub._check_health(A))            # no stall: it delivered 605
+
+
+def test_a_full_tick_replaces_its_bare_twin_without_resending_it():
+    hub = _hub()
+    hub.ingest(*tickstream.condense_bare(700))
+    q = hub.subscribe()
+    s, d = _s(700)
+    assert hub.ingest(s, d) is False             # viewers already have the cube
+    assert q.empty()
+    assert hub.recent()[-1].get("bare") is None
+    assert hub.detail(700) is not None
+    assert hub.ingest(*_s(700)) is False         # and a full tick is never replaced
+
+
+def test_a_node_delivering_old_ticks_is_down():
+    hub = _failover_hub({A: 500}, network=500 + tickstream.LAG_TICKS + 1)
+    _quiet_since(hub, 500, 0)
+    with pytest.raises(tickstream.NodeDown, match="behind the network"):
+        asyncio.run(hub._check_health(A))
+
+
+def test_a_bare_tick_claims_no_content_and_is_read_from_a_node_on_click():
+    s, d = tickstream.condense_bare(83333606)
+    assert s["bare"] and s["tick"] == 83333606
+    for k in ("tx", "burned", "solutions", "qu_moved", "ts", "epoch"):
+        assert s[k] is None, k          # unknown, not zero
+    hub = _hub()
+    hub.ingest(s, d)
+    assert [r["tick"] for r in hub.recent()] == [83333606]
+    assert hub.detail(83333606) is None
+
+
+def test_a_detail_read_falls_through_to_the_next_node(monkeypatch):
+    calls = []
+
+    def fetch(self, tick, contracts=None):
+        calls.append(self.url)
+        if self.url == A:
+            return {"tick": 0}           # frozen node: does not know the tick
+        return {"tick": tick, "from": self.url}
+    monkeypatch.setattr(tickstream.BobRPC, "fetch_tick", fetch)
+    hub = _failover_hub({A: 1, B: 1})
+    assert hub.fetch_detail(42)["from"] == B
+    assert calls == [A, B]
+
+
+def test_the_status_names_the_bob_node_in_use():
+    hub = _failover_hub({A: 1, B: 1})
+    hub.source, hub.active_url = "bob-ws", B
+    st = hub.status()
+    assert st["node"] == {"kind": "bob", "host": "bob-b.invalid"}
+    assert [n["state"] for n in st["nodes"]] == ["standby", "active"]
+    hub.source, hub.active_url = "bare", None
+    assert hub.status()["node"]["kind"] == "bare"

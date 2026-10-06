@@ -185,6 +185,10 @@ body { min-height: 100vh; }
 .hud .dot.stale { background: var(--c-burn); }
 .hud .dot.off { background: var(--c-skip); }
 .hud .sess { opacity: .8; }
+/* The node the ticks come from. The only HUD part that takes the pointer: its
+   tooltip lists every node and why one is out. */
+.hud .node { pointer-events: auto; cursor: help; color: var(--ink-faint); }
+.hud .node.bare, .hud .node.none { color: var(--c-burn); }
 
 /* ─── Legend: the last line of the HUD, under everything else ─────────── */
 .legend {
@@ -327,6 +331,7 @@ body { min-height: 100vh; }
   <div class="hud" id="hud" aria-live="polite">
     <div class="big" id="hud-tick">–</div>
     <div class="line keep"><span class="src"><span class="dot" id="hud-dot"></span><span id="hud-src">connecting</span></span></div>
+    <div class="line keep"><span class="node" id="hud-node"></span></div>
     <div class="line"><span id="hud-epoch">–</span> · <span id="hud-rate">–</span></div>
     <div class="line sess" id="hud-sess"></div>
     <div class="legend" id="legend" aria-hidden="true">
@@ -388,7 +393,7 @@ body { min-height: 100vh; }
   </div>
 </footer>
 
-<script src="./ticks.js?v=987fa152"></script>
+<script src="./ticks.js?v=c7025e82"></script>
 <script src="./wake.js"></script>
 </body>
 </html>

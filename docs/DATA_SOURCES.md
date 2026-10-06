@@ -342,6 +342,28 @@ Valid subscription types, as the node lists them on a wrong one: `newTicks`,
 So the relay subscribes to `tickStream` once and sends browsers a condensed form
 (~1 KB). Never forward either raw.
 
+**A node can answer and still be dead (2026-10-06).** bob.qubic.li froze at tick
+83,288,297 for hours: every RPC call answered, `qubic_getTickNumber` returned the
+same number each time, the socket sent nothing. The network (`rpc.qubic.org
+/v1/tick-info`) was 45,000 ticks further. So the relay judges a node by progress,
+not by replies — no new tick for 30 s, or more than 120 ticks behind the network
+— and moves to the next node (`QDR_BOB_URLS`; default: `QDR_BOB_URL`, then
+bob.qubic.li and bob.qubic.global, which was live throughout). A node found down
+is probed again after 5 minutes.
+
+Why the public RPC is the yardstick and not a tick source: it rate-limits hard.
+Some two dozen requests in two minutes got a Cloudflare 429 (error 1015,
+`Retry-After: 51`), and the ingest worker shares the host's address. A per-tick
+feed from it (tick-data + transactions, 2 requests per tick, ~1.8 ticks/s) would
+cost the report its data. It is read once per 30 s, plus once per epoch for the
+computor list when no Bob node answers. Its archive also trails `tick-info` by a
+few ticks (`/v1/latestTick` is the archived head).
+
+The last resort is `wss://rt.qubic.li/live` (the old star-rain feed): it pushes
+`{"Tick": n, "MessageType": "Tick"}` (~40 bytes, plus an occasional
+`RandomMiningSeed`) and nothing else. The page then shows numbered cubes without
+content and says so; a click on one reads the tick from any node that has it.
+
 Facts the condensing depends on:
 
 * **A skipped tick** has `isSkipped` and `hasNoTickData` true and the timestamp

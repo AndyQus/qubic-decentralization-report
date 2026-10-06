@@ -664,7 +664,8 @@ def mining_series(
 
 
 # -- live ticks ------------------------------------------------------------
-# One upstream connection to a Bob node, condensed and fanned out (qdr/tickstream).
+# One upstream connection to a Bob node, condensed and fanned out (qdr/tickstream);
+# a node that stops making progress is replaced by the next one in QDR_BOB_URLS.
 # The hub is created on first use and closes its upstream by itself once nobody
 # has watched for QDR_TICKS_IDLE seconds, so an unwatched page costs the node
 # nothing.
@@ -688,8 +689,19 @@ def _tick_leaders(epoch: int) -> list:
     read from the stored report of that epoch — a read, never a recompute — and
     stays None for an unattributed computor, which is what the report says too.
     """
-    from qdr import bob, tickstream
-    ids = tickstream.BobRPC(bob.BOB_URL, timeout=30).computors(epoch)
+    from qdr import tickstream
+    ids: list = []
+    # Any node will do — the list is the same everywhere — and the public RPC
+    # when none answers: one request per epoch, well inside its rate limit.
+    for url in get_tick_hub().bob_urls:
+        try:
+            ids = tickstream.BobRPC(url, timeout=30).computors(epoch)
+        except Exception:
+            continue
+        if ids:
+            break
+    if not ids:
+        ids = tickstream.network_computors(epoch)
     labels: dict[str, str] = {}
     try:
         store = get_store()
@@ -707,8 +719,9 @@ def _tick_leaders(epoch: int) -> list:
 def get_tick_hub():
     global _tick_hub
     if _tick_hub is None:
-        from qdr import bob, contracts, tickstream
-        _tick_hub = tickstream.TickHub(bob.BOB_URL, contracts_fn=contracts.by_address,
+        from qdr import contracts, tickstream
+        _tick_hub = tickstream.TickHub(urls=tickstream.bob_urls(),
+                                       contracts_fn=contracts.by_address,
                                        leaders_fn=_tick_leaders)
     return _tick_hub
 
@@ -791,7 +804,8 @@ async def tick_detail(tick: int):
     """Every transaction and event of one tick.
 
     Recent ticks come from the relay's buffer and cost the node nothing. Older
-    ones are read from Bob on demand — which only works inside the running epoch,
+    ones — and ticks the fallback feed knew by number only — are read from the
+    Bob nodes on demand — which only works inside the running epoch,
     because Bob does not keep tick logs for closed ones (DATA_SOURCES §7.2).
     """
     import asyncio
@@ -806,10 +820,9 @@ async def tick_detail(tick: int):
         _tick_detail_cache = OrderedDict()
     if tick in _tick_detail_cache:
         return _tick_detail_cache[tick]
-    from qdr import bob, contracts, tickstream
+    from qdr import contracts
     try:
-        detail = await asyncio.to_thread(
-            tickstream.BobRPC(bob.BOB_URL).fetch_tick, tick, contracts.by_address())
+        detail = await asyncio.to_thread(hub.fetch_detail, tick, contracts.by_address())
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"tick {tick} unavailable: {e}")
     if not detail.get("tick"):

@@ -166,6 +166,20 @@ Detailansicht.
 
 Status ehrlich ausweisen, wie überall im Report: `source: "bob-ws" | "bob-poll"`,
 `stale: true` wenn Bob schweigt, `catch_up: true` wenn Bob nachläuft (`isCatchUp`).
+`node` nennt die Quelle (`{"kind": "bob", "host": "bob.qubic.global"}`, im Notbetrieb
+`kind: "bare"`), `nodes` den Zustand jedes Nodes mit Ausfallgrund.
+
+**Ausfallsicherheit (v0.13.1).** Am 2026-10-06 stand bob.qubic.li stundenlang bei einem
+Tick, beantwortete aber jede Anfrage — die Seite zeigte „Node schweigt“, weil es keinen
+zweiten Node gab. Seitdem gilt ein Node als ausgefallen, wenn er 30 s keinen neuen Tick
+liefert (sein eigener `qubic_getTickNumber` unterscheidet dabei „Node steht“ von
+„nur der Socket hängt“) oder mehr als 120 Ticks hinter `rpc.qubic.org/v1/tick-info`
+liegt; dann übernimmt der nächste aus `QDR_BOB_URLS` (Standard: `QDR_BOB_URL`,
+bob.qubic.li, bob.qubic.global). Nach 5 Minuten wird ein ausgefallener Node neu geprüft.
+Liefert keiner, kommen nur Ticknummern von `wss://rt.qubic.li/live` (`bare: true`,
+alle Inhaltsfelder `null` statt 0). Die RPC ist bewusst keine Tick-Quelle: Sie sperrt
+schon nach einigen Dutzend Anfragen (Cloudflare 1015), und der Worker braucht sie.
+Die Seite zeigt unter dem Live-Status, von welchem Bob-Node die Ticks kommen.
 
 ### 3.3 Konfiguration
 

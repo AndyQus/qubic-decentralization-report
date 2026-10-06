@@ -58,6 +58,49 @@ BOB_URL = os.environ.get("QDR_BOB_URL", "https://bob.qubic.li/qubic")
 BUFFER_TICKS = int(os.environ.get("QDR_TICKS_BUFFER", "300"))
 IDLE_S = float(os.environ.get("QDR_TICKS_IDLE", "60"))
 
+# Public Bob nodes the relay falls back on, in order. On 2026-10-06 bob.qubic.li
+# froze at tick 83,288,297 for hours while answering every call normally, and
+# the page showed nothing; bob.qubic.global was live the whole time.
+PUBLIC_BOB_URLS = ("https://bob.qubic.li/qubic", "https://bob.qubic.global/qubic")
+
+# The network's own tick, the yardstick a node's head is measured against. Read
+# rarely on purpose: rpc.qubic.org rate-limits hard (Cloudflare 1015 after a
+# couple of dozen requests in two minutes, measured 2026-10-06), and the ingest
+# worker shares this host's address and needs that RPC far more than we do. For
+# the same reason it is never used as a tick source.
+NETWORK_TICK_URL = (os.environ.get("QUBIC_RPC_BASE", "https://rpc.qubic.org").rstrip("/")
+                    + "/v1/tick-info")
+NETWORK_CHECK_S = 30.0
+
+# Last resort when no Bob node is usable: a push feed of bare tick numbers
+# (measured 2026-10-06: ~1.4 messages/s, ~40 bytes each). Cubes keep arriving,
+# without content. Empty disables it.
+BARE_FEED_WS = os.environ.get("QDR_TICKS_BARE_WS", "wss://rt.qubic.li/live")
+
+
+def bob_urls() -> list[str]:
+    """The Bob nodes to use, preferred first.
+
+    ``QDR_BOB_URLS`` (comma-separated) is the whole list when set. Otherwise it is
+    ``QDR_BOB_URL`` — your own node, if you set one — followed by the public
+    nodes, so a node that goes quiet is replaced instead of silencing the page.
+    """
+    raw = os.environ.get("QDR_BOB_URLS", "")
+    urls = [u.strip() for u in raw.split(",") if u.strip()] or [BOB_URL, *PUBLIC_BOB_URLS]
+    out: list[str] = []
+    for u in urls:
+        if u.rstrip("/") not in [o.rstrip("/") for o in out]:
+            out.append(u)
+    return out
+
+
+def host_of(url: Optional[str]) -> Optional[str]:
+    """``https://bob.qubic.li/qubic`` → ``bob.qubic.li`` — what the page shows."""
+    if not url:
+        return None
+    from urllib.parse import urlsplit
+    return urlsplit(url).hostname or url
+
 # A Qubic identity: exactly 60 upper-case letters.
 _IDENTITY = re.compile(r"[A-Z]{60}")
 
@@ -82,6 +125,16 @@ POLL_MAX_TICKS = 6
 WS_FAILURES_BEFORE_POLL = 3
 POLL_BEFORE_WS_RETRY_S = 300.0
 
+# When a node counts as down. A node can answer every call and still be useless:
+# frozen at one tick, or catching up hours behind. So health is measured by
+# progress, not by replies — no new tick for STALL_S, or more than LAG_TICKS
+# (about a minute) behind the network. A node found down is skipped for
+# NODE_RETRY_S and then probed again.
+STALL_S = 30.0
+LAG_TICKS = 120
+NODE_RETRY_S = 300.0
+HEALTH_EVERY_S = 10.0
+
 # Ranking for the transactions a summary names: what changed the supply first,
 # then what called a contract, then plain transfers by size.
 _KIND_RANK = {"burn": 0, "contract": 1, "transfer": 2, "call": 3, "unknown": 4}
@@ -92,13 +145,14 @@ DETAIL_WORKERS = 8
 DETAIL_MAX_TX_LOOKUPS = 128
 
 
-def ws_url_for(bob_url: str) -> str:
+def ws_url_for(bob_url: str, use_env: bool = True) -> str:
     """``https://host/qubic`` → ``wss://host/ws/qubic`` (and http → ws).
 
     The public node serves JSON-RPC under /qubic and the socket under /ws/qubic.
     A bare own node (``http://10.0.0.5:40420``) gets ``ws://10.0.0.5:40420/ws/qubic``.
+    ``QDR_BOB_WS`` overrides this for ``QDR_BOB_URL``'s node only.
     """
-    explicit = os.environ.get("QDR_BOB_WS")
+    explicit = os.environ.get("QDR_BOB_WS") if use_env else None
     if explicit:
         return explicit
     url = bob_url.rstrip("/")
@@ -313,6 +367,37 @@ def condense_polled(tick_data: dict, logs: Iterable[dict],
     return condense(raw, contracts_by_address)
 
 
+def condense_bare(tick: int) -> tuple[dict, dict]:
+    """A tick known by its number alone (the last-resort feed).
+
+    Everything a Bob node would have said about it is None, not 0: an unknown
+    count is not an empty one. ``bare`` lets the page say so, and keeps the
+    detail out of the buffer's answers so a click reads the tick from a node.
+    """
+    summary = {"tick": int(tick), "epoch": None, "ts": None, "state": "ok",
+               "bare": True, "catch_up": False, "leader": {"index": None},
+               "tx": None, "tx_failed": None, "logs": None, "qu_moved": None,
+               "burned": None, "solutions": None, "contracts": [], "top": []}
+    return summary, dict(summary)
+
+
+def network_tick(url: str = NETWORK_TICK_URL, timeout: float = 8.0) -> int:
+    """The network's current tick, from the public RPC (one request)."""
+    resp = requests.get(url, timeout=timeout)
+    resp.raise_for_status()
+    return int(resp.json()["tickInfo"]["tick"])
+
+
+def network_computors(epoch: int, timeout: float = 15.0) -> list[str]:
+    """The epoch's computors in index order, from the public RPC — the leader
+    names' fallback when no Bob node answers. One request per epoch."""
+    base = NETWORK_TICK_URL.rsplit("/v1/", 1)[0]
+    resp = requests.get(f"{base}/v1/epochs/{int(epoch)}/computors", timeout=timeout)
+    resp.raise_for_status()
+    ids = (resp.json().get("computors") or {}).get("identities") or []
+    return [i if _IDENTITY.fullmatch(str(i)) else None for i in ids]
+
+
 # ── Bob JSON-RPC (poll mode and the detail view) ──────────────────────────────
 
 class BobRPC:
@@ -395,24 +480,39 @@ class BobRPC:
 
 # ── The hub ───────────────────────────────────────────────────────────────────
 
+class NodeDown(Exception):
+    """The node answers, or did, but delivers no usable ticks: switch nodes."""
+
+
 class TickHub:
     """One upstream, a ring buffer, and any number of subscribers.
 
     Lives on the API's event loop. ``ensure_running()`` starts the upstream task
     on demand; the task ends itself once nobody has subscribed or polled for
     ``idle_s`` seconds.
+
+    The upstream is the first healthy node of ``bob_urls``. A node that stops
+    making progress (frozen, or far behind the network) is marked down and the
+    next one takes over; with none left, the bare tick feed keeps cubes coming
+    until a node is worth probing again.
     """
 
     def __init__(
         self,
-        bob_url: str = BOB_URL,
+        bob_url: Optional[str] = None,
         buffer_ticks: int = BUFFER_TICKS,
         idle_s: float = IDLE_S,
         contracts_fn: Optional[Callable[[], dict]] = None,
         leaders_fn: Optional[Callable[[int], list]] = None,
+        urls: Optional[list[str]] = None,
+        bare_ws: Optional[str] = BARE_FEED_WS,
+        network_fn: Optional[Callable[[], int]] = network_tick,
     ) -> None:
-        self.bob_url = bob_url
-        self.ws_url = ws_url_for(bob_url)
+        self.bob_urls = list(urls or ([bob_url] if bob_url else bob_urls()))
+        self.bob_url = self.bob_urls[0]
+        self.ws_url = self._ws_url(self.bob_url)
+        self.bare_ws = bare_ws or None
+        self.network_fn = network_fn
         self.idle_s = idle_s
         self.buffer: deque[dict] = deque(maxlen=buffer_ticks)
         self.details: OrderedDict[int, dict] = OrderedDict()
@@ -427,10 +527,31 @@ class TickHub:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._last_seen = time.time()
         self.source: Optional[str] = None
+        self.active_url: Optional[str] = None
         self.connected = False
         self.last_event_at: Optional[float] = None
         self.last_error: Optional[str] = None
         self.ticks_seen = 0
+        # Per node: {"down_until", "reason", "head", "checked_at"}.
+        self.nodes: dict[str, dict] = {u: {} for u in self.bob_urls}
+        self._net_tick: Optional[int] = None
+        self._net_at = 0.0
+        self._node_since = 0.0
+        # The current node's highest tick, and when it last showed progress —
+        # a tick delivered (even one the buffer already has) or a higher head.
+        self._node_head: Optional[int] = None
+        self._node_alive_at = 0.0
+        self._rpcs: dict[str, BobRPC] = {}
+
+    @staticmethod
+    def _ws_url(url: str) -> str:
+        # QDR_BOB_WS names the socket of QDR_BOB_URL's node, no other.
+        return ws_url_for(url, use_env=url.rstrip("/") == BOB_URL.rstrip("/"))
+
+    def _rpc(self, url: str) -> BobRPC:
+        if url not in self._rpcs:
+            self._rpcs[url] = BobRPC(url, timeout=8)
+        return self._rpcs[url]
 
     # -- lifecycle --------------------------------------------------------
 
@@ -458,10 +579,30 @@ class TickHub:
         now = time.time()
         last = self.buffer[-1] if self.buffer else None
         age = round(now - self.last_event_at, 1) if self.last_event_at else None
+        if self.source in ("bob-ws", "bob-poll"):
+            node = {"kind": "bob", "host": host_of(self.active_url)}
+            upstream = self._ws_url(self.active_url) if self.source == "bob-ws" else self.active_url
+        elif self.source == "bare":
+            node = {"kind": "bare", "host": host_of(self.bare_ws)}
+            upstream = self.bare_ws
+        else:
+            node, upstream = None, None
+        nodes = []
+        for u in self.bob_urls:
+            n = self.nodes.get(u) or {}
+            down = n.get("down_until", 0) > now
+            nodes.append({"host": host_of(u),
+                          "state": "active" if u == self.active_url and node and node["kind"] == "bob"
+                          else "down" if down else "standby",
+                          "reason": n.get("reason") if down else None,
+                          "head": n.get("head")})
         return {
             "source": self.source,
             "connected": self.connected,
-            "upstream": self.ws_url if self.source == "bob-ws" else self.bob_url,
+            "upstream": upstream,
+            "node": node,
+            "nodes": nodes,
+            "network_tick": self._net_tick,
             "last_tick": last["tick"] if last else None,
             "last_event_age_s": age,
             # Ticks come ~2/s; ten silent seconds means the node, not the network.
@@ -490,7 +631,30 @@ class TickHub:
         return rows[-limit:] if limit else rows
 
     def detail(self, tick: int) -> Optional[dict]:
-        return self.details.get(int(tick))
+        d = self.details.get(int(tick))
+        return None if d is None or d.get("bare") else d
+
+    def fetch_detail(self, tick: int, contracts_by_address: Optional[dict] = None) -> dict:
+        """One tick read from a node on demand (blocking; run it in a thread).
+
+        The active node first, then the others, nodes known to be down last —
+        a node frozen at an older tick still has everything before it.
+        """
+        now = time.time()
+        order = sorted(self.bob_urls, key=lambda u: (
+            u != self.active_url, (self.nodes.get(u) or {}).get("down_until", 0) > now))
+        error: Optional[Exception] = None
+        for u in order:
+            try:
+                d = BobRPC(u).fetch_tick(tick, contracts_by_address)
+            except Exception as e:
+                error = e
+                continue
+            if d.get("tick"):
+                return d
+        if error is not None:
+            raise error
+        return {}
 
     # -- ingest -----------------------------------------------------------
 
@@ -518,7 +682,10 @@ class TickHub:
     def ingest(self, summary: dict, detail: dict) -> bool:
         """Add one condensed tick. Returns False for a tick already seen."""
         tick = summary["tick"]
-        if not tick or tick in self.details:
+        if not tick:
+            return False
+        known = self.details.get(tick)
+        if known is not None and not (known.get("bare") and not summary.get("bare")):
             return False
         if self.buffer and tick < self.buffer[-1]["tick"] - self.buffer.maxlen:
             return False                 # far behind the window: not live any more
@@ -529,6 +696,14 @@ class TickHub:
             detail["leader"] = {"index": idx, **info}
             summary["leader"] = {"index": idx, "id": short_id(info.get("id")),
                                  "cluster": info.get("cluster")}
+        if known is not None:
+            # A node delivers in full what the bare feed knew by number only.
+            # Viewers already have the cube, so it is only replaced, not sent.
+            for i, s in enumerate(self.buffer):
+                if s["tick"] == tick:
+                    self.buffer[i] = summary
+            self.details[tick] = detail
+            return False
         self.buffer.append(summary)
         if len(self.buffer) > 1 and self.buffer[-2]["tick"] > tick:
             # Out of order (a catch-up burst): keep the buffer sorted, so
@@ -553,41 +728,156 @@ class TickHub:
     async def _ingest_raw(self, raw: dict) -> None:
         await self._refresh_leaders(_int(raw.get("epoch")) or None)
         summary, detail = condense(raw, self._contracts_map())
+        self._node_progress(summary["tick"])
         self.ingest(summary, detail)
+
+    def _node_progress(self, tick: int) -> bool:
+        """Note a tick the current node has reached; True if it is a new high.
+
+        Measured per node, not by what the buffer accepts: after a switch the
+        new node may deliver ticks the buffer already holds, and that is a
+        working node, not a stuck one."""
+        if tick and tick > (self._node_head or 0):
+            self._node_head = tick
+            self._node_alive_at = time.time()
+            return True
+        return False
+
+    # -- node health ------------------------------------------------------
+
+    async def _network_tick(self) -> Optional[int]:
+        """The network's tick, read at most every NETWORK_CHECK_S. A failed read
+        keeps the older value: an old yardstick only understates a node's lag,
+        so it can never get a healthy node thrown out."""
+        if self.network_fn is None or time.time() - self._net_at < NETWORK_CHECK_S:
+            return self._net_tick
+        self._net_at = time.time()
+        try:
+            self._net_tick = await asyncio.to_thread(self.network_fn)
+        except Exception:
+            pass
+        return self._net_tick
+
+    def _mark_down(self, url: str, reason: str) -> None:
+        n = self.nodes.setdefault(url, {})
+        n["down_until"] = time.time() + NODE_RETRY_S
+        n["reason"] = reason
+        self.last_error = f"{host_of(url)}: {reason}"
+
+    async def _pick_node(self) -> Optional[str]:
+        """The first node that is not marked down and is near the network's head."""
+        net = await self._network_tick()
+        for url in self.bob_urls:
+            n = self.nodes.setdefault(url, {})
+            if n.get("down_until", 0) > time.time():
+                continue
+            try:
+                head = await asyncio.to_thread(self._rpc(url).tick_number)
+            except Exception as e:
+                self._mark_down(url, f"unreachable: {type(e).__name__}")
+                continue
+            n.update(head=head, checked_at=time.time())
+            if net and net - head > LAG_TICKS:
+                self._mark_down(url, f"{net - head} ticks behind the network")
+                continue
+            n.pop("reason", None)
+            self._node_head = head
+            self._node_alive_at = time.time()
+            return url
+        return None
+
+    async def _check_health(self, url: str, socket: bool = True) -> None:
+        """Raise NodeDown when the node stopped making progress.
+
+        No progress for STALL_S is either the node (frozen) or only our socket;
+        the node's own tick number tells which. A socket problem is raised as an
+        ordinary error so the socket is retried rather than the node dropped; in
+        poll mode (``socket=False``) there is no socket, so it is no problem.
+        """
+        now = time.time()
+        if now - max(self._node_alive_at, self._node_since) > STALL_S:
+            try:
+                head = await asyncio.to_thread(self._rpc(url).tick_number)
+            except Exception as e:
+                raise NodeDown(f"silent and unreachable: {type(e).__name__}")
+            self.nodes.setdefault(url, {}).update(head=head, checked_at=now)
+            if not self._node_progress(head):
+                raise NodeDown(f"stuck at tick {head}")
+            if socket:
+                raise RuntimeError("socket silent while the node advances")
+        net = await self._network_tick()
+        if net and self._node_head and net - self._node_head > LAG_TICKS:
+            raise NodeDown(f"{net - self._node_head} ticks behind the network")
 
     # -- upstream ---------------------------------------------------------
 
     async def _run(self) -> None:
-        ws_failures = 0
-        poll_until = 0.0
         try:
             while not self._idle():
                 await self._refresh_contracts()
-                if time.time() < poll_until:
-                    await self._poll_once()
-                    await asyncio.sleep(POLL_INTERVAL_S)
+                url = await self._pick_node()
+                if url is not None:
+                    try:
+                        await self._run_node(url)
+                    except NodeDown as e:
+                        self._mark_down(url, str(e))
                     continue
-                try:
-                    await self._run_ws()
-                    ws_failures = 0
-                except asyncio.CancelledError:
-                    raise
-                except Exception as e:
-                    ws_failures += 1
-                    self.last_error = f"websocket: {type(e).__name__}: {e}"
-                    self.connected = False
-                    if ws_failures >= WS_FAILURES_BEFORE_POLL:
-                        poll_until = time.time() + POLL_BEFORE_WS_RETRY_S
-                        ws_failures = 0
-                    else:
-                        await asyncio.sleep(min(2 ** ws_failures, 10))
+                # No node usable. Probe again once the first one's wait is over;
+                # until then the bare feed, if there is one.
+                now = time.time()
+                until = min((n.get("down_until", now) for n in self.nodes.values()),
+                            default=now) or now
+                until = max(until, now + 5)
+                self.active_url = None
+                if self.bare_ws:
+                    try:
+                        await self._run_bare(until)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as e:
+                        self.connected = False
+                        self.last_error = f"bare feed: {type(e).__name__}: {e}"
+                        await asyncio.sleep(5)
+                else:
+                    self.source, self.connected = None, False
+                    await asyncio.sleep(min(10.0, until - now))
         finally:
             self.connected = False
 
-    async def _run_ws(self) -> None:
+    async def _run_node(self, url: str) -> None:
+        """Stream from one node until it goes down (NodeDown) or nobody watches.
+
+        The socket first; after WS_FAILURES_BEFORE_POLL failures in a row the
+        node is polled for a while, then the socket is tried again.
+        """
+        self.active_url = url
+        self._node_since = time.time()
+        ws_failures = 0
+        poll_until = 0.0
+        while not self._idle():
+            if time.time() < poll_until:
+                await self._poll_once(url)
+                await asyncio.sleep(POLL_INTERVAL_S)
+                continue
+            try:
+                await self._run_ws(url)
+                ws_failures = 0
+            except (asyncio.CancelledError, NodeDown):
+                raise
+            except Exception as e:
+                ws_failures += 1
+                self.last_error = f"websocket: {type(e).__name__}: {e}"
+                self.connected = False
+                if ws_failures >= WS_FAILURES_BEFORE_POLL:
+                    poll_until = time.time() + POLL_BEFORE_WS_RETRY_S
+                    ws_failures = 0
+                else:
+                    await asyncio.sleep(min(2 ** ws_failures, 10))
+
+    async def _run_ws(self, url: str) -> None:
         import websockets      # ships with uvicorn[standard]
 
-        async with websockets.connect(self.ws_url, open_timeout=15, max_size=None,
+        async with websockets.connect(self._ws_url(url), open_timeout=15, max_size=None,
                                       ping_interval=20) as ws:
             await ws.send(json.dumps({"jsonrpc": "2.0", "id": 1,
                                       "method": "qubic_subscribe",
@@ -595,12 +885,15 @@ class TickHub:
             self.source = "bob-ws"
             self.connected = True
             self.last_error = None
+            self._node_since = time.time()
+            checked = time.time()
             while not self._idle():
+                if time.time() - checked > HEALTH_EVERY_S:
+                    checked = time.time()
+                    await self._check_health(url)
                 try:
                     msg = await asyncio.wait_for(ws.recv(), timeout=5)
                 except asyncio.TimeoutError:
-                    if self.last_event_at and time.time() - self.last_event_at > 30:
-                        raise RuntimeError("no tick for 30 s")
                     continue
                 data = json.loads(msg)
                 if "error" in data:
@@ -609,29 +902,59 @@ class TickHub:
                 if isinstance(result, dict) and "tick" in result:
                     await self._ingest_raw(result)
 
-    async def _poll_once(self) -> None:
-        rpc = getattr(self, "_rpc", None) or BobRPC(self.bob_url)
-        self._rpc = rpc
+    async def _poll_once(self, url: str) -> None:
+        rpc = self._rpc(url)
         try:
             head = await asyncio.to_thread(rpc.tick_number)
+            self.nodes.setdefault(url, {}).update(head=head, checked_at=time.time())
+            self._node_progress(head)
             last = self.buffer[-1]["tick"] if self.buffer else head - 1
-            if head <= last:
-                return
-            first = max(last + 1, head - POLL_MAX_TICKS + 1)
-            logs = await asyncio.to_thread(rpc.logs, first, head)
-            by_tick: dict[int, list] = {}
-            for e in logs:
-                by_tick.setdefault(_int(e.get("tick")), []).append(e)
-            for t in range(first, head + 1):
-                data = await asyncio.to_thread(rpc.tick, t)
-                if not data:
-                    continue
-                await self._refresh_leaders(_int(data.get("epoch")) or None)
-                s, d = condense_polled(data, by_tick.get(t, []), self._contracts_map())
-                self.ingest(s, d)
+            if head > last:
+                first = max(last + 1, head - POLL_MAX_TICKS + 1)
+                logs = await asyncio.to_thread(rpc.logs, first, head)
+                by_tick: dict[int, list] = {}
+                for e in logs:
+                    by_tick.setdefault(_int(e.get("tick")), []).append(e)
+                for t in range(first, head + 1):
+                    data = await asyncio.to_thread(rpc.tick, t)
+                    if not data:
+                        continue
+                    await self._refresh_leaders(_int(data.get("epoch")) or None)
+                    s, d = condense_polled(data, by_tick.get(t, []), self._contracts_map())
+                    self.ingest(s, d)
             self.source = "bob-poll"
             self.connected = True
             self.last_error = None
         except Exception as e:
             self.connected = False
             self.last_error = f"poll: {type(e).__name__}: {e}"
+        # A node that answers every poll with the same tick is exactly the case
+        # that must not pass as healthy.
+        await self._check_health(url, socket=False)
+
+    async def _run_bare(self, until: float) -> None:
+        """Tick numbers from the bare feed until ``until``, when nodes are probed
+        again. Same stall rule as a node: silence means this feed is gone too."""
+        import websockets
+
+        async with websockets.connect(self.bare_ws, open_timeout=15, max_size=2 ** 20,
+                                      ping_interval=20) as ws:
+            self.source = "bare"
+            self.connected = True
+            since = time.time()
+            while not self._idle() and time.time() < until:
+                try:
+                    msg = await asyncio.wait_for(ws.recv(), timeout=5)
+                except asyncio.TimeoutError:
+                    if time.time() - since > STALL_S:
+                        raise RuntimeError(f"no tick for {STALL_S:.0f} s")
+                    continue
+                try:
+                    data = json.loads(msg)
+                except ValueError:
+                    continue
+                if isinstance(data, dict) and data.get("MessageType") == "Tick":
+                    tick = _int(data.get("Tick"))
+                    if tick:
+                        since = time.time()      # the feed is alive, new tick or not
+                        self.ingest(*condense_bare(tick))

@@ -53,6 +53,11 @@
       layoutFree: "Free", layoutWorm: "Wormhole",
       srcConnecting: "connecting", srcStream: "live · stream", srcPoll: "live · polling",
       srcStale: "node silent", srcOff: "offline", srcPaused: "paused",
+      nodeBob: "Bob node · {host}", nodeBare: "fallback · {host} · tick numbers only",
+      nodeNone: "no Bob node reachable", nodeActive: "in use", nodeStandby: "standby",
+      nodeDown: "down: {r}", nodeTip: "Ticks come from a Bob node, Qubic's event and log node. If one stops delivering, the next takes over.",
+      nodeBareTip: "No Bob node is delivering right now. Tick numbers keep coming from {host}, without content; Bob nodes are probed again every few minutes.",
+      bareTick: "number only",
       epoch: "Epoch {n}", rate: "{n} ticks/s",
       sess: "{ticks} ticks · {tx} tx · ⛏ {sol} · 🔥 {burn} QU",
       tx: "tx", empty: "empty", skipped: "skipped", catchUp: "catch-up",
@@ -74,7 +79,7 @@
       stSolMin: "mining solutions / min", stTxTick: "transactions per tick",
       noApi: "This page was opened as a file and has no API. Start the server and open it through it: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/ticks.html",
       discLabel: "Disclaimer:", discBeta: "This page is currently in beta status.",
-      discData: "Ticks are relayed live from a Bob node; nothing on this page is stored or estimated.",
+      discData: "Ticks are relayed live from a Bob node (another one takes over if it stops delivering); nothing on this page is stored or estimated.",
       discNoGuarantee: "We do not guarantee the completeness, accuracy, or availability of the data.",
       discDemo: "Use it for analysis purposes only — not as a basis for investment decisions.",
       tos: "Terms of Service", privacy: "Privacy Policy", codeVersion: "code",
@@ -93,6 +98,11 @@
       layoutFree: "Frei", layoutWorm: "Wurmloch",
       srcConnecting: "verbinde", srcStream: "live · Stream", srcPoll: "live · Abfrage",
       srcStale: "Node schweigt", srcOff: "offline", srcPaused: "pausiert",
+      nodeBob: "Bob-Node · {host}", nodeBare: "Notbetrieb · {host} · nur Ticknummern",
+      nodeNone: "kein Bob-Node erreichbar", nodeActive: "in Benutzung", nodeStandby: "bereit",
+      nodeDown: "ausgefallen: {r}", nodeTip: "Die Ticks kommen von einem Bob-Node, dem Ereignis- und Log-Node von Qubic. Liefert einer nicht mehr, übernimmt der nächste.",
+      nodeBareTip: "Gerade liefert kein Bob-Node. Die Ticknummern kommen weiter von {host}, ohne Inhalt; die Bob-Nodes werden alle paar Minuten neu geprüft.",
+      bareTick: "nur Nummer",
       epoch: "Epoche {n}", rate: "{n} Ticks/s",
       sess: "{ticks} Ticks · {tx} Tx · ⛏ {sol} · 🔥 {burn} QU",
       tx: "Tx", empty: "leer", skipped: "übersprungen", catchUp: "Nachlauf",
@@ -114,7 +124,7 @@
       stSolMin: "Mining-Lösungen / Min", stTxTick: "Transaktionen pro Tick",
       noApi: "Diese Seite wurde als Datei geöffnet und hat keine API. Starte den Server und öffne sie darüber: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/ticks.html",
       discLabel: "Hinweis:", discBeta: "Diese Seite befindet sich im Beta-Status.",
-      discData: "Die Ticks kommen live von einem Bob-Node; auf dieser Seite wird nichts gespeichert oder geschätzt.",
+      discData: "Die Ticks kommen live von einem Bob-Node (liefert er nicht mehr, übernimmt ein anderer); auf dieser Seite wird nichts gespeichert oder geschätzt.",
       discNoGuarantee: "Wir garantieren weder Vollständigkeit noch Richtigkeit oder Verfügbarkeit der Daten.",
       discDemo: "Nur zu Analysezwecken verwenden — nicht als Grundlage für Investitionsentscheidungen.",
       tos: "Nutzungsbedingungen", privacy: "Datenschutz", codeVersion: "Code",
@@ -261,6 +271,7 @@
 
   function onStatus(st) {
     S.status = st;
+    Hud.node(st);
     if (!st) return setSource("off");
     if (st.stale && S.totals.ticks) return setSource("stale");
     if (S.totals.ticks) setSource(Feed.kind === "sse" ? "stream" : "poll");
@@ -326,6 +337,21 @@
   }
 
   var Hud = {
+    /* Which node the ticks come from, and — on hover — how the others are. */
+    node: function (st) {
+      var el = $("hud-node");
+      if (!el) return;
+      var n = st && st.node;
+      var text = !st ? "" : !n ? t("nodeNone") : n.kind === "bare" ? t("nodeBare", { host: n.host }) : t("nodeBob", { host: n.host });
+      var tip = n && n.kind === "bare" ? t("nodeBareTip", { host: n.host }) : t("nodeTip");
+      ((st && st.nodes) || []).forEach(function (x) {
+        tip += "\n" + x.host + ": " + (x.state === "active" ? t("nodeActive")
+          : x.state === "down" ? t("nodeDown", { r: x.reason || "?" }) : t("nodeStandby"));
+      });
+      el.textContent = text;
+      el.title = tip;
+      el.className = "node" + (n && n.kind === "bare" ? " bare" : !n && st ? " none" : "");
+    },
     tick: function (s) {
       var big = $("hud-tick");
       big.textContent = "Tick " + fmtInt(s.tick);
@@ -393,13 +419,14 @@
       var bits;
       if (s.state === "skipped") bits = t("skipped");
       else if (s.state === "empty") bits = t("empty");
+      else if (s.bare) bits = t("bareTick");
       else {
         bits = fmtInt(s.tx) + " " + t("tx");
         if (s.solutions) bits += " · ⛏" + s.solutions;
         if (c.contracts.length) bits += " · " + c.contracts.map(function (x) { return x.name || "#" + x.index; }).join(", ");
         if (s.burned) bits += " · 🔥 " + fmtQu(s.burned);
       }
-      bits += " · L" + (s.leader && s.leader.index != null ? s.leader.index : "?");
+      if (!s.bare) bits += " · L" + (s.leader && s.leader.index != null ? s.leader.index : "?");
       if (s.catch_up) bits += " · " + t("catchUp");
       out.push(this.line("k-tick s-" + s.state, s.tick, head + esc(bits)));
       if (s.burned) out.push(this.line("sub k-burn", s.tick, "🔥 " + esc(fmtQu(s.burned)) + " QU " + esc(t("burned"))));
@@ -670,6 +697,7 @@
       var lines = [];
       if (s.state === "skipped") lines.push([t("skipped"), COLORS.skip]);
       else if (s.state === "empty") lines.push([t("empty"), COLORS.empty]);
+      else if (s.bare) lines.push([t("bareTick"), COLORS.empty]);
       else {
         lines.push([s.tx + " " + t("tx"), "#b0faff"]);
         if (s.solutions) lines.push(["⛏ " + s.solutions, COLORS.sol]);
