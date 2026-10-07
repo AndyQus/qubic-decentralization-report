@@ -74,12 +74,23 @@ body { min-height: 100vh; }
   height: calc(100svh - var(--hdr));
   min-height: 240px;
   overflow: hidden;
-  background: radial-gradient(ellipse at 50% 50%, var(--night-2) 0%, var(--night) 70%);
+  /* The canvas is transparent; this is the night it is drawn on, and what a
+     terminal behind the universe sits on. */
+  background: var(--night);
   color: var(--ink);
   -webkit-user-select: none; user-select: none;
 }
-#sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; }
+#sky { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; display: block; touch-action: manipulation; }
 #sky.hover { cursor: pointer; }
+
+/* The Qubic planet: decoration behind the cubes. planet.js places it a third
+   of the way out from the centre, circles it with the star field (much slower)
+   and brings it closer over minutes; its size here is the nearest it gets. */
+#planet {
+  position: absolute; z-index: 0; top: 0; left: 0;
+  width: clamp(156px, 34vmin, 312px); height: clamp(156px, 34vmin, 312px);
+  pointer-events: none; transform-origin: 50% 50%; will-change: transform, opacity;
+}
 
 /* ─── Controls (top right of the stage) ──────────────────────────────────── */
 .stage-ctl {
@@ -93,7 +104,8 @@ body { min-height: 100vh; }
 .tick-search input {
   width: 170px; font: 500 12px/1 var(--mono); color: var(--ink);
   background: rgba(11, 16, 32, .62); border: 1px solid rgba(78, 224, 252, .22);
-  border-radius: 8px; padding: 7px 10px; min-height: 30px; outline: none;
+  border-radius: 8px; padding: 0 10px; height: 32px; box-sizing: border-box; outline: none;
+  -webkit-appearance: none; appearance: none; margin: 0;
   backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   -webkit-user-select: text; user-select: text;
 }
@@ -103,37 +115,44 @@ body { min-height: 100vh; }
 .sbtn {
   font: 500 12px/1 var(--mono); color: var(--ink-dim);
   background: rgba(11, 16, 32, .62); border: 1px solid rgba(78, 224, 252, .22);
-  border-radius: 8px; padding: 7px 10px; cursor: pointer; min-height: 30px;
+  border-radius: 8px; padding: 0 10px; cursor: pointer; margin: 0;
+  /* One fixed height for every control here, the search field included, so
+     the buttons line up with it on a phone as on a desktop. */
+  height: 32px; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
   backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
 }
 .sbtn:hover { color: var(--ink); border-color: rgba(78, 224, 252, .5); }
 .sbtn[aria-pressed="true"] { color: var(--c-tick); border-color: rgba(78, 224, 252, .55); }
 .sbtn kbd { font: inherit; opacity: .55; margin-left: 4px; }
-.sbtn select { font: inherit; color: inherit; background: transparent; border: 0; cursor: pointer; }
-.sbtn select option { color: #111; }
 
 /* ─── Terminal (left) ────────────────────────────────────────────────────── */
 .term {
-  position: absolute; top: 0; left: 0; bottom: 0; z-index: 5;
+  /* Behind the universe: stars and cubes pass over it, and every click reaches
+     the cubes first (ticks.js hands a missed one on to the terminal). */
+  position: absolute; top: 0; left: 0; bottom: 0; z-index: 0;
   /* Wide enough that a tick line with time, number, counts, contract, burn and
      leader fits in one row on a desktop; below that it wraps rather than cut. */
   width: min(600px, 94vw);
   display: flex; flex-direction: column;
   background: linear-gradient(90deg, rgba(5, 7, 13, .86) 0%, rgba(5, 7, 13, .62) 80%, rgba(5, 7, 13, 0) 100%);
-  font: 12px/1.45 var(--mono);
+  /* Size and line colour as on live.qubic.org's terminal: Space Mono at .8em. */
+  font: 12.8px/1.45 var(--mono);
   transition: transform .25s ease;
 }
 .term[hidden] { display: flex; transform: translateX(-105%); visibility: hidden; }
-.term-head {
-  display: flex; align-items: center; gap: 8px; padding: 12px 14px 6px;
-  color: var(--ink-faint); text-transform: uppercase; letter-spacing: .08em; font-size: 11px;
-}
-.term-head .grow { flex: 1; }
 .term-x { background: none; border: 0; color: var(--ink-faint); font: inherit; font-size: 15px; cursor: pointer; padding: 2px 6px; }
 .term-x:hover { color: var(--ink); }
-.term-filters { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 14px 8px; }
+.term-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 12px 14px 8px; }
+.term-filters .term-x { margin-left: auto; }
+/* Narrower than terminal plus controls side by side (about 840px): the filters
+   start below the search field and the buttons (12 + 32 + 6 + 32 px) instead
+   of under them. */
+@media (max-width: 840px) { .term-filters { padding-top: 90px; } }
 .chip {
-  font: 500 11px/1 var(--mono); padding: 5px 8px; border-radius: 999px; cursor: pointer;
+  /* As tall as the buttons and the search field (32px). */
+  height: 32px; box-sizing: border-box; display: inline-flex; align-items: center; margin: 0;
+  font: 500 11px/1 var(--mono); padding: 0 10px; border-radius: 999px; cursor: pointer;
   background: transparent; color: var(--ink-faint); border: 1px solid rgba(176, 250, 255, .18);
 }
 .chip[aria-pressed="true"] { color: var(--ink); border-color: currentColor; }
@@ -150,9 +169,8 @@ body { min-height: 100vh; }
 .term-list::-webkit-scrollbar { display: none; width: 0; height: 0; }
 /* Never cut: everything on a line matters. A line too long for the panel wraps,
    indented under its own start so it still reads as one entry. */
-.tl { color: var(--ink-faint); white-space: normal; overflow-wrap: anywhere; cursor: pointer; padding: 1px 0 1px 2.2em; text-indent: -2.2em; }
+.tl { color: rgba(176, 250, 255, .3); white-space: normal; overflow-wrap: anywhere; cursor: pointer; padding: 1px 0 1px 2.2em; text-indent: -2.2em; }
 .tl:hover { color: var(--ink); }
-.tl .tm { opacity: .7; }
 .tl .tn { color: var(--ink-dim); }
 .tl.k-tick .tn  { color: var(--c-tick); }
 .tl.s-empty .tn { color: var(--c-empty); }
@@ -160,7 +178,7 @@ body { min-height: 100vh; }
 .tl.k-burn      { color: var(--c-burn); }
 .tl.k-tx        { color: var(--c-big); }
 .tl.k-contract  { color: var(--c-contract); }
-.tl.sub { padding-left: 4.4em; }
+.tl.sub { padding-left: calc(6px + 2.2em); }   /* first line 6px in, wraps under it as above */
 .term-list.hide-tick .k-tick, .term-list.hide-tx .k-tx, .term-list.hide-burn .k-burn,
 .term-list.hide-contract .k-contract { display: none; }
 .term-empty { color: var(--ink-faint); padding: 8px 0; }
@@ -234,10 +252,11 @@ body { min-height: 100vh; }
 .d-kpi b { display: block; font: 700 16px/1.2 var(--display); font-variant-numeric: tabular-nums; }
 .d-kpi span { color: var(--ink-dim); font-size: 11px; }
 .d-sec { margin: 14px 0 6px; font: 600 11px/1 var(--mono); color: var(--ink-faint); text-transform: uppercase; letter-spacing: .08em; }
-.d-leader { font: 12px/1.5 var(--mono); word-break: break-all; color: var(--ink-dim); }
+/* Values in the same size as the terminal's lines (12.8px). */
+.d-leader { font: 12.8px/1.5 var(--mono); word-break: break-all; color: var(--ink-dim); }
 .d-leader a, .d-tx a { color: var(--c-tick); text-decoration: none; }
 .d-leader a:hover, .d-tx a:hover { text-decoration: underline; }
-.d-tx { border-top: 1px solid rgba(176, 250, 255, .08); padding: 7px 0; font: 12px/1.45 var(--mono); }
+.d-tx { border-top: 1px solid rgba(176, 250, 255, .08); padding: 7px 0; font: 12.8px/1.45 var(--mono); }
 .d-tx .row1 { display: flex; gap: 8px; align-items: baseline; }
 .d-tx .amt { margin-left: auto; color: var(--ink); white-space: nowrap; }
 .d-tx .ids { color: var(--ink-dim); word-break: break-all; }
@@ -247,8 +266,8 @@ body { min-height: 100vh; }
 .kind.system, .kind.call, .kind.unknown { color: var(--c-empty); }
 .kind.failed { color: var(--c-skip); }
 .d-more { color: var(--ink-faint); font-size: 12px; padding: 8px 0; }
-.d-events summary { cursor: pointer; color: var(--ink-dim); font: 12px var(--mono); }
-.d-ev { font: 11.5px/1.45 var(--mono); color: var(--ink-dim); padding: 3px 0; word-break: break-all; }
+.d-events summary { cursor: pointer; color: var(--ink-dim); font: 12.8px var(--mono); }
+.d-ev { font: 12.8px/1.45 var(--mono); color: var(--ink-dim); padding: 3px 0; word-break: break-all; }
 .d-note { color: var(--ink-faint); font-size: 12px; margin-top: 16px; }
 
 @media (max-width: 600px) {
@@ -289,19 +308,16 @@ body { min-height: 100vh; }
 </header>
 
 <main class="stage" id="stage">
+  <canvas id="planet" aria-hidden="true"></canvas>
   <canvas id="sky" aria-label="Live ticks flying in as cubes"></canvas>
 
   <aside class="term" id="term" aria-label="Terminal">
-    <div class="term-head">
-      <span data-i18n="termTitle">new ticks in the network</span>
-      <span class="grow"></span>
-      <button class="term-x" id="term-x" type="button" aria-label="Close terminal">×</button>
-    </div>
     <div class="term-filters" id="term-filters">
       <button class="chip" type="button" data-k="tick" aria-pressed="true" data-i18n="fTick">Ticks</button>
       <button class="chip" type="button" data-k="tx" aria-pressed="true" data-i18n="fTx">Transfers</button>
       <button class="chip" type="button" data-k="burn" aria-pressed="true" data-i18n="fBurn">Burns</button>
       <button class="chip" type="button" data-k="contract" aria-pressed="true" data-i18n="fContract">Contracts</button>
+      <button class="term-x" id="term-x" type="button" aria-label="Close terminal">×</button>
     </div>
     <div class="term-list" id="term-list" role="log" aria-live="off">
       <div class="term-empty" id="term-empty" data-i18n="waiting">waiting for the first tick …</div>
@@ -310,22 +326,18 @@ body { min-height: 100vh; }
 
 
   <div class="stage-ctl" id="stage-ctl">
+    <form class="tick-search" id="tick-search" role="search" autocomplete="off">
+      <input id="tick-q" type="search" inputmode="numeric" enterkeyhint="search"
+             data-i18n-ph="searchPh" placeholder="Search tick" aria-label="Search tick">
+      <button class="sbtn" type="submit" data-i18n-aria="searchGo" aria-label="Open tick">→</button>
+    </form>
    <div class="ctl-row">
     <button class="sbtn" id="term-btn" type="button" aria-pressed="true"><span data-i18n="btnTerm">Terminal</span><kbd>T</kbd></button>
     <!-- Stats-Flug vorerst aus (siehe ticks.js, Scene.init):
     <button class="sbtn" id="stats-btn" type="button" aria-pressed="true"><span data-i18n="btnStats">Stats</span><kbd>S</kbd></button>
     -->
     <button class="sbtn" id="pause-btn" type="button" aria-pressed="false" aria-label="Pause">⏸</button>
-    <label class="sbtn"><select id="layout-sel" aria-label="Layout">
-      <option value="free" data-i18n="layoutFree">Free</option>
-      <option value="worm" data-i18n="layoutWorm">Wormhole</option>
-    </select></label>
    </div>
-    <form class="tick-search" id="tick-search" role="search" autocomplete="off">
-      <input id="tick-q" type="search" inputmode="numeric" enterkeyhint="search"
-             data-i18n-ph="searchPh" placeholder="Search tick" aria-label="Search tick">
-      <button class="sbtn" type="submit" data-i18n-aria="searchGo" aria-label="Open tick">→</button>
-    </form>
   </div>
 
   <div class="hud" id="hud" aria-live="polite">
@@ -393,7 +405,8 @@ body { min-height: 100vh; }
   </div>
 </footer>
 
-<script src="./ticks.js?v=c7025e82"></script>
+<script src="./ticks.js?v=b3ca783e"></script>
+<script src="./planet.js?v=a604a918"></script>
 <script src="./wake.js"></script>
 </body>
 </html>

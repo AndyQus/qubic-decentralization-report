@@ -44,13 +44,12 @@
       navReport: "Report", burnReport: "Burn", priceReport: "Price", miningLive: "Mining",
       ticksLive: "Ticks", howItWorks: "How it works",
       subtitle: "Every tick · Qubic Report",
-      termTitle: "new ticks in the network", waiting: "waiting for the first tick …",
+      waiting: "waiting for the first tick …",
       fTick: "Ticks", fTx: "Transfers", fBurn: "Burns", fContract: "Contracts",
       lgTick: "tick", lgEmpty: "empty", lgSkip: "skipped", lgBurn: "burn",
       lgBig: "large transfer", lgContract: "contract call", lgSol: "⛏ mining solutions",
       btnTerm: "Terminal", btnStats: "Stats",
       searchPh: "Search tick  /", searchGo: "Open tick",
-      layoutFree: "Free", layoutWorm: "Wormhole",
       srcConnecting: "connecting", srcStream: "live · stream", srcPoll: "live · polling",
       srcStale: "node silent", srcOff: "offline", srcPaused: "paused",
       nodeBob: "Bob node · {host}", nodeBare: "fallback · {host} · tick numbers only",
@@ -89,13 +88,12 @@
       navReport: "Report", burnReport: "Burn", priceReport: "Kurs", miningLive: "Mining",
       ticksLive: "Ticks", howItWorks: "So funktioniert's",
       subtitle: "Jeder Tick · Qubic Report",
-      termTitle: "neue Ticks im Netzwerk", waiting: "warte auf den ersten Tick …",
+      waiting: "warte auf den ersten Tick …",
       fTick: "Ticks", fTx: "Transfers", fBurn: "Burns", fContract: "Verträge",
       lgTick: "Tick", lgEmpty: "leer", lgSkip: "übersprungen", lgBurn: "Burn",
       lgBig: "großer Transfer", lgContract: "Vertragsaufruf", lgSol: "⛏ Mining-Lösungen",
       btnTerm: "Terminal", btnStats: "Stats",
       searchPh: "Tick suchen  /", searchGo: "Tick öffnen",
-      layoutFree: "Frei", layoutWorm: "Wurmloch",
       srcConnecting: "verbinde", srcStream: "live · Stream", srcPoll: "live · Abfrage",
       srcStale: "Node schweigt", srcOff: "offline", srcPaused: "pausiert",
       nodeBob: "Bob-Node · {host}", nodeBare: "Notbetrieb · {host} · nur Ticknummern",
@@ -153,7 +151,7 @@
   }
   function fmtTime(ts) {
     var d = ts ? new Date(ts * 1000) : new Date();
-    return d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    return d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
   }
 
   /* ── API base (same resolution as the other pages) ────────────────────── */
@@ -373,11 +371,12 @@
   var Term = {
     // At most this many lines in the DOM: the oldest are removed as new ones
     // arrive, so the page stays as fast after a day as after a minute.
+    // Shown or not; when shown, always behind the universe, so every cube
+    // stays clickable. Shown is the default, on a phone too.
     el: null, list: null, pending: [], max: 250, scheduled: false, open: true,
     init: function () {
       this.el = $("term"); this.list = $("term-list");
-      var saved = safeGet(LS_TERM);
-      this.setOpen(saved === null ? window.innerWidth >= 900 : saved === "1", false);
+      this.setOpen(safeGet(LS_TERM) !== "0", false);
       var self = this;
       $("term-btn").addEventListener("click", function () { self.setOpen(!self.open, true); });
       $("term-x").addEventListener("click", function () { self.setOpen(false, true); });
@@ -414,21 +413,23 @@
     },
     push: function (s) {
       var c = s._c, out = [];
-      var tm = '<span class="tm">' + esc(fmtTime(s.ts)) + "</span> ";
-      var head = tm + '<span class="tn">#' + esc(fmtInt(s.tick)) + "</span> ";
-      var bits;
-      if (s.state === "skipped") bits = t("skipped");
-      else if (s.state === "empty") bits = t("empty");
-      else if (s.bare) bits = t("bareTick");
+      // "83,415,042 10:13:45  7tx · ⛏4 · L22 · QX": number, 24-hour time, then
+      // the values, every one set off by " · ", and contracts always after L.
+      var head = '<span class="tn">' + esc(fmtInt(s.tick)) + "</span> " +
+        '<span class="tm">' + esc(fmtTime(s.ts)) + "</span>&nbsp; ";
+      var bits = [];
+      if (s.state === "skipped") bits.push(t("skipped"));
+      else if (s.state === "empty") bits.push(t("empty"));
+      else if (s.bare) bits.push(t("bareTick"));
       else {
-        bits = fmtInt(s.tx) + " " + t("tx");
-        if (s.solutions) bits += " · ⛏" + s.solutions;
-        if (c.contracts.length) bits += " · " + c.contracts.map(function (x) { return x.name || "#" + x.index; }).join(", ");
-        if (s.burned) bits += " · 🔥 " + fmtQu(s.burned);
+        bits.push(fmtInt(s.tx) + t("tx"));
+        if (s.solutions) bits.push("⛏" + s.solutions);
+        if (s.burned) bits.push("🔥 " + fmtQu(s.burned));
       }
-      if (!s.bare) bits += " · L" + (s.leader && s.leader.index != null ? s.leader.index : "?");
-      if (s.catch_up) bits += " · " + t("catchUp");
-      out.push(this.line("k-tick s-" + s.state, s.tick, head + esc(bits)));
+      if (!s.bare) bits.push("L" + (s.leader && s.leader.index != null ? s.leader.index : "?"));
+      if (s.state !== "skipped" && s.state !== "empty" && !s.bare) c.contracts.forEach(function (x) { bits.push(x.name || "#" + x.index); });
+      if (s.catch_up) bits.push(t("catchUp"));
+      out.push(this.line("k-tick s-" + s.state, s.tick, head + esc(bits.join(" · "))));
       if (s.burned) out.push(this.line("sub k-burn", s.tick, "🔥 " + esc(fmtQu(s.burned)) + " QU " + esc(t("burned"))));
       (s.top || []).forEach(function (tx) {
         if (tx.kind === "transfer" && tx.qu > 0) {
@@ -486,9 +487,10 @@
   // The stars fly a little faster than the cubes (20 %), not past them: the
   // cubes are what the page is about, the stars only say "moving".
   var STAR_VS_CUBE = 1.2;
-  // Wormhole layout: angle between consecutive cubes, how fast the whole thing
-  // turns (rad/s), and the tube's radius as a share of the world's half-width.
-  var WORM_STEP = 0.62, WORM_SPIN = 0.22, WORM_RADIUS = 0.5;
+  // The whole universe, stars and cubes together, turns about the line of
+  // flight at this rate (rad/s). A rigid rotation: nothing that was apart can
+  // come to overlap, and a free spot found now stays free.
+  var SPIN = 0.22;
   var CUBE_EDGES = [0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7];
   var CUBE_V = [-1, -1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1, -1, -1, 1, 1, -1, 1, 1, 1, 1, -1, 1, 1];
 
@@ -499,14 +501,12 @@
     speed: 1, speedTarget: 1, quality: 1, ema: 16, slowFor: 0,
     // 15 s over twice the depth: the same closing speed up front as before.
     flight: 15, maxCubes: 48, maxQueue: 6, stats: false,
-    // "free": each cube placed where it never meets another. "worm": every cube
-    // takes the next place on a spiral that turns as it comes at the viewer,
-    // stars included, so one looks down a wormhole.
-    layout: "free", spiralAng: 0,
     init: function () {
       this.on = true;
       this.canvas = $("sky");
-      this.ctx = this.canvas.getContext("2d", { alpha: false });
+      // Transparent: the night sky is the stage's background, so a terminal
+      // placed behind the universe shows through between stars and cubes.
+      this.ctx = this.canvas.getContext("2d");
       var self = this;
       /* Stats-Flug vorerst abgeschaltet (Wunsch 05.10.2026: die Kennzahlen sollen
          nicht wie im alten Projekt nach vorn fliegen). Der Code bleibt, damit eine
@@ -527,6 +527,11 @@
       }, { passive: true });
       this.canvas.addEventListener("click", function (e) { self.click(e); });
       this.canvas.addEventListener("mousemove", function (e) { self.hover(e); }, { passive: true });
+      // The wheel over a terminal behind the universe still scrolls it.
+      this.canvas.addEventListener("wheel", function (e) {
+        var el = self.under(e);
+        if (el && el.closest && el.closest("#term-list")) Term.list.scrollTop += e.deltaY;
+      }, { passive: true });
       this.start();
     },
     resize: function () {
@@ -621,51 +626,14 @@
       }
       return null;
     },
-    /* A point at angle `ang` and radius `rad` around the line of flight. A
-       circle, not squeezed to the screen: then turning everything is a rigid
-       rotation, under which nothing that was apart can come to overlap. */
-    wormPos: function (ang, rad) {
-      return { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad };
-    },
-    /* Switch layout. Into the wormhole every cube stays where it is and from
-       then on everything turns together; new cubes take their places on the
-       spiral. Back to free, the cubes stop turning where they are. Nothing
-       jumps, and nothing passes through anything. */
-    setLayout: function (l) {
-      this.layout = l;
-      if (l === "worm") {
-        var far = null;
-        this.cubes.forEach(function (c) {
-          c.ang = Math.atan2(c.y, c.x); c.rad = Math.sqrt(c.x * c.x + c.y * c.y);
-          c.tx = c.x; c.ty = c.y;
-          if (!far || c.z > far.z) far = c;
-        });
-        this.spiralAng = far ? far.ang + WORM_STEP : 0;
-      } else {
-        this.cubes.forEach(function (c) { c.tx = c.x; c.ty = c.y; });
-      }
-    },
     spawn: function (s) {
       var c = s._c || classify(s);
       var size = s.state === "ok" ? Math.min(0.34, 0.14 + 0.05 * Math.log2(1 + (s.tx || 0))) : 0.11;
       size *= CUBE_SCALE;
-      var pos, ang = 0, rad = 0;
-      if (this.layout === "worm") {
-        // Next place on the spiral: consecutive cubes sit WORM_STEP apart in
-        // angle. Checked like a free placement — everything turns together, so
-        // in the turning frame the others stand still and the check holds. A
-        // place still blocked by a cube from before the switch means wait.
-        ang = this.spiralAng; rad = this.spread * WORM_RADIUS;
-        pos = this.wormPos(ang, rad);
-        if (this.clearance(pos.x, pos.y, size) < 1) return false;
-        this.spiralAng += WORM_STEP;
-      } else {
-        // Never inside another cube: no free spot means wait, not overlap.
-        pos = this.place(size);
-        if (!pos) return false;
-      }
+      // Never inside another cube: no free spot means wait, not overlap.
+      var pos = this.place(size);
+      if (!pos) return false;
       this.cubes.push({
-        ang: ang, rad: rad, tx: pos.x, ty: pos.y,
         s: s, x: pos.x, y: pos.y, z: CUBE_FAR, gone: this.goneAt(pos.x, pos.y),
         // Fest ausgerichtet, wie im Original: die Würfel fliegen, sie drehen sich nicht.
         size: size,
@@ -742,8 +710,7 @@
       }
 
       var ctx = this.ctx, w = this.w, h = this.h, cx = w / 2, cy = h / 2, F = this.F;
-      ctx.fillStyle = "#05070d";
-      ctx.fillRect(0, 0, w, h);
+      ctx.clearRect(0, 0, w, h);
 
       // Stars. Like the original Star Rain: white, many, fast, and growing as
       // they come closer (size ~ 1/z), so it reads as flying through space.
@@ -753,11 +720,10 @@
       var sv = (CUBE_FAR - Z_NEAR) / this.flight * STAR_VS_CUBE * v * dt;
       var n = this.starN, sx = this.sx, sy = this.sy, sz = this.sz;
       var dots = [[], [], []];
-      // In the wormhole the sky turns with the spiral.
-      var worm = this.layout === "worm";
-      var rc = worm ? Math.cos(WORM_SPIN * v * dt) : 1, rs = worm ? Math.sin(WORM_SPIN * v * dt) : 0;
+      // The universe turns; the cubes below turn with it by the same angle.
+      var rc = Math.cos(SPIN * v * dt), rs = Math.sin(SPIN * v * dt);
       for (var i = 0; i < n; i++) {
-        if (worm) { var ox = sx[i]; sx[i] = ox * rc - sy[i] * rs; sy[i] = ox * rs + sy[i] * rc; }
+        var ox = sx[i]; sx[i] = ox * rc - sy[i] * rs; sy[i] = ox * rs + sy[i] * rc;
         var z = sz[i] - sv;
         if (z < 0.12) { this.respawnStar(i, Z_FAR); z = Z_FAR; }
         sz[i] = z;
@@ -789,11 +755,7 @@
       for (var k = 0; k < this.cubes.length; k++) {
         var c = this.cubes[k];
         c.z -= cv;
-        if (worm) {
-          c.ang += WORM_SPIN * v * dt;
-          var wp = this.wormPos(c.ang, c.rad);
-          c.x = c.tx = wp.x; c.y = c.ty = wp.y;
-        }
+        var cx0 = c.x; c.x = cx0 * rc - c.y * rs; c.y = cx0 * rs + c.y * rc;
         if (c.z > c.gone) alive.push(c);
       }
       this.cubes = alive;
@@ -862,7 +824,23 @@
       }
       return best;
     },
-    click: function (e) { var c = this.pick(e); if (c) Detail.open(c.s.tick); },
+    /* The terminal element under the canvas at the pointer, or null. */
+    under: function (e) {
+      if (!Term.open) return null;
+      var cv = this.canvas;
+      cv.style.pointerEvents = "none";
+      var el = document.elementFromPoint(e.clientX, e.clientY);
+      cv.style.pointerEvents = "";
+      return el && Term.el.contains(el) ? el : null;
+    },
+    /* A cube always wins the click. Missed every cube: the click goes on to the
+       terminal behind — a line, a filter, the close button. */
+    click: function (e) {
+      var c = this.pick(e);
+      if (c) { Detail.open(c.s.tick); return; }
+      var el = this.under(e);
+      if (el) { e.qdrPassed = true; el.click(); }
+    },
     hover: function (e) { this.canvas.classList.toggle("hover", !!this.pick(e)); },
     /* Adaptive quality: a smoothed frame time over budget for a while first drops
        the glow and halves the stars; on a small device that still cannot keep up,
@@ -949,7 +927,7 @@
          the panel to another tick instead. Those handlers run first, on their
          own element; this one sees the click after it has bubbled up. */
       document.addEventListener("click", function (e) {
-        if (!self.shown) return;
+        if (!self.shown || e.qdrPassed) return;
         var el = e.target;
         if (el.closest && el.closest("#detail, #tick-search, #term-list .tl")) return;
         if (el === Scene.canvas && Scene.pick(e)) return;
@@ -1115,15 +1093,6 @@
     fitStage();
     window.addEventListener("resize", fitStage, { passive: true });
     applyLang();
-
-    var lay = $("layout-sel");
-    var savedLayout = safeGet("qdr.ticks.layout") === "worm" ? "worm" : "free";
-    lay.value = savedLayout;
-    if (Scene.on) Scene.setLayout(savedLayout);
-    lay.addEventListener("change", function () {
-      safeSet("qdr.ticks.layout", lay.value);
-      Scene.setLayout(lay.value);
-    });
 
     $("pause-btn").addEventListener("click", function () { setPaused(!S.paused); });
 

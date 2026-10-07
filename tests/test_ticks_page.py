@@ -101,3 +101,11 @@ def test_the_page_links_the_current_script_hash():
     want = hashlib.sha256(SCRIPT.read_bytes()).hexdigest()[:8]
     got = re.findall(r'src="\./ticks\.js\?v=([0-9a-f]+)"', html())
     assert got == [want], f"ticks.html links ticks.js?v={got}, the file hashes to {want}"
+
+
+def test_the_page_links_the_current_planet_hash():
+    """The planet behind the cubes lives in its own file; same cache rule."""
+    import hashlib
+    want = hashlib.sha256((DASH / "planet.js").read_bytes()).hexdigest()[:8]
+    got = re.findall(r'src="\./planet\.js\?v=([0-9a-f]+)"', html())
+    assert got == [want], f"ticks.html links planet.js?v={got}, the file hashes to {want}"
