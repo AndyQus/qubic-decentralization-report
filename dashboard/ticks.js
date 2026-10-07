@@ -372,11 +372,15 @@
     // At most this many lines in the DOM: the oldest are removed as new ones
     // arrive, so the page stays as fast after a day as after a minute.
     // Shown or not; when shown, always behind the universe, so every cube
-    // stays clickable. Shown is the default, on a phone too.
+    // stays clickable. Shown is the default on a desktop; on a phone or tablet
+    // (touch as the primary pointer) it starts hidden. A choice made with the
+    // button or T is remembered and wins over either default.
     el: null, list: null, pending: [], max: 250, scheduled: false, open: true,
     init: function () {
       this.el = $("term"); this.list = $("term-list");
-      this.setOpen(safeGet(LS_TERM) !== "0", false);
+      var saved = safeGet(LS_TERM), touch = false;
+      try { touch = window.matchMedia("(pointer: coarse)").matches; } catch (e) {}
+      this.setOpen(saved === null ? !touch : saved !== "0", false);
       var self = this;
       $("term-btn").addEventListener("click", function () { self.setOpen(!self.open, true); });
       $("term-x").addEventListener("click", function () { self.setOpen(false, true); });

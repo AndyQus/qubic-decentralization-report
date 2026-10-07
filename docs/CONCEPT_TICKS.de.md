@@ -243,7 +243,8 @@ offen ist, verlangsamt sich der Flug, damit man lesen kann.
 * Filter-Chips: Ticks · Transaktionen · Burns · Lösungen · Verträge.
 * **Fest begrenzt auf 250 Zeilen**; ältere werden entfernt, neue Zeilen per
   `DocumentFragment` gesammelt einmal pro Frame eingefügt.
-* Unter 600 px Breite standardmäßig aus; dann als Overlay von links einblendbar.
+* Auf Handy und Tablet (Touch als Hauptzeiger, `pointer: coarse`) standardmäßig aus,
+  auf dem Desktop an; eine eigene Wahl per Button oder **T** hat Vorrang.
 
 ### 4.3 Stats-Flug
 
