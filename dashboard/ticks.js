@@ -76,6 +76,11 @@
       stSupply: "circulating supply", stBurned: "burned QU (total)", stPrice: "price",
       stMcap: "market cap", stProgress: "epoch progress", stRate: "ticks per second",
       stSolMin: "mining solutions / min", stTxTick: "transactions per tick",
+      mEpoch: "⛏ Epoch {n} · BPP-9000 · BTC hourly direction",
+      mWindow: "window {w} h + up to {c} h", mTask: "threshold {th} · {sol} solutions",
+      mNoForecast: "forecast: none — every graded hour is already known",
+      mOpenHours: "forecast: {n} open hours in the task",
+      mTip: "Live from a Qubic node via the mining page. The miners search for networks that follow the hourly direction of Bitcoin in a fixed historical file; as soon as the task contains hours whose direction is unknown, this line says so.",
       noApi: "This page was opened as a file and has no API. Start the server and open it through it: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/ticks.html",
       discLabel: "Disclaimer:", discBeta: "This page is currently in beta status.",
       discData: "Ticks are relayed live from a Bob node (another one takes over if it stops delivering); nothing on this page is stored or estimated.",
@@ -120,6 +125,11 @@
       stSupply: "umlaufende Menge", stBurned: "verbrannte QU (gesamt)", stPrice: "Kurs",
       stMcap: "Marktkapitalisierung", stProgress: "Epochenfortschritt", stRate: "Ticks pro Sekunde",
       stSolMin: "Mining-Lösungen / Min", stTxTick: "Transaktionen pro Tick",
+      mEpoch: "⛏ Epoche {n} · BPP-9000 · BTC-Stundenrichtung",
+      mWindow: "Fenster {w} h + bis {c} h", mTask: "Schwelle {th} · {sol} Lösungen",
+      mNoForecast: "Prognose: keine — jede bewertete Stunde ist schon bekannt",
+      mOpenHours: "Prognose: {n} offene Stunden in der Aufgabe",
+      mTip: "Live von einem Qubic-Node, über die Mining-Seite. Die Miner suchen Netze, die der stündlichen Richtung von Bitcoin in einer festen historischen Datei folgen; sobald die Aufgabe Stunden enthält, deren Richtung noch niemand kennt, steht das hier.",
       noApi: "Diese Seite wurde als Datei geöffnet und hat keine API. Starte den Server und öffne sie darüber: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/ticks.html",
       discLabel: "Hinweis:", discBeta: "Diese Seite befindet sich im Beta-Status.",
       discData: "Die Ticks kommen live von einem Bob-Node (liefert er nicht mehr, übernimmt ein anderer); auf dieser Seite wird nichts gespeichert oder geschätzt.",
@@ -463,6 +473,48 @@
       this.pending.length = 0;
       this.list.insertBefore(frag, this.list.firstChild);
       while (this.list.childNodes.length > this.max) this.list.removeChild(this.list.lastChild);
+    }
+  };
+
+  /* ── Mining line (top of the terminal) ─────────────────────────────────
+     What the miners are working on this epoch, from /v1/mining — the same
+     node read the mining page shows. The server caches it for everyone, so a
+     minute between asks costs the node nothing extra. "Forecast" follows
+     task.tail_unknown: hours at the end of the task whose direction nobody
+     knows yet, the first sign of a real prediction (docs/CONCEPT_BTC_ORACLE.de.md). */
+  var Mining = {
+    data: null, timer: null, every: 60000,
+    start: function () {
+      if (apiBase === null || this.timer) return;
+      var self = this;
+      this.load();
+      this.timer = setInterval(function () { self.load(); }, this.every);
+    },
+    stop: function () { clearInterval(this.timer); this.timer = null; },
+    load: function () {
+      var self = this;
+      fetch(apiUrl("/v1/mining"), { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { self.data = d && d.status === "live" ? d : self.data; self.render(); })
+        .catch(function () { self.render(); });
+    },
+    render: function () {
+      var el = $("term-mining"), d = this.data;
+      if (!el) return;
+      var task = d && d.task, ep = d && d.epoch && d.epoch.epoch;
+      if (!task || !ep) { el.hidden = true; return; }
+      var col = d.colony || {};
+      var fc = task.tail_unknown > 0 ? t("mOpenHours", { n: fmtInt(task.tail_unknown) })
+        : task.tail_unknown === 0 ? t("mNoForecast") : null;
+      el.innerHTML = '<span class="m-head">' + esc(t("mEpoch", { n: ep })) + "</span><br>" +
+        // Right after a server start the task is not resolved yet and carries
+        // only its hash: the window is left out then, not shown as "–".
+        (task.window_width != null ? esc(t("mWindow", { w: fmtInt(task.window_width), c: fmtInt(task.shift_cap) })) + " · " : "") +
+        esc(t("mTask", { th: fmtInt(col.threshold != null ? col.threshold : task.threshold_default),
+          sol: fmtInt(col.solution_count) })) +
+        (fc ? '<br><span class="' + (task.tail_unknown > 0 ? "m-open" : "m-none") + '">' + esc(fc) + "</span>" : "");
+      el.title = t("mTip");
+      el.hidden = false;
     }
   };
 
@@ -1055,6 +1107,7 @@
     document.querySelectorAll("#lang-seg button").forEach(function (b) { b.classList.toggle("active", b.dataset.lang === lang); });
     setSource(S.feed);
     Stats.refresh();
+    Mining.render();
   }
   document.querySelectorAll("#lang-seg button").forEach(function (b) {
     b.addEventListener("click", function () { lang = b.dataset.lang; safeSet(LS_LANG, lang); applyLang(); });
@@ -1134,7 +1187,7 @@
         .then(function (d) { if (d && d.version) $("code-ver").textContent = d.version; }).catch(function () {});
     }
 
-    Feed.start();
+    Feed.start(); Mining.start();
     // Nur der Stats-Flug braucht /v1/pulse; solange er aus ist, wird nicht gefragt.
     // loadPulse();
     // setInterval(loadPulse, 60000);
@@ -1142,8 +1195,8 @@
     // A hidden tab neither draws nor streams; coming back resumes after the
     // last tick seen, and the backlog lands in the terminal, not as a swarm.
     document.addEventListener("visibilitychange", function () {
-      if (document.hidden) { Feed.stop(); Scene.stop(); }
-      else { Scene.queue.length = 0; if (Scene.on) Scene.start(); Feed.start(); }
+      if (document.hidden) { Feed.stop(); Scene.stop(); Mining.stop(); }
+      else { Scene.queue.length = 0; if (Scene.on) Scene.start(); Feed.start(); Mining.start(); }
     });
   }
 

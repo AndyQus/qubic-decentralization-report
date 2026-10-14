@@ -9,6 +9,18 @@ Erstellt: 2026-09-09 · Geprüft gegen: `qubic/core` @ `main`, Epoch 230, `rpc.q
 
 ---
 
+## 0a. Nachtrag 2026-10-14 — Core v1.308.1, Epoch 235
+
+Neue Task-Datei: Laut Blog beginnt die Historie jetzt am 2025-07-01 statt am 2025-01-01,
+ist also ein halbes Jahr weiter vorne. Der Daten-Hash ist `e5b6d875…`. Das Format bleibt gleich:
+8929 Zeilen, Rahmen 8760 h, `SHIFT_CAP` 168, Schwelle 4350, Ziele 4460 × 0 und 4468 × 1,
+**kein `UNKNOWN`**. Laut Qubic-Blog [„BPP-9000 Mining Algorithm Explained“](https://qubic.org/blog-detail/qubic-bpp-9000-mining-algorithm-explained)
+(2026-10-14) kommt jede bewertete Stunde aus einer festen historischen Datei. Dort steht:
+„There's no price feed“ und „It isn't a forecasting result“. Am Epochenende schreiben die
+Nodes die besten Netze (bis 676) in eine Datei für Offline-Analysen. Das ist lokal beim
+Node, es gibt dafür keinen Abrufweg. Mining liest kein Oracle, und es gibt keine neuen
+Nachrichtentypen. **Ergebnis unverändert: keine abrufbare Prognose.**
+
 ## 0. Nachtrag 2026-10-03 — Core v1.306.0, Epoch 233
 
 Die §§1–2 beschreiben den Stand von Epoch 230. Seit v1.306.0 (PR #1012) gilt:
