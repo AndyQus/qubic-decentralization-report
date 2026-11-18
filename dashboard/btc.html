@@ -72,7 +72,12 @@ body { background: var(--bg); }
 @media (max-width: 700px) { .page { padding: 16px var(--gutter-mobile) 32px; } }
 
 .hero-title { font-family: var(--display); font-size: clamp(26px, 4.4vw, 40px); margin: 4px 0 4px; letter-spacing: -.01em; }
-.hero-sub { color: var(--muted); margin: 0 0 8px; line-height: 1.45; font-size: 14px; }
+.hero-sub { color: var(--muted); margin: 0 0 8px; line-height: 1.5; font-size: 14px; }
+/* Title left, the colony's calls right; stacked on tablets in portrait and phones. */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 600px); gap: 16px; align-items: center; margin-bottom: 16px; }
+.hero .card { margin-bottom: 0; }
+.hero-left { min-width: 0; }
+@media (max-width: 980px) { .hero { grid-template-columns: 1fr; gap: 10px; } }
 
 .card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -83,8 +88,13 @@ body { background: var(--bg); }
 .card .desc { color: var(--muted); font-size: 14px; margin: 0 0 14px; line-height: 1.5; }
 
 /* ── Next hour + call ─────────────────────────────────────────────── */
-.now-grid { display: grid; grid-template-columns: 120px 1fr; gap: 18px; align-items: center; }
-@media (max-width: 760px) { .now-grid { grid-template-columns: 1fr; justify-items: center; } }
+.now-grid { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 16px; align-items: center; }
+@media (max-width: 520px) {
+  .now-grid { grid-template-columns: minmax(0, 1fr) 86px; gap: 10px; }
+  .ring { width: 84px !important; height: 84px !important; }
+  .ring-in .big { font-size: 15px !important; }
+  .ring-in .small { font-size: 9px !important; max-width: 64px !important; }
+}
 .ring { position: relative; width: 116px; height: 116px; }
 .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .ring .track { fill: none; stroke: var(--border-strong); stroke-width: 10; }
@@ -112,7 +122,7 @@ body { background: var(--bg); }
 .progress .bar { flex: 0 0 140px; margin-top: 0; }
 .now-meta { font-size: 12px; color: var(--faint); margin-top: 6px; }
 .now-meta a { color: var(--accent); }
-@media (max-width: 760px) { .slot { grid-template-columns: 92px 34px 1fr; } }
+@media (max-width: 760px) { .slot { grid-template-columns: 84px 30px minmax(0, 1fr); gap: 8px; } .slot .g { width: 30px; height: 30px; font-size: 16px; } .slot .txt { font-size: 13px; } }
 .next-hour { font-family: var(--display); font-size: 24px; margin: 2px 0 10px; }
 .call {
   border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 12px 14px;
@@ -145,6 +155,7 @@ body { background: var(--bg); }
 .rate .rb i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--accent); }
 .rate .rb b { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--text); opacity: .55; }
 .hits-wrap { overflow-x: auto; }
+@media (max-width: 600px) { .hits th:nth-child(n+5), .hits td:nth-child(n+5) { display: none; } .rate { min-width: 0; } .hits td, .hits th { padding: 6px 4px; } }
 
 /* ── KPI tiles ─────────────────────────────────────────────────────── */
 .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
@@ -161,8 +172,9 @@ body { background: var(--bg); }
 .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .8s ease; }
 
 /* ── The tape ──────────────────────────────────────────────────────── */
-.tape-wrap { overflow-x: auto; padding: 4px 2px 10px; scrollbar-width: thin; }
-.tape { display: flex; gap: 2px; align-items: flex-end; min-height: 92px; }
+.tape-wrap { padding: 4px 2px 10px; }
+/* Wraps into rows instead of scrolling, on any screen. */
+.tape { display: flex; flex-wrap: wrap; gap: 6px 2px; align-items: flex-end; }
 .cell {
   flex: 0 0 auto; width: 22px; height: 38px; border-radius: 4px; display: grid; place-items: center;
   font-size: 11px; color: var(--cell-ink); position: relative; cursor: default;
@@ -182,6 +194,48 @@ body { background: var(--bg); }
 @keyframes flip { 0% { transform: rotateY(90deg) scale(.6); opacity: 0; } 100% { transform: none; opacity: 1; } }
 .cell.cut { width: 2px; height: 56px; background: var(--accent); border-radius: 1px; opacity: .8; }
 .col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; }
+
+/* ── Shards (after the Qubic Home-Node's epoch vault): one per hour, or per epoch ── */
+.shards { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 6px; padding: 6px 2px 2px; }
+.shard {
+  position: relative; width: 30px; height: 84px; flex-shrink: 0; border-radius: 7px;
+  background: rgba(148, 163, 184, .06); border: 1px solid var(--border-strong);
+  overflow: hidden; display: flex; align-items: flex-end;
+  animation: shard-rise .6s cubic-bezier(.2, .9, .3, 1.2) both; transition: transform .2s, border-color .2s; cursor: default;
+}
+.shard:hover { transform: translateY(-5px) scale(1.06); border-color: var(--accent); z-index: 2; }
+.shard .fill { width: 100%; height: 100%; position: relative; overflow: hidden; border-radius: 5px 5px 0 0;
+  transition: height .8s cubic-bezier(.2, .8, .2, 1); }
+.shard.up .fill   { background: linear-gradient(180deg, var(--up), color-mix(in srgb, var(--up) 35%, transparent)); }
+.shard.down .fill { background: linear-gradient(0deg, var(--down), color-mix(in srgb, var(--down) 35%, transparent)); }
+.shard.acc .fill  { background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 25%, transparent)); }
+.shard .fill::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, .35) 50%, transparent 70%); }
+.shard .gl { position: absolute; top: 5px; left: 0; right: 0; text-align: center; font-size: 13px; color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
+.shard .num { position: absolute; bottom: 3px; left: 0; right: 0; text-align: center; font-family: var(--mono);
+  font-size: 9.5px; font-weight: 700; color: #eafffb; text-shadow: 0 1px 2px rgba(0, 0, 0, .7); }
+.shard.frame { height: 52px; opacity: .42; }
+.shard.frame .num { display: none; }
+.shard.filled .fill { background-image: repeating-linear-gradient(45deg, transparent 0 3px, rgba(255,255,255,.35) 3px 5px); }
+/* The newest hour shimmers -- only that one: on every shard it kept the browser repainting. */
+.shard.newest { border-color: var(--accent); box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 25%, transparent); }
+.shard.newest .fill { animation: shard-glow 2.2s ease-in-out infinite; }
+.shard.newest .fill::after { animation: shard-shimmer 4.5s ease-in-out infinite; }
+.shard.pending { border: 2px dashed var(--border-strong); background: transparent; animation: pend 2.2s ease-in-out infinite; }
+.shard.pending .gl { color: var(--muted); text-shadow: none; top: 30px; font-size: 18px; }
+.shard.pending .num { color: var(--muted); text-shadow: none; }
+.shard-cut { width: 2px; height: 84px; background: var(--accent); border-radius: 1px; opacity: .8; align-self: flex-start; }
+.shard-sub { font-size: 10.5px; color: var(--muted); font-family: var(--mono); height: 14px; line-height: 14px; }
+@keyframes shard-rise { from { transform: translateY(18px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes shard-glow { 0%, 100% { opacity: .75; } 50% { opacity: 1; } }
+@keyframes shard-shimmer { 0%, 70% { transform: translateX(-100%); } 85%, 100% { transform: translateX(100%); } }
+@media (max-width: 800px) {
+  .shard { width: 24px; height: 68px; } .shard.frame { height: 42px; } .shard-cut { height: 68px; }
+  .shard .num { font-size: 8px; } .shard .gl { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) { .shard, .shard .fill, .shard .fill::after { animation: none !important; } }
+.ep-shards { margin-bottom: 14px; }
 .mark { height: 14px; font-size: 11px; line-height: 14px; color: var(--faint); }
 .mark.hit { color: var(--success); font-weight: 700; }
 .mark.miss { color: var(--danger); font-weight: 700; }
@@ -193,7 +247,8 @@ body { background: var(--bg); }
 .tape-legend i.p { border: 2px dashed var(--border-strong); }
 
 /* ── Colony pulse ──────────────────────────────────────────────────── */
-.pulse { display: flex; gap: 2px; align-items: flex-end; height: 60px; border-bottom: 1px solid var(--border-strong); }
+.pulse { display: flex; gap: 2px; align-items: flex-end; height: 60px; border-bottom: 1px solid var(--border-strong); overflow: hidden; }
+@media (max-width: 600px) { .pulse { gap: 1px; } .pulse i { min-width: 1px !important; } }
 .pulse i { flex: 1 1 0; min-width: 2px; background: var(--accent); border-radius: 2px 2px 0 0; opacity: .85; }
 .pulse i.rej { background: var(--faint); }
 .pulse-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin-top: 8px; }
@@ -204,7 +259,8 @@ body { background: var(--bg); }
 .ep-head { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; margin-bottom: 6px; }
 .ep-head b { font-family: var(--display); font-size: 15px; }
 .ep-head span { color: var(--muted); font-size: 13px; }
-.week { display: grid; grid-template-columns: 54px repeat(24, minmax(10px, 1fr)); gap: 2px; font-size: 10.5px; }
+.week { display: grid; grid-template-columns: 54px repeat(24, minmax(0, 1fr)); gap: 2px; font-size: 10.5px; }
+@media (max-width: 600px) { .week { grid-template-columns: 38px repeat(24, minmax(0, 1fr)); gap: 1px; font-size: 9px; } .week .c { font-size: 0; height: 13px; } }
 .week .d { color: var(--faint); align-self: center; white-space: nowrap; }
 .week .h { color: var(--faint); text-align: center; }
 .week .c { height: 16px; border-radius: 3px; display: grid; place-items: center; color: var(--cell-ink); font-size: 8px; }
@@ -292,9 +348,43 @@ body { background: var(--bg); }
 </header>
 
 <main class="page is-loading" id="page" aria-busy="true">
-  <h2 class="hero-title" data-i18n="heroTitle">Colony vs Bitcoin</h2>
-  <p class="hero-sub" data-i18n="heroSub">Since epoch 240 Qubic's mining is graded on the real direction of Bitcoin: every hour the nodes store the BTC/USDT price on-chain through Qubic's Price oracle, and the ant colony searches for networks whose output matches up and down. Here is every hour as it arrives.</p>
-  <p class="status" id="status" data-i18n="loading">Reading from a Qubic node …</p>
+  <div class="hero">
+    <div class="hero-left">
+      <h2 class="hero-title" data-i18n="heroTitle">Colony vs Bitcoin</h2>
+      <p class="status" id="status" data-i18n="loading">Reading from a Qubic node …</p>
+    </div>
+  <!-- ── The next hour, and the colony's call for it ─────────────────── -->
+    <section class="card now-card" id="now-card">
+      <div class="now-grid">
+        <div>
+          <div class="next-label" data-i18n="callTitle">The colony's calls</div>
+          <div class="slot">
+            <div class="lbl"><span data-i18n="slotRun">Running</span><b id="run-when">–</b></div>
+            <div class="g" id="run-g" aria-hidden="true">?</div>
+            <div class="txt" id="run-txt"></div>
+          </div>
+          <div class="slot">
+            <div class="lbl"><span data-i18n="slotNext">Next</span><b id="up-when">–</b></div>
+            <div class="g" id="up-g" aria-hidden="true">?</div>
+            <div class="txt" id="up-txt"></div>
+          </div>
+          <div class="progress" id="progress" hidden><div class="bar"><i id="prog-bar"></i></div><span id="prog-txt"></span></div>
+          <div class="now-meta"><span id="call-meta"></span>
+            <a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_PREDICTION.de.md" target="_blank" rel="noreferrer" data-i18n="callConcept">How the call is made (concept, German) →</a></div>
+        </div>
+        <div class="ring" id="ring">
+          <svg viewBox="0 0 200 200" aria-hidden="true">
+            <circle class="track" cx="100" cy="100" r="88" />
+            <circle class="prog" id="ring-prog" cx="100" cy="100" r="88" stroke-dasharray="552.9" stroke-dashoffset="552.9" />
+          </svg>
+          <div class="ring-in">
+            <div class="big" id="ring-big">–:––</div>
+            <div class="small" id="ring-small"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
 
   <!-- ── Key figures ──────────────────────────────────────────────────── -->
   <div class="kpis">
@@ -326,38 +416,6 @@ body { background: var(--bg); }
     </div>
   </div>
 
-  <!-- ── The next hour, and the colony's call for it ─────────────────── -->
-  <section class="card" id="now-card">
-    <div class="now-grid">
-      <div class="ring" id="ring">
-        <svg viewBox="0 0 200 200" aria-hidden="true">
-          <circle class="track" cx="100" cy="100" r="88" />
-          <circle class="prog" id="ring-prog" cx="100" cy="100" r="88" stroke-dasharray="552.9" stroke-dashoffset="552.9" />
-        </svg>
-        <div class="ring-in">
-          <div class="big" id="ring-big">–:––</div>
-          <div class="small" id="ring-small"></div>
-        </div>
-      </div>
-      <div>
-        <div class="next-label" data-i18n="callTitle">The colony's calls</div>
-        <div class="slot">
-          <div class="lbl"><span data-i18n="slotRun">Running</span><b id="run-when">–</b></div>
-          <div class="g" id="run-g" aria-hidden="true">?</div>
-          <div class="txt" id="run-txt"></div>
-        </div>
-        <div class="slot">
-          <div class="lbl"><span data-i18n="slotNext">Next</span><b id="up-when">–</b></div>
-          <div class="g" id="up-g" aria-hidden="true">?</div>
-          <div class="txt" id="up-txt"></div>
-        </div>
-        <div class="progress" id="progress" hidden><div class="bar"><i id="prog-bar"></i></div><span id="prog-txt"></span></div>
-        <div class="now-meta"><span id="call-meta"></span>
-          <a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_PREDICTION.de.md" target="_blank" rel="noreferrer" data-i18n="callConcept">How the call is made (concept, German) →</a></div>
-      </div>
-    </div>
-  </section>
-
   <!-- ── Colony pulse ─────────────────────────────────────────────────── -->
   <section class="card">
     <h2 data-i18n="pulseTitle">Colony pulse</h2>
@@ -370,7 +428,7 @@ body { background: var(--bg); }
   <section class="card">
     <h2 data-i18n="tapeTitle">Hour by hour</h2>
     <p class="desc" data-i18n="tapeDesc">Each cell is one hour: ▲ closed level or higher than the hour before (in whole USDT), ▼ lower. Pale: the last hours of the year-long frame the epoch started with. Bright: hours stored live during this epoch — the ones the colony could not know in advance. Dashed: the hour still to come.</p>
-    <div class="tape-wrap" id="tape-wrap"><div class="tape" id="tape"></div></div>
+    <div class="tape-wrap" id="tape-wrap"><div class="shards" id="tape"></div></div>
     <div class="tape-legend">
       <span><i class="u"></i><span data-i18n="lgUp">▲ up or level</span></span>
       <span><i class="d"></i><span data-i18n="lgDown">▼ down</span></span>
@@ -392,7 +450,11 @@ body { background: var(--bg); }
     <div id="hit-box"><div class="skel head"></div><div class="skel"></div><div class="skel"></div></div>
   </section>
 
-  <p class="note" data-i18n="footNote">Directions only, no prices: the prices come from Binance via Qubic's Price oracle, and this report does not republish exchange data. Times in your local time zone. Not investment advice — a research experiment of the Qubic network.</p>
+  <section class="card info-card">
+    <h2 data-i18n="infoTitle">About this page</h2>
+  <p class="hero-sub" data-i18n="heroSub">Since epoch 240 Qubic's mining is graded on the real direction of Bitcoin: every hour the nodes store the BTC/USDT price on-chain through Qubic's Price oracle, and the ant colony searches for networks whose output matches up and down. Here is every hour as it arrives.</p>
+    <p class="note" data-i18n="footNote">Directions only, no prices: the prices come from Binance via Qubic's Price oracle, and this report does not republish exchange data. Times in your local time zone. Not investment advice — a research experiment of the Qubic network.</p>
+  </section>
 </main>
 
 <footer class="qs-footer">
@@ -448,7 +510,7 @@ body { background: var(--bg); }
       navReport: "Report", burnReport: "Burn", priceReport: "Price", miningLive: "Mining",
       ticksLive: "Ticks", btcLive: "BTC", howItWorks: "How it works",
       pageTitle: "Colony vs Bitcoin", subtitle: "BPP-9000 live · Qubic Report",
-      heroTitle: "Colony vs Bitcoin",
+      heroTitle: "Colony vs Bitcoin", infoTitle: "About this page",
       heroSub: "Since epoch 240 Qubic's mining is graded on the real direction of Bitcoin: every hour the nodes store the BTC/USDT price on-chain through Qubic's Price oracle, and the ant colony searches for networks whose output matches up and down. Here is every hour as it arrives.",
       loading: "Reading from a Qubic node …",
       live: "Live from node {ip} · epoch {ep} · checked: the targets hash to the node's own data hash.",
@@ -498,6 +560,7 @@ body { background: var(--bg); }
       recTitle: "Record",
       recDesc: "Every live hour this server has recorded, one week per epoch (one row per day, one column per hour of the day, UTC). A node only answers for the running epoch, so the record starts with this server's first reading — earlier hours are not filled in afterwards.",
       recEmpty: "No hour recorded yet.",
+      recShardTip: "Epoch {ep}: {n} of 168 live hours recorded · {hits} of {calls} calls hit",
       recEpoch: "Epoch {ep}", recSum: "{n} hours · {up} % ▲ · {filled} filled",
       hitTitle: "Hit rate",
       hPeriod: "Period", hCalls: "Calls", hHits: "Hits", hRate: "Hit rate", hAlways: "always ▲", hRepeat: "as hour before",
@@ -518,7 +581,7 @@ body { background: var(--bg); }
       navReport: "Report", burnReport: "Burn", priceReport: "Kurs", miningLive: "Mining",
       ticksLive: "Ticks", btcLive: "BTC", howItWorks: "So funktioniert's",
       pageTitle: "Kolonie gegen Bitcoin", subtitle: "BPP-9000 live · Qubic Report",
-      heroTitle: "Kolonie gegen Bitcoin",
+      heroTitle: "Kolonie gegen Bitcoin", infoTitle: "Über diese Seite",
       heroSub: "Seit Epoche 240 wird Qubics Mining an der echten Richtung von Bitcoin gemessen: Jede Stunde speichern die Nodes den BTC/USDT-Kurs über Qubics Preis-Oracle on-chain, und die Ameisenkolonie sucht Netze, deren Ausgabe das Rauf und Runter trifft. Hier ist jede Stunde, sobald sie eintrifft.",
       loading: "Lese von einem Qubic-Node …",
       live: "Live von Node {ip} · Epoche {ep} · geprüft: Die Ziele ergeben den Daten-Hash der Node.",
@@ -568,6 +631,7 @@ body { background: var(--bg); }
       recTitle: "Aufzeichnung",
       recDesc: "Jede Live-Stunde, die dieser Server aufgezeichnet hat, eine Woche je Epoche (eine Zeile je Tag, eine Spalte je Stunde des Tages, UTC). Eine Node antwortet nur für die laufende Epoche; die Aufzeichnung beginnt deshalb mit der ersten Messung dieses Servers — frühere Stunden werden nicht nachgetragen.",
       recEmpty: "Noch keine Stunde aufgezeichnet.",
+      recShardTip: "Epoche {ep}: {n} von 168 Live-Stunden aufgezeichnet · {hits} von {calls} Tipps getroffen",
       recEpoch: "Epoche {ep}", recSum: "{n} Stunden · {up} % ▲ · {filled} aufgefüllt",
       hitTitle: "Trefferquote",
       hPeriod: "Zeitraum", hCalls: "Tipps", hHits: "Treffer", hRate: "Quote", hAlways: "immer ▲", hRepeat: "wie Vorstunde",
@@ -672,35 +736,45 @@ body { background: var(--bg); }
   }
 
   function renderTape() {
-    var tape = $("tape"), wrap = $("tape-wrap");
+    var tape = $("tape");
     var task = (D && D.task) || {};
     if (task.hash_verified !== true) { tape.innerHTML = ""; return; }
-    var atEnd = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 30;
     var html = "", cutDone = false;
-    (D.hours || []).forEach(function (h) {
-      if (h.live && !cutDone) { html += '<div class="cell cut" aria-hidden="true"></div>'; cutDone = true; }
-      var cls = "cell " + (h.up ? "up" : "down") + (h.live ? " live" : " frame") + (h.filled ? " filled" : "");
-      if (h.live && !shownLive[h.hour] && !firstDraw) cls += " arrive";
-      if (h.live) shownLive[h.hour] = true;
+    // The year-long frame is context, not the story: its last 24 hours are enough
+    // to see what the live hours continue. Shards wrap into rows, never scroll.
+    var frame = (D.hours || []).filter(function (h) { return !h.live; }).slice(-24);
+    var live = (D.hours || []).filter(function (h) { return h.live; });
+    var newest = live.length ? live[live.length - 1].hour : null;
+    frame.concat(live).forEach(function (h, i) {
+      if (h.live && !cutDone) { html += '<div class="shard-cut" aria-hidden="true"></div>'; cutDone = true; }
+      var cls = "shard " + (h.up ? "up" : "down") + (h.live ? " live" : " frame") + (h.filled ? " filled" : "") +
+        (h.hour === newest ? " newest" : "");
       var tip = cellTitle(h) + (h.call != null ? " · " + t(h.call === 1 ? "callUp" : h.call === 0 ? "callDown" : "callUnsure") +
         (h.hit === true ? " ✓" : h.hit === false ? " ✗" : "") : "");
-      html += '<div class="col"><div class="' + cls + '" title="' + esc(tip) + '">' + (h.up ? "▲" : "▼") + "</div>" +
+      // Rise in once; later redraws keep still unless the hour is new.
+      var delay = firstDraw ? (Math.min(i, 60) * 18) : (shownLive[h.hour] || !h.live ? -1 : 0);
+      if (h.live) shownLive[h.hour] = true;
+      html += '<div class="col"><div class="' + cls + '" title="' + esc(tip) + '"' +
+        (delay < 0 ? ' style="animation:none"' : ' style="animation-delay:' + delay + 'ms"') + '>' +
+        '<div class="fill"></div><span class="gl">' + (h.up ? "▲" : "▼") + '</span>' +
+        '<span class="num">' + esc(hm(h.at - 3600).slice(0, 2)) + "</span></div>" +
         (h.live ? markHtml(h) : '<div class="mark"></div>') + "</div>";
     });
-    if (!cutDone) html += '<div class="cell cut" aria-hidden="true"></div>';
+    if (!cutDone) html += '<div class="shard-cut" aria-hidden="true"></div>';
     var o = D.oracle, call = D.call || {};
     // shift_cap is read from qubic/core in the background and can be missing on
     // the very first answer after a restart; a missing cap is no reason to hide
     // the hour that is coming.
     if (o && o.next_at && (task.shift_cap == null || task.shift_limit < task.shift_cap)) {
       var mine = call.running && call.running.hour === o.next_hour ? call.running.call : null;
-      html += '<div class="col"><div class="cell pending" title="' + esc(t("pendTip", { from: dayHm(o.next_at - 3600), to: hm(o.next_at) })) + '">?</div>' +
+      html += '<div class="col"><div class="shard pending" title="' + esc(t("pendTip", { from: dayHm(o.next_at - 3600), to: hm(o.next_at) })) + '">' +
+        '<span class="gl">' + (mine == null ? "?" : GLYPH[mine]) + '</span><span class="num">' + esc(hm(o.next_at - 3600).slice(0, 2)) + "</span></div>" +
         markHtml({ call: mine }) + "</div>";
     }
     tape.innerHTML = html;
-    if (atEnd || firstDraw) wrap.scrollLeft = wrap.scrollWidth;
     firstDraw = false;
   }
+
 
   function renderNext() {
     renderCall();
@@ -815,8 +889,23 @@ body { background: var(--bg); }
     hours.forEach(function (h) { (byEp[h.epoch] = byEp[h.epoch] || []).push(h); });
     var sums = {};
     ((rec && rec.epochs) || []).forEach(function (e) { sums[e.epoch] = e; });
-    var html = "";
-    Object.keys(byEp).map(Number).sort(function (a, b) { return b - a; }).forEach(function (ep) {
+    // One shard per epoch: filled as far as its 168 live hours were recorded,
+    // the hit rate underneath once calls were judged.
+    var rates = {};
+    ((D.stats && D.stats.epochs) || []).forEach(function (e) { rates[e.epoch] = e; });
+    var eps = Object.keys(byEp).map(Number).sort(function (a, b) { return a - b; });
+    var html = '<div class="shards ep-shards">';
+    eps.forEach(function (ep, i) {
+      var e = sums[ep] || { hours: byEp[ep].length, ups: 0, filled: 0 }, r = rates[ep];
+      var pct = Math.max(6, Math.round(100 * Math.min(1, e.hours / 168)));
+      var rateTxt = r && r.rate != null ? Math.round(r.rate * 100) + "%" : "–";
+      html += '<div class="col"><div class="shard acc' + (i === eps.length - 1 ? " newest" : "") + '" style="animation-delay:' + (i * 45) + 'ms" title="' +
+        esc(t("recShardTip", { ep: ep, n: fmtInt(e.hours), hits: r ? fmtInt(r.hits) : "0", calls: r ? fmtInt(r.calls) : "0" })) + '">' +
+        '<div class="fill" style="height:' + pct + '%"></div><span class="num">' + ep + "</span></div>" +
+        '<div class="shard-sub">' + rateTxt + "</div></div>";
+    });
+    html += "</div>";
+    eps.slice().reverse().forEach(function (ep) {
       var list = byEp[ep], e = sums[ep] || { hours: list.length, ups: 0, filled: 0 };
       var upPct = e.hours ? Math.round(100 * e.ups / e.hours) : 0;
       html += '<div class="ep"><div class="ep-head"><b>' + esc(t("recEpoch", { ep: ep })) + "</b><span>" +
