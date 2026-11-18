@@ -71,8 +71,8 @@ body { background: var(--bg); }
 .page { position: relative; z-index: 1; max-width: var(--content-width); margin: 0 auto; padding: 22px var(--gutter) 40px; }
 @media (max-width: 700px) { .page { padding: 16px var(--gutter-mobile) 32px; } }
 
-.hero-title { font-family: var(--display); font-size: clamp(26px, 4.4vw, 40px); margin: 6px 0 6px; letter-spacing: -.01em; }
-.hero-sub { color: var(--muted); margin: 0 0 18px; line-height: 1.5; }
+.hero-title { font-family: var(--display); font-size: clamp(26px, 4.4vw, 40px); margin: 4px 0 4px; letter-spacing: -.01em; }
+.hero-sub { color: var(--muted); margin: 0 0 8px; line-height: 1.45; font-size: 14px; }
 
 .card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -215,7 +215,7 @@ body { background: var(--bg); }
 
 .note { font-size: 13px; color: var(--faint); line-height: 1.5; margin: 8px 0 0; }
 .empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
-.status { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+.status { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
 .status.bad { color: var(--warn); }
 
 /* ── Loading: until the first node answer, every place data will land shows a
@@ -326,27 +326,6 @@ body { background: var(--bg); }
     </div>
   </div>
 
-  <!-- ── Colony pulse ─────────────────────────────────────────────────── -->
-  <section class="card">
-    <h2 data-i18n="pulseTitle">Colony pulse</h2>
-    <p class="desc" data-i18n="pulseDesc">Mining solutions per tick, live from the tick stream. Each one is a network that beat its parent; the node logs whether it was accepted and how many errors it made over the year-long frame.</p>
-    <div class="pulse" id="pulse" role="img" aria-label="Accepted solutions per tick"></div>
-    <div class="pulse-meta" id="pulse-meta"><span data-i18n="pulseWait">Waiting for ticks …</span></div>
-  </section>
-
-  <!-- ── The tape ─────────────────────────────────────────────────────── -->
-  <section class="card">
-    <h2 data-i18n="tapeTitle">Hour by hour</h2>
-    <p class="desc" data-i18n="tapeDesc">Each cell is one hour: ▲ closed level or higher than the hour before (in whole USDT), ▼ lower. Pale: the last hours of the year-long frame the epoch started with. Bright: hours stored live during this epoch — the ones the colony could not know in advance. Dashed: the hour still to come.</p>
-    <div class="tape-wrap" id="tape-wrap"><div class="tape" id="tape"></div></div>
-    <div class="tape-legend">
-      <span><i class="u"></i><span data-i18n="lgUp">▲ up or level</span></span>
-      <span><i class="d"></i><span data-i18n="lgDown">▼ down</span></span>
-      <span><i class="f"></i><span data-i18n="lgFrame">frame (known at epoch start)</span></span>
-      <span><i class="p"></i><span data-i18n="lgPending">next hour</span></span>
-    </div>
-  </section>
-
   <!-- ── The next hour, and the colony's call for it ─────────────────── -->
   <section class="card" id="now-card">
     <div class="now-grid">
@@ -376,6 +355,27 @@ body { background: var(--bg); }
         <div class="now-meta"><span id="call-meta"></span>
           <a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_PREDICTION.de.md" target="_blank" rel="noreferrer" data-i18n="callConcept">How the call is made (concept, German) →</a></div>
       </div>
+    </div>
+  </section>
+
+  <!-- ── Colony pulse ─────────────────────────────────────────────────── -->
+  <section class="card">
+    <h2 data-i18n="pulseTitle">Colony pulse</h2>
+    <p class="desc" data-i18n="pulseDesc">Mining solutions per tick, live from the tick stream. Each one is a network that beat its parent; the node logs whether it was accepted and how many errors it made over the year-long frame.</p>
+    <div class="pulse" id="pulse" role="img" aria-label="Accepted solutions per tick"></div>
+    <div class="pulse-meta" id="pulse-meta"><span data-i18n="pulseWait">Waiting for ticks …</span></div>
+  </section>
+
+  <!-- ── The tape ─────────────────────────────────────────────────────── -->
+  <section class="card">
+    <h2 data-i18n="tapeTitle">Hour by hour</h2>
+    <p class="desc" data-i18n="tapeDesc">Each cell is one hour: ▲ closed level or higher than the hour before (in whole USDT), ▼ lower. Pale: the last hours of the year-long frame the epoch started with. Bright: hours stored live during this epoch — the ones the colony could not know in advance. Dashed: the hour still to come.</p>
+    <div class="tape-wrap" id="tape-wrap"><div class="tape" id="tape"></div></div>
+    <div class="tape-legend">
+      <span><i class="u"></i><span data-i18n="lgUp">▲ up or level</span></span>
+      <span><i class="d"></i><span data-i18n="lgDown">▼ down</span></span>
+      <span><i class="f"></i><span data-i18n="lgFrame">frame (known at epoch start)</span></span>
+      <span><i class="p"></i><span data-i18n="lgPending">next hour</span></span>
     </div>
   </section>
 
