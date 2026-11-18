@@ -411,6 +411,7 @@ body { background: var(--bg); }
       rLineage: "Part of the best network's lineage is missing from the tick logs.",
       rAnchor: "No node served the tick data a rebuild needs; retried every minute.",
       rOther: "No call for this hour (tracker: {s}).",
+      rFailed: "The replayer stopped on this server; no call until it runs again.",
       kLive: "Live hours", kLiveS: "of {cap} possible this epoch",
       kDir: "Direction so far", kDirS: "of the live hours",
       kOracle: "Oracle", kOracleS: "{fail} failed now · {filled} filled · node-local counters",
@@ -474,6 +475,7 @@ body { background: var(--bg); }
       rLineage: "Ein Teil der Linie des besten Netzes fehlt in den Tick-Logs.",
       rAnchor: "Keine Node lieferte die Tick-Daten für den Nachbau; neuer Versuch jede Minute.",
       rOther: "Kein Tipp für diese Stunde (Tracker: {s}).",
+      rFailed: "Der Nachbau ist auf diesem Server abgebrochen; kein Tipp, bis er wieder läuft.",
       kLive: "Live-Stunden", kLiveS: "von {cap} möglichen in dieser Epoche",
       kDir: "Richtung bisher", kDirS: "der Live-Stunden",
       kOracle: "Oracle", kOracleS: "{fail} Fehlversuche gerade · {filled} aufgefüllt · Zähler der Node",
@@ -628,7 +630,7 @@ body { background: var(--bg); }
 
   var REASON = { "no-tracker": "rNoTracker", "no-replayer": "rNoReplayer", "catching-up": "rCatchingUp",
     "mismatch": "rMismatch", "no-solutions": "rNoSolutions", "lineage-incomplete": "rLineage",
-    "anchor-unavailable": "rAnchor" };
+    "anchor-unavailable": "rAnchor", "replayer-failed": "rFailed" };
   function renderCall() {
     var c = (D && D.call) || {}, g = $("call-glyph");
     if (c.available) {

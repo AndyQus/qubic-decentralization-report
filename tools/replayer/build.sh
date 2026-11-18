@@ -25,6 +25,10 @@ sed -e 's|#include "../src/mining/score_common.h"|#include "platform_shim.h"|' \
     -e 's|#include "../src/mining/task_file.h"||' \
     "$C/test/score_bpp9000_reference.h" > "$WORK/score_bpp9000_reference.h"
 cp "$HERE/replay_bpp9000.cpp" "$HERE/platform_shim.h" "$WORK/"
+# Two builds: AVX2 (~15 s per walk) and plain x86-64 (~22 s) for hosts without
+# AVX2, where the first would die on an illegal instruction. qdr/colony.py picks
+# by /proc/cpuinfo. Both reproduce the reference values above.
 "${CXX:-clang++-18}" -std=c++20 -O3 -mavx -mavx2 -static -I"$WORK" "$WORK/replay_bpp9000.cpp" -o "${OUT:-$HERE/replay}"
+"${CXX:-clang++-18}" -std=c++20 -O3 -march=x86-64 -static -I"$WORK" "$WORK/replay_bpp9000.cpp" -o "${OUT:-$HERE/replay}-portable"
 rm -rf "$WORK"
 echo "built ${OUT:-$HERE/replay} from qubic/core $TAG"

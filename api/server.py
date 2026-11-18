@@ -689,6 +689,7 @@ _COLONY_REASONS = {
     "no-solutions": "No accepted mining solution yet this epoch.",
     "lineage-incomplete": "Part of the best network's lineage is missing from the logs.",
     "anchor-unavailable": "No node served the tick data a rebuild needs; retried every minute.",
+    "replayer-failed": "The replayer stopped; see tracker_detail (exit code, CPU, memory limit).",
 }
 
 
@@ -766,7 +767,9 @@ def _current_call(store, view: dict, next_hour) -> dict:
     state = status.get("state") or "no-tracker"
     return {"available": False, "reason": state,
             "detail": _COLONY_REASONS.get(state, "The ingest worker has not reported on the colony yet."),
-            "network": network, "tracker_updated_at": status.get("updated_at")}
+            "network": network, "tracker_updated_at": status.get("updated_at"),
+            "tracker_detail": {k: status.get(k) for k in ("detail", "replayer", "cpu_avx2", "memory_limit_mb")
+                               if status.get(k) is not None} or None}
 
 
 # The stored mining history. Sampling is the ingest worker's job; this only

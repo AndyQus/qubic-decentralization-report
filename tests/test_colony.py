@@ -271,3 +271,14 @@ def test_the_summary_is_small_and_wordy(client):
     assert s["last"][-1] == {"from": s["last"][-1]["to"] - 3600, "to": s["last"][-1]["to"],
                              "dir": "up", "call": "up", "hit": True}
     assert len(client.get("/v1/btc/summary").content) < 3000
+
+
+def test_a_dying_replayer_is_reported_with_its_reasons(live):
+    class Dying(FakeReplayer):
+        def walk(self, *a, **k):
+            raise colony.ReplayerError("replayer exited (code -4)")
+
+    st = colony.Tracker(live, Dying({})).step(object(), ["x"])
+    assert st["state"] == "replayer-failed" and "code -4" in st["detail"]
+    assert "cpu_avx2" in st and "memory_limit_mb" in st
+    assert live.btc_calls() == []

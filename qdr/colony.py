@@ -46,7 +46,43 @@ ROOT = (0, 0xFFFFFFFF)
 ACCEPTED = (0, 1)
 CUSTOM_LOG_TYPE = 255
 
-REPLAYER = os.environ.get("QDR_REPLAYER", "/usr/local/bin/qdr-replay")
+def cpu_has_avx2() -> Optional[bool]:
+    try:
+        with open("/proc/cpuinfo", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if line.startswith("flags"):
+                    return " avx2" in line
+    except OSError:
+        return None
+    return None
+
+
+def memory_limit_bytes() -> Optional[int]:
+    """The container's memory limit (cgroup v2 or v1), None when unlimited/unknown."""
+    for path in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+        try:
+            raw = open(path, encoding="utf-8").read().strip()
+        except OSError:
+            continue
+        if raw.isdigit() and int(raw) < (1 << 60):
+            return int(raw)
+        return None
+    return None
+
+
+def pick_replayer() -> str:
+    """QDR_REPLAYER if set; else the AVX2 build where the CPU has AVX2, the
+    portable build where it does not (an AVX2 binary dies on SIGILL there)."""
+    env = os.environ.get("QDR_REPLAYER")
+    if env:
+        return env
+    fast, portable = "/usr/local/bin/qdr-replay", "/usr/local/bin/qdr-replay-portable"
+    if cpu_has_avx2() is False and os.path.isfile(portable):
+        return portable
+    return fast
+
+
+REPLAYER = pick_replayer()
 SCAN_CHUNK_TICKS = 500
 SCAN_MAX_CALLS = int(os.environ.get("QDR_COLONY_SCAN_CALLS", "40"))
 # Walks per tracker step: ~11 s each, so a step stays a few minutes and the
@@ -184,13 +220,20 @@ class Replayer:
         assert self.proc and self.proc.stdout
         out = self.proc.stdout.readline()
         if not out:
-            raise ReplayerError("replayer exited")
+            # Say why: -4 is SIGILL (CPU lacks an instruction), -9 SIGKILL (usually
+            # the container's memory limit -- the pool alone is 512 MB).
+            try:
+                rc = self.proc.wait(timeout=5)
+                err = (self.proc.stderr.read() or "")[-300:] if self.proc.stderr else ""
+            except Exception:
+                rc, err = None, ""
+            raise ReplayerError(f"replayer exited (code {rc}) {err}".strip())
         return out.rstrip("\n")
 
     def start(self, seed: str) -> None:
         self.close()
         self.proc = subprocess.Popen([self.path], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                     text=True, bufsize=1)
+                                     stderr=subprocess.PIPE, text=True, bufsize=1)
         self._send(f"seed {seed}")
         if self._read() != "ok seed":
             raise ReplayerError("seed rejected")
@@ -261,7 +304,15 @@ class Tracker:
 
     def step(self, bob, peers: list[str]) -> dict:
         with self.lock:
-            return self._step(bob, peers)
+            try:
+                return self._step(bob, peers)
+            except ReplayerError as e:
+                self.rep.close()
+                self.verified = None
+                mem = memory_limit_bytes()
+                return self.status(state="replayer-failed", detail=str(e)[:300],
+                                   replayer=self.rep.path, cpu_avx2=cpu_has_avx2(),
+                                   memory_limit_mb=round(mem / 2 ** 20) if mem else None)
 
     def _step(self, bob, peers: list[str]) -> dict:
         from qdr import antnode

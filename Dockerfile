@@ -25,7 +25,7 @@ ENV PYTHONUNBUFFERED=1 \
     DATA_DIR=/data \
     PORT=8000
 
-COPY --from=replayer /qdr-replay /usr/local/bin/qdr-replay
+COPY --from=replayer /qdr-replay /qdr-replay-portable /usr/local/bin/
 COPY --from=build /wheels /wheels
 COPY requirements.txt .
 RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt \
