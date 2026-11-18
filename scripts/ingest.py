@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import threading
 import time
@@ -78,6 +79,47 @@ def start_mining_sampler(store: Store, interval: int) -> threading.Thread:
             time.sleep(max(1.0, interval - (time.time() - started)))
 
     t = threading.Thread(target=loop, name="mining-sampler", daemon=True)
+    t.start()
+    return t
+
+
+def start_colony_tracker(store: Store, interval: int) -> threading.Thread:
+    """Follow the ant colony's best network and record its call for the next BTC hour.
+
+    qdr/colony.py rebuilds the networks from public data with the replayer that
+    ships in the image (tools/replayer). It runs on its own thread because a step
+    can take minutes (~11 s per rebuilt walk), and nothing else must wait on it.
+    Without the replayer -- a plain local checkout -- it records why and idles.
+    """
+    from qdr import antnode, colony
+    from qdr.bob import BobClient
+    from qdr.tickstream import bob_urls
+
+    tracker = colony.Tracker(store)
+
+    def loop() -> None:
+        while True:
+            started = time.time()
+            try:
+                peers = antnode.fetch_peers()
+                state = None
+                for url in bob_urls():
+                    try:
+                        state = tracker.step(BobClient(url=url, timeout=60), peers)
+                    except Exception as e:      # this Bob node failed: try the next
+                        state = {"state": "error", "detail": str(e)[:200]}
+                        continue
+                    if state.get("state") != "error":
+                        break
+                if state and state.get("state") not in ("tracking", "catching-up"):
+                    print(f"[colony] {state.get('state')}: {state.get('detail', '')}", file=sys.stderr)
+                elif state and state.get("call") and state["call"].get("new"):
+                    print(f"[colony] call for hour {state['call']['hour']}: {state['call']['call']}")
+            except Exception as e:
+                print(f"[colony] step failed: {e}", file=sys.stderr)
+            time.sleep(max(5.0, interval - (time.time() - started)))
+
+    t = threading.Thread(target=loop, name="colony-tracker", daemon=True)
     t.start()
     return t
 
@@ -269,6 +311,10 @@ def main() -> int:
                          f"(default {pipeline.MINING_SAMPLE_INTERVAL_S})")
     ap.add_argument("--no-mining", action="store_true",
                     help="with --watch: do not sample mining state")
+    ap.add_argument("--no-colony", action="store_true",
+                    help="with --watch: do not rebuild the colony's networks for its BTC calls")
+    ap.add_argument("--colony-interval", type=int, default=60,
+                    help="with --watch: seconds between colony tracker steps (default 60)")
     ap.add_argument("--price-sample", action="store_true",
                     help="take one market sample into the store and exit")
     ap.add_argument("--price-status", action="store_true",
@@ -575,6 +621,9 @@ def main() -> int:
         if not args.no_mining:
             start_mining_sampler(store, args.mining_interval)
             print(f"           mining state sampled every {args.mining_interval}s")
+        if not args.no_colony and os.environ.get("QDR_COLONY", "1") != "0":
+            start_colony_tracker(store, args.colony_interval)
+            print(f"           colony calls tracked every {args.colony_interval}s")
         if not args.no_price:
             start_price_sampler(client, store, args.price_interval)
             print(f"           market price polled every {args.price_interval}s "

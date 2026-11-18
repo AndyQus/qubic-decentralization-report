@@ -229,6 +229,8 @@ def api_index():
             # it is not secret, so the endpoint is indexed like any other.
             "/v1/mining",
             "/v1/mining/series",
+            "/v1/btc",
+            "/v1/btc/summary",
             "/v1/ticks/stream",
             "/v1/ticks/recent",
             "/v1/ticks/{tick}",
@@ -500,11 +502,22 @@ def mining():
     """What the mining algorithm is doing right now, straight off a Qubic node.
 
     None of this exists on the public RPC: the ant-colony queries live on the
-    peer-to-peer port (21841). All three reads used here are unsigned and public.
+    peer-to-peer port (21841). Every read used here is unsigned and public.
+
+    Since epoch 240 the task is the live BTC feed (qdr/antask.py): `task` says
+    how far it has grown (`shift_limit`) and whether its targets hash to the
+    node's `dataHash`. The hour-by-hour view is /v1/btc.
 
     `next_refresh_in` tells the page when this server will actually go back to a
     node, so a live view can count down to real new data instead of polling blind.
     """
+    out = dict(_mining_bundle())
+    out.pop("btc", None)
+    return out
+
+
+def _mining_bundle() -> dict:
+    """The cached node read behind /v1/mining and /v1/btc, refreshed every MINING_TTL_S."""
     import time as _t
     now = _t.time()
     cached = _mining_cache["data"]
@@ -573,6 +586,187 @@ def mining():
     out = dict(data)
     out["next_refresh_in"] = round(MINING_TTL_S)
     return out
+
+
+# -- BTC feed ----------------------------------------------------------------
+# The hours the ant colony is graded on, and the colony's call for each
+# (docs/CONCEPT_BTC_PREDICTION.de.md). Live part from the same cached node read
+# as /v1/mining; calls, verdicts and the record of earlier hours from the store,
+# which the ingest worker fills (qdr/colony.py rebuilds the networks). Direction
+# only: no price leaves this server (tests/test_btc.py pins that).
+@app.get("/v1/btc", tags=["service"], summary="The live BTC hours, the colony's calls and their hit rate")
+def btc(compact: bool = Query(False, description="Only the epoch's live hours, the current call "
+                                                  "and the headline rates -- for the ticks "
+                                                  "terminal's one-line summary.")):
+    """Hourly BTC direction as the network's task holds it, and how the colony called it.
+
+    `hours` ends with the epoch's live hours (`live: true`), stored on-chain
+    through the Price oracle since the epoch began, each with the colony's `call`
+    and `hit` when one was recorded; before them, the last hours of the year-long
+    first frame. `call` is the colony's call for the hour still to come: the
+    output of the best network, rebuilt from public data and checked against the
+    error the node logged, written down before the hour existed. Until there is
+    one it says why. `stats` are hit rates over the last 6 and 24 hours, per day
+    and per epoch, each beside what "always up" and "same as the hour before"
+    would have scored on the same hours. `record` is every live hour kept.
+    """
+    import time as _t
+
+    store = get_store()
+    now = int(_t.time())
+    view = _btc_calls_view(store, now)
+    record = None if compact else {"epochs": store.btc_epochs(),
+                                   "hours": _with_calls(store.btc_hours(limit=BTC_RECORD_HOURS), view)}
+    try:
+        data = _mining_bundle()
+    except HTTPException:
+        data = None
+    if not data or data.get("status") != "live":
+        return {"status": "unavailable", "reason": (data or {}).get("reason") or "no node answered",
+                "record": record, "call": _current_call(store, view, None),
+                "stats": view["stats"] if not compact else _headline(view["stats"])}
+    task = data.get("task") or {}
+    btc_part = data.get("btc") or {}
+    hours = [h for h in btc_part.get("hours") or [] if h.get("live") or not compact]
+    return {
+        "status": "live",
+        "stale": bool(data.get("stale")),
+        "fetched_at": data.get("fetched_at"),
+        "next_refresh_in": data.get("next_refresh_in"),
+        "epoch": data.get("epoch"),
+        "node": {"ip": (data.get("node") or {}).get("ip")},
+        "task": {k: task.get(k) for k in (
+            "hash_verified", "data_hash", "source_ref", "window_width", "shift_limit",
+            "shift_cap", "advance_threshold", "base_hour", "base_at", "anchor_tick")},
+        "oracle": task.get("oracle"),
+        "colony": data.get("colony"),
+        "hours": _with_calls(hours, view),
+        "call": _current_call(store, view, (task.get("oracle") or {}).get("next_hour")),
+        "stats": _headline(view["stats"]) if compact else view["stats"],
+        "record": record,
+    }
+
+
+@app.get("/v1/btc/summary", tags=["service"], summary="The colony's BTC calls in a few lines")
+def btc_summary():
+    """Everything a small screen needs, nothing more: the next hour and its call,
+    the last twelve hours with direction, call and verdict, and the hit rates.
+
+    Directions are words (`up`, `down`, `unsure`), times are unix seconds of the
+    hour's start and end. Made for e-ink readers and widgets; CORS is open.
+    """
+    full = btc(compact=False)
+    hours = [h for h in (full.get("hours") or []) if h.get("live")]
+    word = {0: "down", 1: "up", 2: "unsure"}
+    last = [{"from": h["at"] - 3600, "to": h["at"], "dir": "up" if h["up"] else "down",
+             "call": word.get(h.get("call")) if h.get("call") is not None else None,
+             "hit": h.get("hit")} for h in hours[-12:]]
+    call = full.get("call") or {}
+    nxt = None
+    oracle = full.get("oracle") or {}
+    if oracle.get("next_at"):
+        nxt = {"from": oracle["next_at"] - 3600, "to": oracle["next_at"], "due_at": oracle.get("next_due_at"),
+               "call": word.get(call.get("call")) if call.get("available") else None}
+    stats = full.get("stats") or {}
+    return {
+        "status": full.get("status"),
+        "epoch": (full.get("epoch") or {}).get("epoch"),
+        "updated_at": full.get("fetched_at"),
+        "next": nxt,
+        "call_status": call.get("reason") if not call.get("available") else "available",
+        "last": last,
+        "rates": {k: stats.get(k) for k in ("h6", "h24", "today", "epoch")},
+        "coin_toss": 0.5,
+    }
+
+
+# Four epochs of live hours at most; an epoch adds up to 168.
+BTC_RECORD_HOURS = 4 * 168
+_COLONY_REASONS = {
+    "no-replayer": "The replayer that rebuilds the colony's networks is not installed here.",
+    "catching-up": "The best network's lineage is still being rebuilt; its first call follows.",
+    "mismatch": "A rebuilt network did not reproduce the error the node logged, so no call is shown.",
+    "no-solutions": "No accepted mining solution yet this epoch.",
+    "lineage-incomplete": "Part of the best network's lineage is missing from the logs.",
+    "anchor-unavailable": "No node served the tick data a rebuild needs; retried every minute.",
+}
+
+
+def _btc_calls_view(store, now: int) -> dict:
+    from qdr import antask, colony
+
+    judged = colony.judge(store.btc_calls())
+    by_hour = {c["hour"]: c for c in judged}
+    hours = store.btc_hours()
+
+    def block(cs):
+        out = colony.rate(cs)
+        out["baselines"] = colony.baselines(hours, cs)
+        return out
+
+    def at(c):
+        return antask.hour_at(c["hour"])
+
+    days: dict = {}
+    for c in judged:
+        days.setdefault(_t_day(at(c) - 3600), []).append(c)
+    epochs: dict = {}
+    for c in judged:
+        epochs.setdefault(int(c["epoch"]), []).append(c)
+    latest_epoch = max(epochs) if epochs else None
+    today = _t_day(now)
+    stats = {
+        "h6": block([c for c in judged if at(c) > now - 6 * 3600]),
+        "h24": block([c for c in judged if at(c) > now - 24 * 3600]),
+        "today": block(days.get(today, [])),
+        "epoch": block(epochs.get(latest_epoch, [])) if latest_epoch else colony.rate([]),
+        "days": [dict(block(v), day=k) for k, v in sorted(days.items())][-14:],
+        "epochs": [dict(block(v), epoch=k) for k, v in sorted(epochs.items())],
+        "coin_toss": 0.5,
+    }
+    return {"by_hour": by_hour, "stats": stats}
+
+
+def _t_day(ts: int) -> str:
+    import datetime as _dt
+    return _dt.datetime.fromtimestamp(int(ts), _dt.timezone.utc).strftime("%Y-%m-%d")
+
+
+def _headline(stats: dict) -> dict:
+    return {k: stats.get(k) for k in ("h6", "h24", "today", "epoch", "coin_toss")}
+
+
+def _with_calls(hours: list, view: dict) -> list:
+    out = []
+    for h in hours:
+        c = view["by_hour"].get(h["hour"])
+        row = dict(h)
+        if c is not None:
+            row["call"] = int(c["call"])
+            # Stored record rows are live hours by definition and carry no flag.
+            if row.get("live", True):
+                row["hit"] = int(c["call"]) == int(bool(h["up"]))
+        out.append(row)
+    return out
+
+
+def _current_call(store, view: dict, next_hour) -> dict:
+    status = store.colony_status() or {}
+    c = view["by_hour"].get(int(next_hour)) if next_hour else None
+    network = None
+    if status.get("network"):
+        n = status["network"]
+        network = {"tick": n.get("tick"), "index": n.get("tx_index"), "identity_key": n.get("pubkey"),
+                   "error": n.get("error"), "shift": n.get("shift")}
+    if c is not None:
+        return {"available": True, "hour": c["hour"], "call": int(c["call"]), "made_at": c["made_at"],
+                "network": {"tick": c["net_tick"], "index": c["net_index"], "identity_key": c["pubkey"],
+                            "error": c["net_error"], "shift": c["net_shift"]},
+                "tracker": status.get("state")}
+    state = status.get("state") or "no-tracker"
+    return {"available": False, "reason": state,
+            "detail": _COLONY_REASONS.get(state, "The ingest worker has not reported on the colony yet."),
+            "network": network, "tracker_updated_at": status.get("updated_at")}
 
 
 # The stored mining history. Sampling is the ingest worker's job; this only

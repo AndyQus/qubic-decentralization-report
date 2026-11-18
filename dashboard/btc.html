@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Colony vs Bitcoin — Qubic Report</title>
+<meta name="description" content="Since epoch 240 Qubic's mining is graded on the real hourly direction of Bitcoin, stored on-chain through the Price oracle. Every hour as it arrives, and what the ant colony does with it." />
+
+<link rel="icon" type="image/svg+xml" href="./assets/icon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
+<link rel="icon" type="image/x-icon" href="./assets/favicon.ico" sizes="48x48" />
+<link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
+<link rel="manifest" href="./assets/manifest.webmanifest" />
+<meta name="theme-color" content="#0d1117" />
+<meta name="apple-mobile-web-app-title" content="Qubic Report" />
+<meta name="application-name" content="Qubic Report" />
+
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Qubic Report" />
+<meta property="og:locale" content="en_US" />
+<meta property="og:title" content="Colony vs Bitcoin — the hours Qubic's miners are graded on" />
+<meta property="og:description" content="Every hour the network stores Bitcoin's direction on-chain; the ant colony has to match it. Live, hour by hour." />
+<meta property="og:url" content="https://report.qubic.tools/dashboard/btc.html" />
+<meta property="og:image" content="https://report.qubic.tools/dashboard/assets/og-image-en.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Qubic Report — decentralization, burned supply, price and mining" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Colony vs Bitcoin — the hours Qubic's miners are graded on" />
+<meta name="twitter:description" content="Bitcoin's hourly direction, stored on-chain by Qubic's Price oracle, and the colony mining against it." />
+<meta name="twitter:image" content="https://report.qubic.tools/dashboard/assets/og-image-en.png" />
+
+<!--
+  dashboard/btc.html — Kolonie gegen Bitcoin.
+
+  Seit Epoche 240 wird das Mining (BPP-9000) an der echten stündlichen Richtung
+  des Bitcoin-Kurses gemessen, die die Nodes über Qubics Preis-Oracle on-chain
+  speichern. Diese Seite zeigt jede Stunde, sobald sie im Netz ist.
+
+  Datenquellen: GET /v1/btc (Stunden, Oracle, Kolonie, Aufzeichnung),
+  GET /v1/ticks/recent (Kolonie-Puls). Konzept: docs/CONCEPT_BTC_PREDICTION.de.md.
+
+  Nur Richtungen, keine Kurse: Die Kurse stammen von Binance, und dieses Projekt
+  verbreitet keine Börsendaten weiter. Der Tipp der Kolonie für die nächste
+  Stunde wird erst gezeigt, wenn er aus öffentlichen Daten lesbar ist — bis
+  dahin sagt die Seite, warum er fehlt. Nichts hier ist geschätzt.
+-->
+
+<link rel="stylesheet" href="./theme.css?v=6388e666">
+
+<style>
+/* Up and down: the same pair as the mining page's target bars (1 = accent,
+   0 = violet), stepped for dark mode so both sit in the validated lightness
+   band. Every cell also carries ▲/▼ — direction is never colour alone. */
+:root {
+  --up:    #0369a1;
+  --down:  #7e6fff;
+  --cell-ink: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --up: #1597b8; --down: #7e6fff; }
+}
+:root[data-theme="dark"] { --up: #1597b8; --down: #7e6fff; }
+
+body { background: var(--bg); }
+#ants {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 0; opacity: .55;
+}
+.page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 22px var(--gutter) 40px; }
+@media (max-width: 700px) { .page { padding: 16px var(--gutter-mobile) 32px; } }
+
+.hero-title { font-family: var(--display); font-size: clamp(26px, 4.4vw, 40px); margin: 6px 0 6px; letter-spacing: -.01em; }
+.hero-sub { color: var(--muted); max-width: 820px; margin: 0 0 18px; line-height: 1.5; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); backdrop-filter: var(--card-blur); -webkit-backdrop-filter: var(--card-blur);
+  padding: 18px 20px; margin-bottom: 16px;
+}
+.card h2 { font-family: var(--display); font-size: 18px; margin: 0 0 4px; }
+.card .desc { color: var(--muted); font-size: 14px; margin: 0 0 14px; line-height: 1.5; }
+
+/* ── Next hour + call ─────────────────────────────────────────────── */
+.now-grid { display: grid; grid-template-columns: 220px 1fr; gap: 22px; align-items: center; }
+@media (max-width: 760px) { .now-grid { grid-template-columns: 1fr; justify-items: center; } }
+.ring { position: relative; width: 200px; height: 200px; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring .track { fill: none; stroke: var(--border-strong); stroke-width: 10; }
+.ring .prog { fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.ring.waiting .prog { stroke: var(--warn); }
+.ring-in { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.ring-in .big { font-family: var(--mono); font-size: 32px; font-weight: 700; }
+.ring-in .small { font-size: 12px; color: var(--muted); max-width: 140px; }
+.ring.waiting .big { animation: blink 1.6s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .45; } }
+
+.next-label { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.next-hour { font-family: var(--display); font-size: 24px; margin: 2px 0 10px; }
+.call {
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 12px 14px;
+  display: flex; gap: 14px; align-items: flex-start;
+}
+.call .q {
+  flex: 0 0 auto; width: 46px; height: 46px; border-radius: 10px; display: grid; place-items: center;
+  font-size: 26px; font-weight: 700; color: var(--faint); border: 2px solid var(--border-strong);
+}
+.call b { display: block; margin-bottom: 2px; }
+.call p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.call a { color: var(--accent); }
+.call .q.up   { background: var(--up);   color: var(--cell-ink); border-color: transparent; }
+.call .q.down { background: var(--down); color: var(--cell-ink); border-color: transparent; }
+.call .q.unsure { color: var(--warn); border-color: var(--warn); }
+.call .verdict { font-family: var(--display); font-size: 20px; margin: 2px 0 6px; }
+.call .meta { font-size: 12px; color: var(--faint); margin-top: 6px; }
+
+/* ── Hit rate table ────────────────────────────────────────────────── */
+.hits { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.hits th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase;
+  letter-spacing: .04em; padding: 6px 8px; border-bottom: 1px solid var(--border-strong); }
+.hits td { padding: 7px 8px; border-bottom: 1px solid var(--border); font-family: var(--mono); }
+.hits td:first-child { font-family: var(--sans); }
+.hits tr.sub td:first-child { padding-left: 22px; color: var(--muted); }
+.hits tr.group td { font-family: var(--sans); color: var(--muted); font-size: 12px; text-transform: uppercase;
+  letter-spacing: .05em; padding-top: 14px; border-bottom: 0; }
+.rate { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+.rate .rb { position: relative; flex: 1; height: 8px; border-radius: 4px; background: var(--border-strong); }
+.rate .rb i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--accent); }
+.rate .rb b { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--text); opacity: .55; }
+.hits-wrap { overflow-x: auto; }
+
+/* ── KPI tiles ─────────────────────────────────────────────────────── */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+@media (max-width: 860px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
+.kpi .l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.kpi .v { font-family: var(--mono); font-size: 24px; font-weight: 700; margin-top: 4px; }
+.kpi .s { font-size: 12px; color: var(--faint); margin-top: 2px; }
+.bar { height: 6px; border-radius: 3px; background: var(--border-strong); margin-top: 8px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .8s ease; }
+
+/* ── The tape ──────────────────────────────────────────────────────── */
+.tape-wrap { overflow-x: auto; padding: 4px 2px 10px; scrollbar-width: thin; }
+.tape { display: flex; gap: 2px; align-items: flex-end; min-height: 92px; }
+.cell {
+  flex: 0 0 auto; width: 22px; height: 38px; border-radius: 4px; display: grid; place-items: center;
+  font-size: 11px; color: var(--cell-ink); position: relative; cursor: default;
+}
+.cell.up   { background: var(--up); }
+.cell.down { background: var(--down); }
+.cell.frame { opacity: .38; height: 30px; }
+.cell.live { height: 46px; box-shadow: 0 0 0 2px var(--bg); }
+.cell.filled::after { content: ""; position: absolute; inset: 0; border-radius: 4px;
+  background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(255,255,255,.35) 3px 5px); }
+.cell.pending {
+  height: 46px; background: transparent; border: 2px dashed var(--border-strong); color: var(--muted);
+  animation: pend 2.2s ease-in-out infinite;
+}
+@keyframes pend { 50% { border-color: var(--accent); color: var(--accent); } }
+.cell.arrive { animation: flip .9s cubic-bezier(.2,.8,.2,1); }
+@keyframes flip { 0% { transform: rotateY(90deg) scale(.6); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.cell.cut { width: 2px; height: 56px; background: var(--accent); border-radius: 1px; opacity: .8; }
+.col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; }
+.mark { height: 14px; font-size: 11px; line-height: 14px; color: var(--faint); }
+.mark.hit { color: var(--success); font-weight: 700; }
+.mark.miss { color: var(--danger); font-weight: 700; }
+.mark.call { color: var(--text); }
+.tape-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.tape-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+.tape-legend i.u { background: var(--up); } .tape-legend i.d { background: var(--down); }
+.tape-legend i.f { background: var(--up); opacity: .38; }
+.tape-legend i.p { border: 2px dashed var(--border-strong); }
+
+/* ── Colony pulse ──────────────────────────────────────────────────── */
+.pulse { display: flex; gap: 2px; align-items: flex-end; height: 60px; border-bottom: 1px solid var(--border-strong); }
+.pulse i { flex: 1 1 0; min-width: 2px; background: var(--accent); border-radius: 2px 2px 0 0; opacity: .85; }
+.pulse i.rej { background: var(--faint); }
+.pulse-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+.pulse-meta b { color: var(--text); font-family: var(--mono); }
+
+/* ── Record: one week per epoch, day × hour ────────────────────────── */
+.ep { margin-bottom: 16px; }
+.ep-head { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; margin-bottom: 6px; }
+.ep-head b { font-family: var(--display); font-size: 15px; }
+.ep-head span { color: var(--muted); font-size: 13px; }
+.week { display: grid; grid-template-columns: 54px repeat(24, minmax(10px, 1fr)); gap: 2px; font-size: 10.5px; }
+.week .d { color: var(--faint); align-self: center; white-space: nowrap; }
+.week .h { color: var(--faint); text-align: center; }
+.week .c { height: 16px; border-radius: 3px; display: grid; place-items: center; color: var(--cell-ink); font-size: 8px; }
+.week .c.up { background: var(--up); } .week .c.down { background: var(--down); }
+.week .c.none { background: transparent; border: 1px solid var(--border); }
+.week .c.hit  { box-shadow: inset 0 0 0 2px var(--success); }
+.week .c.miss { box-shadow: inset 0 0 0 2px var(--danger); }
+
+.note { font-size: 13px; color: var(--faint); line-height: 1.5; margin: 8px 0 0; }
+.empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
+.status { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+.status.bad { color: var(--warn); }
+
+@media (prefers-reduced-motion: reduce) {
+  #ants { display: none; }
+  .cell.arrive, .cell.pending, .ring.waiting .big { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="ants" aria-hidden="true"></canvas>
+
+<header class="top qs-header" id="hdr">
+  <div class="top-inner qs-header-inner">
+    <div class="brand">
+      <div class="logo qs-logo" aria-hidden="true"></div>
+      <div>
+        <h1 data-i18n="pageTitle">Colony vs Bitcoin</h1>
+        <div class="sub"><span data-i18n="subtitle">BPP-9000 live · Qubic Report</span></div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <button class="qs-icon-btn qs-burger" id="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">☰</button>
+    <div class="controls">
+      <nav class="qs-nav" id="site-nav" aria-label="Sections">
+        <a class="how-link qs-link" href="./" data-i18n="navReport">Report</a>
+        <a class="how-link qs-link" href="./burn.html" data-i18n="burnReport">Burn</a>
+        <a class="how-link qs-link" href="./price.html" data-i18n="priceReport">Price</a>
+        <a class="how-link qs-link" href="./mining.html" data-i18n="miningLive">Mining</a>
+        <a class="how-link qs-link" href="./ticks.html" data-i18n="ticksLive">Ticks</a>
+        <a class="how-link qs-link" href="./btc.html" aria-current="page" data-i18n="btcLive">BTC</a>
+      </nav>
+      <div class="qs-seg" id="lang-seg">
+        <button data-lang="en">EN</button><button data-lang="de">DE</button>
+      </div>
+      <button class="qs-icon-btn" id="theme-btn" title="Theme" aria-label="Theme">🌙</button>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  <h2 class="hero-title" data-i18n="heroTitle">Colony vs Bitcoin</h2>
+  <p class="hero-sub" data-i18n="heroSub">Since epoch 240 Qubic's mining is graded on the real direction of Bitcoin: every hour the nodes store the BTC/USDT price on-chain through Qubic's Price oracle, and the ant colony searches for networks whose output matches up and down. Here is every hour as it arrives.</p>
+  <p class="status" id="status" data-i18n="loading">Reading from a Qubic node …</p>
+
+  <!-- ── The next hour, and the colony's call for it ─────────────────── -->
+  <section class="card" id="now-card">
+    <div class="now-grid">
+      <div class="ring" id="ring">
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="track" cx="100" cy="100" r="88" />
+          <circle class="prog" id="ring-prog" cx="100" cy="100" r="88" stroke-dasharray="552.9" stroke-dashoffset="552.9" />
+        </svg>
+        <div class="ring-in">
+          <div class="big" id="ring-big">–:––</div>
+          <div class="small" id="ring-small"></div>
+        </div>
+      </div>
+      <div>
+        <div class="next-label" data-i18n="nextLabel">Next hour on the network</div>
+        <div class="next-hour" id="next-hour">–</div>
+        <div class="call">
+          <div class="q" id="call-glyph" aria-hidden="true">?</div>
+          <div>
+            <b data-i18n="callTitle">The colony's call for this hour</b>
+            <div class="verdict" id="call-verdict"></div>
+            <p id="call-text"></p>
+            <div class="meta" id="call-meta"></div>
+            <p><a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_PREDICTION.de.md" target="_blank" rel="noreferrer" data-i18n="callConcept">How the call is made (concept, German) →</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Key figures ──────────────────────────────────────────────────── -->
+  <div class="kpis">
+    <div class="kpi">
+      <div class="l" data-i18n="kLive">Live hours</div>
+      <div class="v" id="k-live">–</div>
+      <div class="s" id="k-live-s"></div>
+      <div class="bar"><i id="k-live-bar"></i></div>
+    </div>
+    <div class="kpi">
+      <div class="l" data-i18n="kDir">Direction so far</div>
+      <div class="v" id="k-dir">–</div>
+      <div class="s" id="k-dir-s"></div>
+    </div>
+    <div class="kpi">
+      <div class="l" data-i18n="kOracle">Oracle</div>
+      <div class="v" id="k-oracle">–</div>
+      <div class="s" id="k-oracle-s"></div>
+    </div>
+    <div class="kpi">
+      <div class="l" data-i18n="kColony">Colony</div>
+      <div class="v" id="k-colony">–</div>
+      <div class="s" id="k-colony-s"></div>
+    </div>
+  </div>
+
+  <!-- ── The tape ─────────────────────────────────────────────────────── -->
+  <section class="card">
+    <h2 data-i18n="tapeTitle">Hour by hour</h2>
+    <p class="desc" data-i18n="tapeDesc">Each cell is one hour: ▲ closed level or higher than the hour before (in whole USDT), ▼ lower. Pale: the last hours of the year-long frame the epoch started with. Bright: hours stored live during this epoch — the ones the colony could not know in advance. Dashed: the hour still to come.</p>
+    <div class="tape-wrap" id="tape-wrap"><div class="tape" id="tape"></div></div>
+    <div class="tape-legend">
+      <span><i class="u"></i><span data-i18n="lgUp">▲ up or level</span></span>
+      <span><i class="d"></i><span data-i18n="lgDown">▼ down</span></span>
+      <span><i class="f"></i><span data-i18n="lgFrame">frame (known at epoch start)</span></span>
+      <span><i class="p"></i><span data-i18n="lgPending">next hour</span></span>
+    </div>
+  </section>
+
+  <!-- ── Colony pulse ─────────────────────────────────────────────────── -->
+  <section class="card">
+    <h2 data-i18n="pulseTitle">Colony pulse</h2>
+    <p class="desc" data-i18n="pulseDesc">Mining solutions per tick, live from the tick stream. Each one is a network that beat its parent; the node logs whether it was accepted and how many errors it made over the year-long frame.</p>
+    <div class="pulse" id="pulse" role="img" aria-label="Accepted solutions per tick"></div>
+    <div class="pulse-meta" id="pulse-meta"><span data-i18n="pulseWait">Waiting for ticks …</span></div>
+  </section>
+
+  <!-- ── Track record ─────────────────────────────────────────────────── -->
+  <section class="card">
+    <h2 data-i18n="recTitle">Record</h2>
+    <p class="desc" data-i18n="recDesc">Every live hour this server has recorded, one week per epoch (one row per day, one column per hour of the day, UTC). A node only answers for the running epoch, so the record starts with this server's first reading — earlier hours are not filled in afterwards.</p>
+    <div id="record"><div class="empty" data-i18n="recEmpty">No hour recorded yet.</div></div>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="hitTitle">Hit rate</h2>
+    <p class="desc" data-i18n="hitDesc">How often the colony's call matched the hour, against 50 % for a coin toss. It appears once calls can be read; a call counts only if it was fixed before its hour arrived.</p>
+    <div id="hit-box"><div class="empty" data-i18n="hitEmpty">No call has been judged yet.</div></div>
+  </section>
+
+  <p class="note" data-i18n="footNote">Directions only, no prices: the prices come from Binance via Qubic's Price oracle, and this report does not republish exchange data. Times in your local time zone. Not investment advice — a research experiment of the Qubic network.</p>
+</main>
+
+<footer class="qs-footer">
+  <div class="fdisc">
+    <b data-i18n="discLabel">Disclaimer:</b>
+    <span data-i18n="discBeta">This page is currently in beta status.</span>
+    <span data-i18n="discData">All data is read live from Qubic nodes and the tick stream; nothing on this page is estimated.</span>
+    <span data-i18n="discNoGuarantee">We do not guarantee the completeness, accuracy, or availability of the data.</span>
+    <b data-i18n="discDemo">Use it for analysis purposes only — not as a basis for investment decisions.</b>
+  </div>
+  <div class="fbar">
+    <div class="fleft">
+      <span class="flogo" aria-hidden="true"></span>
+      <span>&copy; <span id="foot-year">2026</span> <span data-i18n="sponsored">Qubic – Sponsored by AndyQus</span></span>
+    </div>
+    <div class="flinks">
+      <a href="./how-it-works.html" data-i18n="howItWorks">How it works</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://qubic.org" target="_blank" rel="noreferrer">Qubic.org</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://github.com/AndyQus/qubic-decentralization-report"
+         target="_blank" rel="noreferrer">GitHub</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://qubic.org/terms-of-service" target="_blank" rel="noreferrer" data-i18n="tos">Terms of Service</a>
+      <span class="fsep">&#x2022;</span>
+      <a href="https://qubic.org/privacy-policy" target="_blank" rel="noreferrer" data-i18n="privacy">Privacy Policy</a>
+    </div>
+    <div class="fright fright-wrap">
+      <span><span data-i18n="codeVersion">code</span> v.<code id="code-ver">–</code> (BETA)</span>
+      <button class="fwake" id="wake-btn" type="button" aria-pressed="false" hidden><span class="wdot" aria-hidden="true"></span><span class="wtext">Screen stays on</span></button>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var root = document.documentElement;
+  var params = new URLSearchParams(location.search);
+  function $(id) { return document.getElementById(id); }
+  function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function safeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function esc(s) {
+    return (s == null ? "" : String(s)).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  /* ── i18n ─────────────────────────────────────────────────────────── */
+  var LS_LANG = "qdr.lang";
+  var I18N = {
+    en: {
+      navReport: "Report", burnReport: "Burn", priceReport: "Price", miningLive: "Mining",
+      ticksLive: "Ticks", btcLive: "BTC", howItWorks: "How it works",
+      pageTitle: "Colony vs Bitcoin", subtitle: "BPP-9000 live · Qubic Report",
+      heroTitle: "Colony vs Bitcoin",
+      heroSub: "Since epoch 240 Qubic's mining is graded on the real direction of Bitcoin: every hour the nodes store the BTC/USDT price on-chain through Qubic's Price oracle, and the ant colony searches for networks whose output matches up and down. Here is every hour as it arrives.",
+      loading: "Reading from a Qubic node …",
+      live: "Live from node {ip} · epoch {ep} · checked: the targets hash to the node's own data hash.",
+      unverified: "Live from node {ip} · epoch {ep} · the targets could not be checked against the node's data hash yet — figures withheld.",
+      stale: "The node did not answer just now; showing the last reading.",
+      unavailable: "No Qubic node answered. The record below is what this server stored earlier.",
+      noApi: "This page was opened as a file and has no API. Open it through the server.",
+      nextLabel: "Next hour on the network",
+      nextHour: "{from} – {to}",
+      ringDue: "earliest on the network", ringWait: "due — the oracle is being asked", ringLate: "overdue · {n} failed attempts",
+      callTitle: "The colony's call for this hour",
+      callConcept: "How the call is made (concept, German) →",
+      callUp: "▲ up or level", callDown: "▼ down", callUnsure: "? unsure",
+      callText: "The output of the colony's best network for this hour. The network was rebuilt from public data with qubic/core's own reference scorer and reproduces the error the node logged; the call was fixed before the hour existed on-chain.",
+      callMeta: "fixed {t} · network in tick {tick} · {err} errors over the year frame · shift {shift}",
+      callNone: "No call yet",
+      rNoTracker: "The ingest worker has not reported on the colony yet.",
+      rNoReplayer: "The replayer that rebuilds the colony's networks is not installed on this server.",
+      rCatchingUp: "The best network's lineage is still being rebuilt, one solution after the other; its call follows.",
+      rMismatch: "A rebuilt network did not reproduce the error the node logged — so no call is shown rather than a wrong one.",
+      rNoSolutions: "No accepted mining solution yet this epoch.",
+      rLineage: "Part of the best network's lineage is missing from the tick logs.",
+      rAnchor: "No node served the tick data a rebuild needs; retried every minute.",
+      rOther: "No call for this hour (tracker: {s}).",
+      kLive: "Live hours", kLiveS: "of {cap} possible this epoch",
+      kDir: "Direction so far", kDirS: "of the live hours",
+      kOracle: "Oracle", kOracleS: "{fail} failed now · {filled} filled · node-local counters",
+      kOracleOk: "on time", kOracleBusy: "asking", kOracleLate: "retrying",
+      kColony: "Colony", kColonyS: "solutions · threshold {th} errors",
+      tapeTitle: "Hour by hour",
+      tapeDesc: "Each cell is one hour: ▲ closed level or higher than the hour before (in whole USDT), ▼ lower. Pale: the last hours of the year-long frame the epoch started with. Bright: hours stored live during this epoch — the ones the colony could not know in advance. Dashed: the hour still to come. Below each live hour: the colony's call, ✓ when it matched, ✗ when not.",
+      lgUp: "▲ up or level", lgDown: "▼ down", lgFrame: "frame (known at epoch start)", lgPending: "next hour",
+      cellTip: "{from} – {to} · {dir}", cellLive: "stored live in tick {tick}", cellFrame: "part of the frame", cellFilled: "oracle failed for 24 h, previous price reused (counts as ▲)",
+      dirUp: "▲ up or level", dirDown: "▼ down", pendTip: "{from} – {to} · not on the network yet",
+      pulseTitle: "Colony pulse",
+      pulseDesc: "Mining solutions per tick, live from the tick stream. Each one is a network that beat its parent; the node logs whether it was accepted and how many errors it made over the year-long frame.",
+      pulseWait: "Waiting for ticks …",
+      pulseMeta: "last {n} ticks: {ok} accepted · {bad} rejected · lowest error {best}",
+      pulseNone: "last {n} ticks: no solution — the miners may still be switching to the live task",
+      recTitle: "Record",
+      recDesc: "Every live hour this server has recorded, one week per epoch (one row per day, one column per hour of the day, UTC). A node only answers for the running epoch, so the record starts with this server's first reading — earlier hours are not filled in afterwards.",
+      recEmpty: "No hour recorded yet.",
+      recEpoch: "Epoch {ep}", recSum: "{n} hours · {up} % ▲ · {filled} filled",
+      hitTitle: "Hit rate",
+      hPeriod: "Period", hCalls: "Calls", hHits: "Hits", hRate: "Hit rate", hAlways: "always ▲", hRepeat: "as hour before",
+      hH6: "last 6 hours", hH24: "last 24 hours", hToday: "today (UTC)", hEpoch: "this epoch",
+      hDays: "per day (UTC)", hEpochs: "per epoch", hEpochN: "epoch {ep}",
+      hNote: "The bar's line marks 50 % — a coin toss. \"always ▲\" and \"as hour before\" are what two naive rules scored on the same hours. \"?\" calls count as misses, as in the scorer.",
+      markHit: "hit", markMiss: "miss",
+      hitDesc: "How often the colony's call matched the hour. Only calls fixed before their hour arrived are counted, and each is judged against the direction the network itself stored.",
+      hitEmpty: "No call has been judged yet. The first verdict comes one hour after the first call.",
+      footNote: "Directions only, no prices: the prices come from Binance via Qubic's Price oracle, and this report does not republish exchange data. Times in your local time zone. Not investment advice — a research experiment of the Qubic network.",
+      discLabel: "Disclaimer:", discBeta: "This page is currently in beta status.",
+      discData: "All data is read live from Qubic nodes and the tick stream; nothing on this page is estimated.",
+      discNoGuarantee: "We do not guarantee the completeness, accuracy, or availability of the data.",
+      discDemo: "Use it for analysis purposes only — not as a basis for investment decisions.",
+      sponsored: "Qubic – Sponsored by AndyQus", tos: "Terms of Service", privacy: "Privacy Policy", codeVersion: "code"
+    },
+    de: {
+      navReport: "Report", burnReport: "Burn", priceReport: "Kurs", miningLive: "Mining",
+      ticksLive: "Ticks", btcLive: "BTC", howItWorks: "So funktioniert's",
+      pageTitle: "Kolonie gegen Bitcoin", subtitle: "BPP-9000 live · Qubic Report",
+      heroTitle: "Kolonie gegen Bitcoin",
+      heroSub: "Seit Epoche 240 wird Qubics Mining an der echten Richtung von Bitcoin gemessen: Jede Stunde speichern die Nodes den BTC/USDT-Kurs über Qubics Preis-Oracle on-chain, und die Ameisenkolonie sucht Netze, deren Ausgabe das Rauf und Runter trifft. Hier ist jede Stunde, sobald sie eintrifft.",
+      loading: "Lese von einem Qubic-Node …",
+      live: "Live von Node {ip} · Epoche {ep} · geprüft: Die Ziele ergeben den Daten-Hash der Node.",
+      unverified: "Live von Node {ip} · Epoche {ep} · die Ziele ließen sich noch nicht gegen den Daten-Hash der Node prüfen — keine Zahlen angezeigt.",
+      stale: "Die Node hat gerade nicht geantwortet; angezeigt wird die letzte Messung.",
+      unavailable: "Kein Qubic-Node hat geantwortet. Unten steht, was dieser Server früher aufgezeichnet hat.",
+      noApi: "Diese Seite wurde als Datei geöffnet und hat keine API. Öffne sie über den Server.",
+      nextLabel: "Nächste Stunde im Netz",
+      nextHour: "{from} – {to}",
+      ringDue: "frühestens im Netz", ringWait: "fällig — das Oracle wird gefragt", ringLate: "überfällig · {n} Fehlversuche",
+      callTitle: "Der Tipp der Kolonie für diese Stunde",
+      callConcept: "Wie der Tipp entsteht (Konzept) →",
+      callUp: "▲ rauf oder gleich", callDown: "▼ runter", callUnsure: "? unsicher",
+      callText: "Die Ausgabe des besten Netzes der Kolonie für diese Stunde. Das Netz wurde aus öffentlichen Daten mit dem Referenz-Scorer von qubic/core nachgebaut und trifft den Fehler, den die Node protokolliert hat; der Tipp stand fest, bevor die Stunde on-chain existierte.",
+      callMeta: "festgelegt {t} · Netz aus Tick {tick} · {err} Fehler über den Jahresrahmen · Shift {shift}",
+      callNone: "Noch kein Tipp",
+      rNoTracker: "Der Worker hat zur Kolonie noch nichts gemeldet.",
+      rNoReplayer: "Der Nachbau der Netze ist auf diesem Server nicht installiert.",
+      rCatchingUp: "Die Linie des besten Netzes wird noch nachgebaut, eine Lösung nach der anderen; sein Tipp folgt.",
+      rMismatch: "Ein nachgebautes Netz hat den protokollierten Fehler nicht getroffen — deshalb lieber kein Tipp als ein falscher.",
+      rNoSolutions: "In dieser Epoche gibt es noch keine angenommene Mining-Lösung.",
+      rLineage: "Ein Teil der Linie des besten Netzes fehlt in den Tick-Logs.",
+      rAnchor: "Keine Node lieferte die Tick-Daten für den Nachbau; neuer Versuch jede Minute.",
+      rOther: "Kein Tipp für diese Stunde (Tracker: {s}).",
+      kLive: "Live-Stunden", kLiveS: "von {cap} möglichen in dieser Epoche",
+      kDir: "Richtung bisher", kDirS: "der Live-Stunden",
+      kOracle: "Oracle", kOracleS: "{fail} Fehlversuche gerade · {filled} aufgefüllt · Zähler der Node",
+      kOracleOk: "pünktlich", kOracleBusy: "fragt", kOracleLate: "wiederholt",
+      kColony: "Kolonie", kColonyS: "Lösungen · Schwelle {th} Fehler",
+      tapeTitle: "Stunde für Stunde",
+      tapeDesc: "Jede Zelle ist eine Stunde: ▲ gleich oder höher geschlossen als die Stunde davor (in ganzen USDT), ▼ tiefer. Blass: die letzten Stunden des Jahresrahmens, mit dem die Epoche begann. Kräftig: Stunden, die während dieser Epoche live gespeichert wurden — die die Kolonie vorher nicht kennen konnte. Gestrichelt: die Stunde, die noch kommt. Unter jeder Live-Stunde: der Tipp der Kolonie, ✓ wenn er traf, ✗ wenn nicht.",
+      lgUp: "▲ rauf oder gleich", lgDown: "▼ runter", lgFrame: "Rahmen (bei Epochenstart bekannt)", lgPending: "nächste Stunde",
+      cellTip: "{from} – {to} · {dir}", cellLive: "live gespeichert in Tick {tick}", cellFrame: "Teil des Rahmens", cellFilled: "Oracle 24 h ausgefallen, Vorstundenkurs übernommen (zählt als ▲)",
+      dirUp: "▲ rauf oder gleich", dirDown: "▼ runter", pendTip: "{from} – {to} · noch nicht im Netz",
+      pulseTitle: "Kolonie-Puls",
+      pulseDesc: "Mining-Lösungen pro Tick, live aus dem Tick-Stream. Jede ist ein Netz, das seinen Elternknoten geschlagen hat; die Node protokolliert, ob es angenommen wurde und wie viele Fehler es über den Jahresrahmen gemacht hat.",
+      pulseWait: "Warte auf Ticks …",
+      pulseMeta: "letzte {n} Ticks: {ok} angenommen · {bad} abgelehnt · geringster Fehler {best}",
+      pulseNone: "letzte {n} Ticks: keine Lösung — die Miner stellen womöglich noch auf die Live-Aufgabe um",
+      recTitle: "Aufzeichnung",
+      recDesc: "Jede Live-Stunde, die dieser Server aufgezeichnet hat, eine Woche je Epoche (eine Zeile je Tag, eine Spalte je Stunde des Tages, UTC). Eine Node antwortet nur für die laufende Epoche; die Aufzeichnung beginnt deshalb mit der ersten Messung dieses Servers — frühere Stunden werden nicht nachgetragen.",
+      recEmpty: "Noch keine Stunde aufgezeichnet.",
+      recEpoch: "Epoche {ep}", recSum: "{n} Stunden · {up} % ▲ · {filled} aufgefüllt",
+      hitTitle: "Trefferquote",
+      hPeriod: "Zeitraum", hCalls: "Tipps", hHits: "Treffer", hRate: "Quote", hAlways: "immer ▲", hRepeat: "wie Vorstunde",
+      hH6: "letzte 6 Stunden", hH24: "letzte 24 Stunden", hToday: "heute (UTC)", hEpoch: "diese Epoche",
+      hDays: "pro Tag (UTC)", hEpochs: "pro Epoche", hEpochN: "Epoche {ep}",
+      hNote: "Der Strich im Balken markiert 50 % — einen Münzwurf. „immer ▲“ und „wie Vorstunde“ zeigen, was zwei einfache Regeln auf denselben Stunden erreicht hätten. „?“-Tipps zählen wie im Scorer als Fehler.",
+      markHit: "Treffer", markMiss: "Fehler",
+      hitDesc: "Wie oft der Tipp der Kolonie die Stunde getroffen hat. Gezählt werden nur Tipps, die feststanden, bevor ihre Stunde eintraf; jeder wird an der Richtung gemessen, die das Netz selbst gespeichert hat.",
+      hitEmpty: "Noch kein Tipp ausgewertet. Das erste Urteil kommt eine Stunde nach dem ersten Tipp.",
+      footNote: "Nur Richtungen, keine Kurse: Die Kurse stammen von Binance über Qubics Preis-Oracle, und dieser Report verbreitet keine Börsendaten weiter. Zeiten in deiner Ortszeit. Keine Anlageberatung — ein Forschungsexperiment des Qubic-Netzes.",
+      discLabel: "Hinweis:", discBeta: "Diese Seite befindet sich in der Beta-Phase.",
+      discData: "Alle Daten werden live von Qubic-Nodes und aus dem Tick-Stream gelesen; auf dieser Seite wird nichts geschätzt.",
+      discNoGuarantee: "Wir übernehmen keine Gewähr für Vollständigkeit, Richtigkeit oder Verfügbarkeit der Daten.",
+      discDemo: "Nur zu Analysezwecken — keine Grundlage für Anlageentscheidungen.",
+      sponsored: "Qubic – Sponsored by AndyQus", tos: "Nutzungsbedingungen", privacy: "Datenschutz", codeVersion: "Code"
+    }
+  };
+  var lang = params.get("lang") || safeGet(LS_LANG) || ((navigator.language || "").slice(0, 2) === "de" ? "de" : "en");
+  if (!I18N[lang]) lang = "en";
+  function t(k, vars) {
+    var s = (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
+    if (vars) Object.keys(vars).forEach(function (v) { s = s.split("{" + v + "}").join(vars[v]); });
+    return s;
+  }
+  function locale() { return lang === "de" ? "de-DE" : "en-US"; }
+  function fmtInt(n) { return n == null || isNaN(n) ? "–" : Number(n).toLocaleString(locale()); }
+  function hm(ts) { return new Date(ts * 1000).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }); }
+  function dayHm(ts) {
+    return new Date(ts * 1000).toLocaleString(locale(), { weekday: "short", day: "2-digit", month: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  }
+
+  /* ── API ──────────────────────────────────────────────────────────── */
+  var apiParam = params.get("api");
+  var servedOverHttp = location.protocol.indexOf("http") === 0;
+  var apiBase = apiParam !== null ? apiParam.replace(/\/$/, "") : (servedOverHttp ? "" : null);
+  function apiUrl(p) { return (apiBase || "") + p; }
+
+  var D = null;            // last /v1/btc answer
+  var shownLive = {};      // hours already drawn as live, so only new ones animate
+  var firstDraw = true;
+
+  /* ── Render ───────────────────────────────────────────────────────── */
+  function renderStatus() {
+    var el = $("status");
+    if (apiBase === null) { el.textContent = t("noApi"); el.className = "status bad"; return; }
+    if (!D) { el.textContent = t("loading"); el.className = "status"; return; }
+    if (D.status !== "live") { el.textContent = t("unavailable"); el.className = "status bad"; return; }
+    var ok = D.task && D.task.hash_verified === true;
+    var s = t(ok ? "live" : "unverified", { ip: (D.node && D.node.ip) || "–", ep: D.epoch ? D.epoch.epoch : "–" });
+    if (D.stale) s += " " + t("stale");
+    el.textContent = s;
+    el.className = "status" + (ok && !D.stale ? "" : " bad");
+  }
+
+  function liveHours() { return ((D && D.hours) || []).filter(function (h) { return h.live; }); }
+
+  function renderKpis() {
+    var task = (D && D.task) || {}, ok = task.hash_verified === true;
+    var live = liveHours();
+    $("k-live").textContent = ok ? fmtInt(task.shift_limit) : "–";
+    $("k-live-s").textContent = ok ? t("kLiveS", { cap: fmtInt(task.shift_cap) }) : "";
+    $("k-live-bar").style.width = ok && task.shift_cap ? (100 * task.shift_limit / task.shift_cap).toFixed(1) + "%" : "0";
+    var ups = live.filter(function (h) { return h.up; }).length;
+    $("k-dir").textContent = ok && live.length ? "▲" + ups + " ▼" + (live.length - ups) : "–";
+    $("k-dir-s").textContent = ok && live.length ? t("kDirS") : "";
+    var o = (D && D.oracle) || null;
+    if (o) {
+      $("k-oracle").textContent = o.failed_attempts > 0 ? t("kOracleLate") : (o.querying ? t("kOracleBusy") : t("kOracleOk"));
+      $("k-oracle-s").textContent = t("kOracleS", { fail: fmtInt(o.failed_attempts), filled: fmtInt(o.filled) });
+    }
+    var c = (D && D.colony) || null;
+    if (c) {
+      $("k-colony").textContent = fmtInt(c.solution_count);
+      $("k-colony-s").textContent = t("kColonyS", { th: fmtInt(c.threshold) });
+    }
+  }
+
+  function cellTitle(h) {
+    var from = dayHm(h.at - 3600), to = hm(h.at);
+    var s = t("cellTip", { from: from, to: to, dir: t(h.up ? "dirUp" : "dirDown") });
+    if (h.live) s += " · " + (h.append_tick ? t("cellLive", { tick: fmtInt(h.append_tick) }) : "");
+    else s += " · " + t("cellFrame");
+    if (h.filled) s += " · " + t("cellFilled");
+    return s;
+  }
+
+  var GLYPH = { 0: "▼", 1: "▲", 2: "?" };
+  function markHtml(h) {
+    if (h.call == null) return '<div class="mark">·</div>';
+    if (h.hit === true) return '<div class="mark hit" title="' + esc(t("markHit")) + '">' + GLYPH[h.call] + "✓</div>";
+    if (h.hit === false) return '<div class="mark miss" title="' + esc(t("markMiss")) + '">' + GLYPH[h.call] + "✗</div>";
+    return '<div class="mark call">' + GLYPH[h.call] + "</div>";
+  }
+
+  function renderTape() {
+    var tape = $("tape"), wrap = $("tape-wrap");
+    var task = (D && D.task) || {};
+    if (task.hash_verified !== true) { tape.innerHTML = ""; return; }
+    var atEnd = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 30;
+    var html = "", cutDone = false;
+    (D.hours || []).forEach(function (h) {
+      if (h.live && !cutDone) { html += '<div class="cell cut" aria-hidden="true"></div>'; cutDone = true; }
+      var cls = "cell " + (h.up ? "up" : "down") + (h.live ? " live" : " frame") + (h.filled ? " filled" : "");
+      if (h.live && !shownLive[h.hour] && !firstDraw) cls += " arrive";
+      if (h.live) shownLive[h.hour] = true;
+      var tip = cellTitle(h) + (h.call != null ? " · " + t(h.call === 1 ? "callUp" : h.call === 0 ? "callDown" : "callUnsure") +
+        (h.hit === true ? " ✓" : h.hit === false ? " ✗" : "") : "");
+      html += '<div class="col"><div class="' + cls + '" title="' + esc(tip) + '">' + (h.up ? "▲" : "▼") + "</div>" +
+        (h.live ? markHtml(h) : '<div class="mark"></div>') + "</div>";
+    });
+    if (!cutDone) html += '<div class="cell cut" aria-hidden="true"></div>';
+    var o = D.oracle, call = D.call || {};
+    // shift_cap is read from qubic/core in the background and can be missing on
+    // the very first answer after a restart; a missing cap is no reason to hide
+    // the hour that is coming.
+    if (o && o.next_at && (task.shift_cap == null || task.shift_limit < task.shift_cap)) {
+      var mine = call.available && call.hour === o.next_hour ? call.call : null;
+      html += '<div class="col"><div class="cell pending" title="' + esc(t("pendTip", { from: dayHm(o.next_at - 3600), to: hm(o.next_at) })) + '">?</div>' +
+        markHtml({ call: mine }) + "</div>";
+    }
+    tape.innerHTML = html;
+    if (atEnd || firstDraw) wrap.scrollLeft = wrap.scrollWidth;
+    firstDraw = false;
+  }
+
+  function renderNext() {
+    var o = D && D.oracle, task = (D && D.task) || {};
+    renderCall();
+    if (!o || !o.next_at || task.hash_verified !== true) { $("next-hour").textContent = "–"; return; }
+    $("next-hour").textContent = t("nextHour", { from: dayHm(o.next_at - 3600), to: hm(o.next_at) });
+    tickRing();
+  }
+
+  var REASON = { "no-tracker": "rNoTracker", "no-replayer": "rNoReplayer", "catching-up": "rCatchingUp",
+    "mismatch": "rMismatch", "no-solutions": "rNoSolutions", "lineage-incomplete": "rLineage",
+    "anchor-unavailable": "rAnchor" };
+  function renderCall() {
+    var c = (D && D.call) || {}, g = $("call-glyph");
+    if (c.available) {
+      g.textContent = GLYPH[c.call]; g.className = "q " + (c.call === 1 ? "up" : c.call === 0 ? "down" : "unsure");
+      $("call-verdict").textContent = t(c.call === 1 ? "callUp" : c.call === 0 ? "callDown" : "callUnsure");
+      $("call-text").textContent = t("callText");
+      var n = c.network || {};
+      $("call-meta").textContent = t("callMeta", { t: dayHm(c.made_at), tick: fmtInt(n.tick), err: fmtInt(n.error), shift: fmtInt(n.shift) });
+    } else {
+      g.textContent = "?"; g.className = "q";
+      $("call-verdict").textContent = t("callNone");
+      $("call-text").textContent = REASON[c.reason] ? t(REASON[c.reason]) : t("rOther", { s: c.reason || "–" });
+      $("call-meta").textContent = "";
+    }
+  }
+
+  function rateCell(r) {
+    if (!r || r.rate == null) return "<td>–</td>";
+    var pct = Math.round(r.rate * 1000) / 10;
+    return '<td><div class="rate"><div class="rb"><i style="width:' + pct + '%"></i><b></b></div><span>' +
+      pct.toLocaleString(locale()) + " %</span></div></td>";
+  }
+  function pctCell(v) { return "<td>" + (v == null ? "–" : (Math.round(v * 1000) / 10).toLocaleString(locale()) + " %") + "</td>"; }
+  function hitRow(label, r, cls) {
+    var b = (r && r.baselines) || {};
+    return '<tr class="' + (cls || "") + '"><td>' + esc(label) + "</td><td>" + fmtInt(r ? r.calls : 0) + "</td><td>" +
+      fmtInt(r ? r.hits : 0) + "</td>" + rateCell(r) + pctCell(b.always_up) + pctCell(b.repeat_last) + "</tr>";
+  }
+  function renderHits() {
+    var st = (D && D.stats) || null, box = $("hit-box");
+    var total = st && st.epochs ? st.epochs.reduce(function (a, e) { return a + (e.calls || 0); }, 0) : 0;
+    if (!st || !total) { box.innerHTML = '<div class="empty">' + esc(t("hitEmpty")) + "</div>"; return; }
+    var h = '<div class="hits-wrap"><table class="hits"><thead><tr><th>' + esc(t("hPeriod")) + "</th><th>" + esc(t("hCalls")) +
+      "</th><th>" + esc(t("hHits")) + "</th><th>" + esc(t("hRate")) + "</th><th>" + esc(t("hAlways")) + "</th><th>" +
+      esc(t("hRepeat")) + "</th></tr></thead><tbody>";
+    h += hitRow(t("hH6"), st.h6) + hitRow(t("hH24"), st.h24) + hitRow(t("hToday"), st.today) + hitRow(t("hEpoch"), st.epoch);
+    if ((st.days || []).length) {
+      h += '<tr class="group"><td colspan="6">' + esc(t("hDays")) + "</td></tr>";
+      st.days.slice().reverse().forEach(function (d) {
+        var label = new Date(d.day + "T00:00:00Z").toLocaleDateString(locale(), { weekday: "short", day: "2-digit", month: "2-digit", timeZone: "UTC" });
+        h += hitRow(label, d, "sub");
+      });
+    }
+    if ((st.epochs || []).length) {
+      h += '<tr class="group"><td colspan="6">' + esc(t("hEpochs")) + "</td></tr>";
+      st.epochs.slice().reverse().forEach(function (e) { h += hitRow(t("hEpochN", { ep: e.epoch }), e, "sub"); });
+    }
+    h += '</tbody></table></div><p class="note">' + esc(t("hNote")) + "</p>";
+    box.innerHTML = h;
+  }
+
+  var RING = 2 * Math.PI * 88;
+  function tickRing() {
+    var o = D && D.oracle;
+    var ring = $("ring");
+    if (!o || !o.next_due_at) return;
+    var now = Date.now() / 1000;
+    var left = o.next_due_at - now;
+    if (left > 0) {
+      var frac = Math.max(0, Math.min(1, 1 - left / 3600));
+      $("ring-prog").style.strokeDashoffset = (RING * (1 - frac)).toFixed(1);
+      var m = Math.floor(left / 60), s = Math.floor(left % 60);
+      $("ring-big").textContent = m + ":" + (s < 10 ? "0" : "") + s;
+      $("ring-small").textContent = t("ringDue") + " " + hm(o.next_due_at);
+      ring.classList.remove("waiting");
+    } else {
+      $("ring-prog").style.strokeDashoffset = "0";
+      $("ring-big").textContent = "…";
+      $("ring-small").textContent = o.failed_attempts > 0 ? t("ringLate", { n: fmtInt(o.failed_attempts) }) : t("ringWait");
+      ring.classList.add("waiting");
+    }
+  }
+
+  function renderRecord() {
+    var rec = D && D.record, box = $("record");
+    var hours = (rec && rec.hours) || [];
+    if (!hours.length) { box.innerHTML = '<div class="empty">' + esc(t("recEmpty")) + "</div>"; return; }
+    var byEp = {};
+    hours.forEach(function (h) { (byEp[h.epoch] = byEp[h.epoch] || []).push(h); });
+    var sums = {};
+    ((rec && rec.epochs) || []).forEach(function (e) { sums[e.epoch] = e; });
+    var html = "";
+    Object.keys(byEp).map(Number).sort(function (a, b) { return b - a; }).forEach(function (ep) {
+      var list = byEp[ep], e = sums[ep] || { hours: list.length, ups: 0, filled: 0 };
+      var upPct = e.hours ? Math.round(100 * e.ups / e.hours) : 0;
+      html += '<div class="ep"><div class="ep-head"><b>' + esc(t("recEpoch", { ep: ep })) + "</b><span>" +
+        esc(t("recSum", { n: fmtInt(e.hours), up: upPct, filled: fmtInt(e.filled) })) + "</span></div>";
+      // One row per UTC day the epoch's hours touch; the cell for hour h is the
+      // interval ending at h:00, drawn in the column of its start hour.
+      var DAY = 86400, byStart = {};
+      list.forEach(function (h) { byStart[h.hour] = h; });
+      var first = list[0].hour, last = list[list.length - 1].hour;
+      var startAt = (first - 1) * 3600 + HOUR_ZERO;
+      var dayFrom = Math.floor(startAt / DAY) * DAY;
+      var endAt = (last - 1) * 3600 + HOUR_ZERO;
+      html += '<div class="week"><div></div>';
+      for (var c = 0; c < 24; c++) html += '<div class="h">' + (c % 6 === 0 ? c : "") + "</div>";
+      for (var d = dayFrom; d <= endAt; d += DAY) {
+        html += '<div class="d">' + esc(new Date(d * 1000).toLocaleDateString(locale(), { weekday: "short", day: "2-digit", month: "2-digit", timeZone: "UTC" })) + "</div>";
+        for (var hh = 0; hh < 24; hh++) {
+          var hour = Math.round((d + hh * 3600 - HOUR_ZERO) / 3600) + 1;
+          var h = byStart[hour];
+          if (h) {
+            var verdict = h.hit === true ? " hit" : h.hit === false ? " miss" : "";
+            var ctip = cellTitle({ at: (h.hour) * 3600 + HOUR_ZERO, up: !!h.up, live: true, append_tick: h.append_tick, filled: !!h.filled }) +
+              (h.call != null ? " · " + t(h.call === 1 ? "callUp" : h.call === 0 ? "callDown" : "callUnsure") + (h.hit === true ? " ✓" : h.hit === false ? " ✗" : "") : "");
+            html += '<div class="c ' + (h.up ? "up" : "down") + verdict + '" title="' + esc(ctip) + '">' + (h.up ? "▲" : "▼") + "</div>";
+          }
+          else html += '<div class="c none"></div>';
+        }
+      }
+      html += "</div></div>";
+    });
+    box.innerHTML = html;
+  }
+  var HOUR_ZERO = 1649851200;   // hour 0 = 2022-04-13 12:00 UTC (qubic/core doc 2.3a)
+
+  function renderAll() {
+    renderStatus();
+    if (!D) return;
+    renderKpis(); renderNext(); renderTape(); renderRecord(); renderHits();
+  }
+
+  function load() {
+    if (apiBase === null) { renderStatus(); return; }
+    fetch(apiUrl("/v1/btc"), { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (d) { D = d; Ants.activity(d.colony && d.colony.delta_per_min); }
+        renderAll();
+      })
+      .catch(function () { renderStatus(); });
+  }
+
+  /* ── Colony pulse: per-tick solutions from the tick relay ───────────── */
+  var Pulse = {
+    after: null, ticks: [], max: 90, timer: null,
+    start: function () {
+      if (apiBase === null || this.timer) return;
+      var self = this;
+      this.poll();
+      this.timer = setInterval(function () { self.poll(); }, 4000);
+    },
+    stop: function () { clearInterval(this.timer); this.timer = null; },
+    poll: function () {
+      var self = this;
+      var q = "/v1/ticks/recent?limit=120" + (self.after ? "&after=" + self.after : "");
+      fetch(apiUrl(q), { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          var list = (d && d.ticks) || [];
+          list.forEach(function (s) {
+            if (s.bare || s.solutions == null) return;
+            if (self.after && s.tick <= self.after) return;
+            self.ticks.push({ tick: s.tick, n: s.solutions || 0,
+              ok: s.sol_ok != null ? s.sol_ok : (s.solutions || 0), best: s.sol_best });
+            self.after = Math.max(self.after || 0, s.tick);
+          });
+          if (self.ticks.length > self.max) self.ticks = self.ticks.slice(-self.max);
+          self.render();
+        })
+        .catch(function () {});
+    },
+    render: function () {
+      var el = $("pulse"), meta = $("pulse-meta");
+      if (!this.ticks.length) return;
+      var peak = 1, ok = 0, bad = 0, best = null;
+      this.ticks.forEach(function (x) {
+        peak = Math.max(peak, x.n); ok += x.ok; bad += x.n - x.ok;
+        if (x.best != null && (best == null || x.best < best)) best = x.best;
+      });
+      var html = "";
+      this.ticks.forEach(function (x) {
+        var hOk = x.ok ? Math.max(3, 60 * x.ok / peak) : 0, hBad = x.n - x.ok ? Math.max(2, 60 * (x.n - x.ok) / peak) : 0;
+        var tip = "Tick " + fmtInt(x.tick) + " · ⛏ " + fmtInt(x.ok) + (x.n - x.ok ? " ✗ " + fmtInt(x.n - x.ok) : "");
+        html += '<i title="' + esc(tip) + '" style="height:' + hOk.toFixed(1) + 'px"></i>';
+        if (hBad) html += '<i class="rej" title="' + esc(tip) + '" style="height:' + hBad.toFixed(1) + 'px"></i>';
+      });
+      el.innerHTML = html;
+      var n = this.ticks.length;
+      meta.textContent = ok + bad
+        ? t("pulseMeta", { n: fmtInt(n), ok: fmtInt(ok), bad: fmtInt(bad), best: best == null ? "–" : fmtInt(best) })
+        : t("pulseNone", { n: fmtInt(n) });
+    }
+  };
+
+  /* ── Background: the colony at work ────────────────────────────────
+     Ants drift right, towards the hour still to come. Their speed follows the
+     colony's measured solutions per minute (from the node read), so a quiet
+     colony walks and a busy one runs. Purely decorative; off with reduced motion. */
+  var Ants = {
+    cv: null, cx: null, w: 0, h: 0, ants: [], speed: 0.25, target: 0.25, raf: 0, last: 0,
+    init: function () {
+      if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      this.cv = $("ants"); this.cx = this.cv.getContext("2d");
+      this.resize(); var self = this;
+      window.addEventListener("resize", function () { self.resize(); }, { passive: true });
+      for (var i = 0; i < 70; i++) this.ants.push(this.spawn(true));
+      this.raf = requestAnimationFrame(function (ts) { self.frame(ts); });
+    },
+    resize: function () {
+      var dpr = Math.min(2, window.devicePixelRatio || 1);
+      this.w = innerWidth; this.h = innerHeight;
+      this.cv.width = this.w * dpr; this.cv.height = this.h * dpr;
+      this.cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    },
+    spawn: function (anywhere) {
+      return { x: anywhere ? Math.random() * this.w : -10, y: Math.random() * this.h,
+               v: 0.6 + Math.random() * 0.8, ph: Math.random() * 6.28, up: Math.random() < 0.5 };
+    },
+    activity: function (perMin) {
+      // 0 solutions/min → a slow walk; a busy colony (thousands/min) → about 6× faster.
+      var a = perMin > 0 ? Math.log10(1 + perMin) : 0;
+      this.target = 0.25 + Math.min(1.5, a * 0.4);
+    },
+    frame: function (ts) {
+      var self = this, dt = Math.min(50, ts - (this.last || ts)); this.last = ts;
+      this.speed += (this.target - this.speed) * 0.02;
+      var cx = this.cx, cs = getComputedStyle(root);
+      var up = cs.getPropertyValue("--up").trim() || "#1597b8", down = cs.getPropertyValue("--down").trim() || "#7e6fff";
+      cx.clearRect(0, 0, this.w, this.h);
+      this.ants.forEach(function (a, i) {
+        a.ph += dt * 0.006 * a.v;
+        a.x += dt * 0.03 * a.v * self.speed;
+        a.y += Math.sin(a.ph) * 0.15;
+        if (a.x > self.w + 10) self.ants[i] = self.spawn(false);
+        cx.fillStyle = a.up ? up : down;
+        cx.globalAlpha = 0.35;
+        cx.beginPath(); cx.ellipse(a.x, a.y, 3.2, 1.6, 0, 0, 6.283); cx.fill();
+        cx.beginPath(); cx.arc(a.x + 3.6, a.y, 1.3, 0, 6.283); cx.fill();
+      });
+      cx.globalAlpha = 1;
+      if (!document.hidden) this.raf = requestAnimationFrame(function (t2) { self.frame(t2); });
+    }
+  };
+
+  /* ── Wiring ───────────────────────────────────────────────────────── */
+  function applyLang() {
+    root.setAttribute("lang", lang);
+    document.querySelectorAll("[data-i18n]").forEach(function (el) { el.textContent = t(el.getAttribute("data-i18n")); });
+    document.querySelectorAll("#lang-seg button").forEach(function (b) { b.classList.toggle("active", b.dataset.lang === lang); });
+    document.title = t("pageTitle") + " — Qubic Report";
+    renderAll(); Pulse.render();
+  }
+  document.querySelectorAll("#lang-seg button").forEach(function (b) {
+    b.addEventListener("click", function () { lang = b.dataset.lang; safeSet(LS_LANG, lang); applyLang(); });
+  });
+
+  var LS_THEME = "qdr.theme";
+  var theme = safeGet(LS_THEME) || "dark";
+  function applyTheme(th) { root.setAttribute("data-theme", th); $("theme-btn").textContent = th === "dark" ? "🌙" : "☀️"; }
+  applyTheme(theme);
+  $("theme-btn").addEventListener("click", function () {
+    theme = theme === "dark" ? "light" : "dark"; safeSet(LS_THEME, theme); applyTheme(theme);
+  });
+
+  (function initNav() {
+    var toggle = $("nav-toggle"), nav = $("site-nav");
+    if (!toggle || !nav) return;
+    function setOpen(open) { nav.classList.toggle("open", open); toggle.setAttribute("aria-expanded", open ? "true" : "false"); }
+    toggle.addEventListener("click", function (e) { e.stopPropagation(); setOpen(!nav.classList.contains("open")); });
+    document.addEventListener("click", function (e) { if (nav.classList.contains("open") && !nav.contains(e.target)) setOpen(false); });
+    window.addEventListener("resize", function () { if (window.innerWidth > 860) setOpen(false); }, { passive: true });
+  })();
+
+  var loadTimer = null, ringTimer = null;
+  function startTimers() {
+    if (!loadTimer) loadTimer = setInterval(load, 30000);
+    if (!ringTimer) ringTimer = setInterval(function () {
+      tickRing();
+      // Past the due time the next hour can land any moment: look a little more often.
+      var o = D && D.oracle;
+      if (o && o.next_due_at && Date.now() / 1000 > o.next_due_at && (Date.now() / 1000) % 15 < 1) load();
+    }, 1000);
+  }
+  function stopTimers() { clearInterval(loadTimer); clearInterval(ringTimer); loadTimer = ringTimer = null; }
+
+  $("foot-year").textContent = new Date().getFullYear();
+  applyLang();
+  Ants.init();
+  load(); startTimers(); Pulse.start();
+  if (apiBase !== null) {
+    fetch(apiUrl("/health")).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.version) $("code-ver").textContent = d.version; }).catch(function () {});
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) { stopTimers(); Pulse.stop(); }
+    else {
+      load(); startTimers(); Pulse.start();
+      if (Ants.cv) { var a = Ants; a.last = 0; a.raf = requestAnimationFrame(function (ts) { a.frame(ts); }); }
+    }
+  });
+})();
+</script>
+<script src="./wake.js"></script>
+</body>
+</html>

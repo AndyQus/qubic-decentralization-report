@@ -42,7 +42,7 @@
   var I18N = {
     en: {
       navReport: "Report", burnReport: "Burn", priceReport: "Price", miningLive: "Mining",
-      ticksLive: "Ticks", howItWorks: "How it works",
+      ticksLive: "Ticks", btcLive: "BTC", howItWorks: "How it works",
       subtitle: "Every tick · Qubic Report",
       waiting: "waiting for the first tick …",
       fTick: "Ticks", fTx: "Transfers", fBurn: "Burns", fContract: "Contracts",
@@ -67,7 +67,8 @@
       dEmpty: "This tick was produced but carries no transactions.",
       dCluster: "operator (report): {c}", dUnattributed: "operator: not attributed in the report",
       dMore: "+ {n} more", dExplorer: "open in explorer",
-      dSolNote: "{n} mining solutions submitted in this tick (each pays 1,000,000 QU to the null address and gets it back in the same transaction — no burn).",
+      dSolNote: "{n} mining solutions in this tick: {ok} accepted, {bad} rejected. Each pays a 1,000,000 QU deposit to the null address; an accepted one gets it back in the same transaction, a rejected one does not.",
+      dSolBest: "Lowest error among the accepted: {e} (fewer is better).",
       dNote: "Live from a Bob node. Older ticks are read on demand and only exist for the running epoch.",
       kTransfer: "transfer", kBurn: "burn", kContract: "contract", kSolution: "solution",
       kSystem: "system", kCall: "call", kUnknown: "tx", kFailed: "failed",
@@ -76,11 +77,14 @@
       stSupply: "circulating supply", stBurned: "burned QU (total)", stPrice: "price",
       stMcap: "market cap", stProgress: "epoch progress", stRate: "ticks per second",
       stSolMin: "mining solutions / min", stTxTick: "transactions per tick",
-      mEpoch: "⛏ Epoch {n} · BPP-9000 · BTC hourly direction",
-      mWindow: "window {w} h + up to {c} h", mTask: "threshold {th} · {sol} solutions",
-      mNoForecast: "forecast: none — every graded hour is already known",
-      mOpenHours: "forecast: {n} open hours in the task",
-      mTip: "Live from a Qubic node via the mining page. The miners search for networks that follow the hourly direction of Bitcoin in a fixed historical file; as soon as the task contains hours whose direction is unknown, this line says so.",
+      mEpoch: "⛏ Epoch {n} · BPP-9000 · live BTC hourly direction",
+      mWindow: "frame {w} h + {l}/{c} live h", mTask: "threshold {th} · {sol} solutions",
+      mLive: "BTC live: {bits} · next hour from {at} UTC",
+      mLiveNone: "BTC live: no hour yet this epoch · first from {at} UTC",
+      mNoCall: "colony's call: none yet ({s})",
+      mCall: "colony's call for {from}–{to} UTC: {c}",
+      mRate: "hit rate 24 h: {r} ({n} calls) · coin toss 50 %",
+      mTip: "Live from a Qubic node. Since epoch 240 the nodes store the Bitcoin price every hour through Qubic's Price oracle; the miners search for networks that match the up/down of those hours. ▲ = closed level or higher, ▼ = lower. More on the BTC page.",
       noApi: "This page was opened as a file and has no API. Start the server and open it through it: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/ticks.html",
       discLabel: "Disclaimer:", discBeta: "This page is currently in beta status.",
       discData: "Ticks are relayed live from a Bob node (another one takes over if it stops delivering); nothing on this page is stored or estimated.",
@@ -91,7 +95,7 @@
     },
     de: {
       navReport: "Report", burnReport: "Burn", priceReport: "Kurs", miningLive: "Mining",
-      ticksLive: "Ticks", howItWorks: "So funktioniert's",
+      ticksLive: "Ticks", btcLive: "BTC", howItWorks: "So funktioniert's",
       subtitle: "Jeder Tick · Qubic Report",
       waiting: "warte auf den ersten Tick …",
       fTick: "Ticks", fTx: "Transfers", fBurn: "Burns", fContract: "Verträge",
@@ -116,7 +120,8 @@
       dEmpty: "Dieser Tick wurde erzeugt, enthält aber keine Transaktionen.",
       dCluster: "Betreiber (Report): {c}", dUnattributed: "Betreiber: im Report nicht zugeordnet",
       dMore: "+ {n} weitere", dExplorer: "im Explorer öffnen",
-      dSolNote: "{n} Mining-Lösungen in diesem Tick eingereicht (jede zahlt 1.000.000 QU an die Null-Adresse und bekommt sie in derselben Transaktion zurück — kein Burn).",
+      dSolNote: "{n} Mining-Lösungen in diesem Tick: {ok} angenommen, {bad} abgelehnt. Jede zahlt 1.000.000 QU Pfand an die Null-Adresse; eine angenommene bekommt es in derselben Transaktion zurück, eine abgelehnte nicht.",
+      dSolBest: "Geringster Fehler unter den angenommenen: {e} (weniger ist besser).",
       dNote: "Live von einem Bob-Node. Ältere Ticks werden bei Bedarf gelesen und existieren nur für die laufende Epoche.",
       kTransfer: "Transfer", kBurn: "Burn", kContract: "Vertrag", kSolution: "Lösung",
       kSystem: "System", kCall: "Aufruf", kUnknown: "Tx", kFailed: "fehlgeschlagen",
@@ -125,11 +130,14 @@
       stSupply: "umlaufende Menge", stBurned: "verbrannte QU (gesamt)", stPrice: "Kurs",
       stMcap: "Marktkapitalisierung", stProgress: "Epochenfortschritt", stRate: "Ticks pro Sekunde",
       stSolMin: "Mining-Lösungen / Min", stTxTick: "Transaktionen pro Tick",
-      mEpoch: "⛏ Epoche {n} · BPP-9000 · BTC-Stundenrichtung",
-      mWindow: "Fenster {w} h + bis {c} h", mTask: "Schwelle {th} · {sol} Lösungen",
-      mNoForecast: "Prognose: keine — jede bewertete Stunde ist schon bekannt",
-      mOpenHours: "Prognose: {n} offene Stunden in der Aufgabe",
-      mTip: "Live von einem Qubic-Node, über die Mining-Seite. Die Miner suchen Netze, die der stündlichen Richtung von Bitcoin in einer festen historischen Datei folgen; sobald die Aufgabe Stunden enthält, deren Richtung noch niemand kennt, steht das hier.",
+      mEpoch: "⛏ Epoche {n} · BPP-9000 · BTC-Stundenrichtung live",
+      mWindow: "Rahmen {w} h + {l}/{c} Live-h", mTask: "Schwelle {th} · {sol} Lösungen",
+      mLive: "BTC live: {bits} · nächste Stunde ab {at} UTC",
+      mLiveNone: "BTC live: noch keine Stunde in dieser Epoche · erste ab {at} UTC",
+      mNoCall: "Tipp der Kolonie: noch keiner ({s})",
+      mCall: "Tipp der Kolonie für {from}–{to} UTC: {c}",
+      mRate: "Trefferquote 24 h: {r} ({n} Tipps) · Münzwurf 50 %",
+      mTip: "Live von einem Qubic-Node. Seit Epoche 240 speichern die Nodes jede Stunde den Bitcoin-Kurs über Qubics Preis-Oracle; die Miner suchen Netze, die das Rauf/Runter dieser Stunden treffen. ▲ = gleich oder höher geschlossen, ▼ = tiefer. Mehr auf der BTC-Seite.",
       noApi: "Diese Seite wurde als Datei geöffnet und hat keine API. Starte den Server und öffne sie darüber: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/ticks.html",
       discLabel: "Hinweis:", discBeta: "Diese Seite befindet sich im Beta-Status.",
       discData: "Die Ticks kommen live von einem Bob-Node (liefert er nicht mehr, übernimmt ein anderer); auf dieser Seite wird nichts gespeichert oder geschätzt.",
@@ -437,7 +445,12 @@
       else if (s.bare) bits.push(t("bareTick"));
       else {
         bits.push(fmtInt(s.tx) + t("tx"));
-        if (s.solutions) bits.push("⛏" + s.solutions);
+        if (s.solutions) {
+          // Since core v1.309 every solution transaction is logged with its
+          // outcome; a rejected one is marked rather than counted as a success.
+          var bad = s.sol_ok != null ? s.solutions - s.sol_ok : 0;
+          bits.push("⛏" + (s.sol_ok != null ? s.sol_ok : s.solutions) + (bad > 0 ? " ✗" + bad : ""));
+        }
         if (s.burned) bits.push("🔥 " + fmtQu(s.burned));
       }
       if (!s.bare) bits.push("L" + (s.leader && s.leader.index != null ? s.leader.index : "?"));
@@ -477,11 +490,11 @@
   };
 
   /* ── Mining line (top of the terminal) ─────────────────────────────────
-     What the miners are working on this epoch, from /v1/mining — the same
-     node read the mining page shows. The server caches it for everyone, so a
-     minute between asks costs the node nothing extra. "Forecast" follows
-     task.tail_unknown: hours at the end of the task whose direction nobody
-     knows yet, the first sign of a real prediction (docs/CONCEPT_BTC_ORACLE.de.md). */
+     What the miners are working on this epoch, from /v1/btc — the same node
+     read the mining and BTC pages show, cached on the server for everyone, so
+     a minute between asks costs the node nothing extra. Since epoch 240 the
+     task is the live BTC feed: the line shows how many of its hours have
+     arrived and which way they went (docs/CONCEPT_BTC_PREDICTION.de.md). */
   var Mining = {
     data: null, timer: null, every: 60000,
     start: function () {
@@ -493,10 +506,14 @@
     stop: function () { clearInterval(this.timer); this.timer = null; },
     load: function () {
       var self = this;
-      fetch(apiUrl("/v1/mining"), { cache: "no-store" })
+      fetch(apiUrl("/v1/btc?compact=1"), { cache: "no-store" })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) { self.data = d && d.status === "live" ? d : self.data; self.render(); })
         .catch(function () { self.render(); });
+    },
+    hhmm: function (ts) {
+      var d = new Date(ts * 1000);
+      return String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0");
     },
     render: function () {
       var el = $("term-mining"), d = this.data;
@@ -504,15 +521,35 @@
       var task = d && d.task, ep = d && d.epoch && d.epoch.epoch;
       if (!task || !ep) { el.hidden = true; return; }
       var col = d.colony || {};
-      var fc = task.tail_unknown > 0 ? t("mOpenHours", { n: fmtInt(task.tail_unknown) })
-        : task.tail_unknown === 0 ? t("mNoForecast") : null;
-      el.innerHTML = '<span class="m-head">' + esc(t("mEpoch", { n: ep })) + "</span><br>" +
-        // Right after a server start the task is not resolved yet and carries
-        // only its hash: the window is left out then, not shown as "–".
-        (task.window_width != null ? esc(t("mWindow", { w: fmtInt(task.window_width), c: fmtInt(task.shift_cap) })) + " · " : "") +
-        esc(t("mTask", { th: fmtInt(col.threshold != null ? col.threshold : task.threshold_default),
-          sol: fmtInt(col.solution_count) })) +
-        (fc ? '<br><span class="' + (task.tail_unknown > 0 ? "m-open" : "m-none") + '">' + esc(fc) + "</span>" : "");
+      var html = '<span class="m-head">' + esc(t("mEpoch", { n: ep })) + "</span><br>";
+      // Until the node's targets have been checked against its data hash the
+      // frame figures are left out, not shown as "–".
+      if (task.hash_verified === true) {
+        html += esc(t("mWindow", { w: fmtInt(task.window_width), l: fmtInt(task.shift_limit),
+          c: fmtInt(task.shift_cap) })) + " · ";
+      }
+      html += esc(t("mTask", { th: fmtInt(col.threshold), sol: fmtInt(col.solution_count) }));
+      if (task.hash_verified === true) {
+        var live = (d.hours || []).filter(function (h) { return h.live; });
+        var due = d.oracle && d.oracle.next_due_at;
+        var bits = live.slice(-12).map(function (h) { return h.up ? "▲" : "▼"; }).join("");
+        var line = live.length ? t("mLive", { bits: (live.length > 12 ? "…" : "") + bits, at: due ? this.hhmm(due) : "–" })
+          : t("mLiveNone", { at: due ? this.hhmm(due) : "–" });
+        html += '<br><span class="m-open">' + esc(line) + "</span>";
+      }
+      var call = d.call || {}, o2 = d.oracle || {};
+      if (call.available && o2.next_at) {
+        html += '<br><span class="m-open">' + esc(t("mCall", { from: this.hhmm(o2.next_at - 3600), to: this.hhmm(o2.next_at),
+          c: call.call === 1 ? "▲" : call.call === 0 ? "▼" : "?" })) + "</span>";
+      } else {
+        html += '<br><span class="m-none">' + esc(t("mNoCall", { s: call.reason || "–" })) + "</span>";
+      }
+      var r24 = d.stats && d.stats.h24;
+      if (r24 && r24.calls) {
+        html += '<br><span class="m-none">' + esc(t("mRate", { r: (Math.round(r24.rate * 1000) / 10).toLocaleString(lang === "de" ? "de-DE" : "en-US") + " %",
+          n: fmtInt(r24.calls) })) + "</span>";
+      }
+      el.innerHTML = html;
       el.title = t("mTip");
       el.hidden = false;
     }
@@ -724,7 +761,7 @@
       else if (s.bare) lines.push([t("bareTick"), COLORS.empty]);
       else {
         lines.push([s.tx + " " + t("tx"), "#b0faff"]);
-        if (s.solutions) lines.push(["⛏ " + s.solutions, COLORS.sol]);
+        if (s.solutions) lines.push(["⛏ " + (s.sol_ok != null ? s.sol_ok : s.solutions), COLORS.sol]);
         if (s.burned) lines.push(["🔥 " + fmtQu(s.burned), COLORS.burn]);
         if (c.big) lines.push([fmtQu(c.big) + " QU", COLORS.big]);
         c.contracts.slice(0, 2).forEach(function (k) { lines.push([k.name || "#" + k.index, COLORS.contract]); });
@@ -1061,7 +1098,12 @@
       var hidden = txs.length - shown.length;
       if (txs.length) {
         h += '<div class="d-sec">' + esc(t("dTransactions")) + " · " + txs.length + "</div>";
-        if (d.solutions) h += '<div class="d-more">⛏ ' + esc(t("dSolNote", { n: fmtInt(d.solutions) })) + "</div>";
+        if (d.solutions) {
+          var ok = d.sol_ok != null ? d.sol_ok : d.solutions;
+          h += '<div class="d-more">⛏ ' + esc(t("dSolNote", { n: fmtInt(d.solutions), ok: fmtInt(ok),
+            bad: fmtInt(d.solutions - ok) })) +
+            (d.sol_best != null ? " " + esc(t("dSolBest", { e: fmtInt(d.sol_best) })) : "") + "</div>";
+        }
         var self = this;
         shown.slice(0, 60).forEach(function (x) {
           var kind = x.ok === false ? "failed" : x.kind;

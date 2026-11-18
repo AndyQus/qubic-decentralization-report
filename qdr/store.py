@@ -254,6 +254,100 @@ CREATE TABLE IF NOT EXISTS mining_epochs (
     updated_at      INTEGER NOT NULL
 );
 
+-- The BTC hours the ant colony is graded on, one row per hour stored LIVE
+-- during an epoch (docs/CONCEPT_BTC_PREDICTION.de.md). Since epoch 240 the
+-- mining task is built from hourly BTC/USDT prices the nodes fetch through the
+-- Price oracle; each new hour adds one target bit.
+--
+-- Direction only, by decision (2026-11-18): the prices originate at Binance and
+-- this project republishes no exchange market data, so no price column exists.
+-- `up` is the network's own target bit (1: the hour closed at or above the one
+-- before, in whole USDT), read from REQUEST_BPP9000_TASK_DATA.
+--
+-- The hours of the year-long first frame are not stored: a node serves them at
+-- any time. Only the epoch's own hours are, because a node forgets them once the
+-- next epoch's frame has moved on -- and they are what any forecast is judged on.
+-- `first_seen_at` is when the worker first read the hour, not when it was
+-- stored on-chain (that is `append_tick`); it is never overwritten.
+CREATE TABLE IF NOT EXISTS btc_hours (
+    hour           INTEGER PRIMARY KEY,   -- hours after 2022-04-13 12:00 UTC
+    epoch          INTEGER NOT NULL,
+    up             INTEGER NOT NULL,      -- target bit, 0 or 1
+    filled         INTEGER NOT NULL DEFAULT 0,  -- oracle failed 24 h; previous price reused
+    append_tick    INTEGER,
+    first_seen_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_btc_hours_epoch ON btc_hours(epoch, hour);
+
+-- The ant colony's accepted solutions, read from the ANT_SOLU messages in a
+-- Bob node's tick logs (qdr/colony.py). Each names its parent by (tick,
+-- transaction index), so the lineage of any network can be walked back to its
+-- identity's root and rebuilt with qubic/core's reference scorer
+-- (tools/replayer). Kept for the running and the previous epoch only.
+CREATE TABLE IF NOT EXISTS ant_solutions (
+    tick         INTEGER NOT NULL,
+    tx_index     INTEGER NOT NULL,
+    epoch        INTEGER NOT NULL,
+    pubkey       TEXT NOT NULL,     -- hex, 32 bytes
+    nonce        TEXT NOT NULL,     -- hex, 32 bytes
+    parent_tick  INTEGER NOT NULL,  -- (0, 4294967295) = the identity's root
+    parent_index INTEGER NOT NULL,
+    anchor_tick  INTEGER NOT NULL,
+    score        INTEGER NOT NULL,  -- error the node recomputed
+    PRIMARY KEY (tick, tx_index)
+);
+CREATE INDEX IF NOT EXISTS ix_ant_solutions_score ON ant_solutions(epoch, score);
+
+-- How far the colony scan has read, per epoch.
+CREATE TABLE IF NOT EXISTS colony_scan (
+    epoch      INTEGER PRIMARY KEY,
+    last_tick  INTEGER NOT NULL
+);
+
+-- K12(anchorTick || K12(TickData)) per anchor tick: 139 KB of tick data read
+-- from a peer once, 32 bytes kept.
+CREATE TABLE IF NOT EXISTS colony_anchors (
+    tick    INTEGER PRIMARY KEY,
+    digest  TEXT NOT NULL
+);
+
+-- Rebuilt networks worth keeping across a restart: the newest verified node of
+-- each tracked lineage, in qubic/core's ANN layout (~35 KB).
+CREATE TABLE IF NOT EXISTS colony_nets (
+    tick      INTEGER NOT NULL,
+    tx_index  INTEGER NOT NULL,
+    epoch     INTEGER NOT NULL,
+    pubkey    TEXT NOT NULL,
+    shift     INTEGER NOT NULL,
+    error     INTEGER NOT NULL,
+    ann       TEXT NOT NULL,
+    saved_at  INTEGER NOT NULL,
+    PRIMARY KEY (tick, tx_index)
+);
+
+-- The colony's call for an hour, recorded BEFORE that hour was stored on-chain
+-- and never rewritten: the output of the best rebuilt network at the emit
+-- position of the hour (0 down, 1 up or level, 2 unsure). Judged against
+-- btc_hours.up once the hour arrives. Permanent.
+CREATE TABLE IF NOT EXISTS btc_calls (
+    hour       INTEGER PRIMARY KEY,
+    epoch      INTEGER NOT NULL,
+    call       INTEGER NOT NULL,
+    net_tick   INTEGER NOT NULL,
+    net_index  INTEGER NOT NULL,
+    pubkey     TEXT NOT NULL,
+    net_error  INTEGER NOT NULL,
+    net_shift  INTEGER NOT NULL,
+    made_at    INTEGER NOT NULL
+);
+
+-- What the colony tracker is doing, for the API to report (one row).
+CREATE TABLE IF NOT EXISTS colony_status (
+    id          INTEGER PRIMARY KEY CHECK (id = 1),
+    state       TEXT NOT NULL,
+    updated_at  INTEGER NOT NULL
+);
+
 -- Market price, polled every minute from Qubic's own RPC -- one row per PRICE,
 -- not one row per poll.
 --
@@ -1192,6 +1286,170 @@ class Store:
                 return 0    # fewer epochs on record than we keep: nothing to do
             cur = c.execute("DELETE FROM mining_samples WHERE epoch < ?", (int(row[0]),))
             return cur.rowcount or 0
+
+    # -- BTC task hours ------------------------------------------------------
+    def put_btc_hours(self, epoch: int, hours: list[dict], seen_at: int) -> int:
+        """Record the epoch's live hours. Returns how many were new.
+
+        An hour, once stored on-chain, does not change; a re-read only fills in
+        what an earlier read lacked (`append_tick`). `first_seen_at` keeps the
+        first sighting.
+        """
+        new = 0
+        with self._tx() as c:
+            for h in hours:
+                if not h.get("live"):
+                    continue
+                cur = c.execute(
+                    "INSERT INTO btc_hours (hour,epoch,up,filled,append_tick,first_seen_at) "
+                    "VALUES (?,?,?,?,?,?) ON CONFLICT(hour) DO NOTHING",
+                    (int(h["hour"]), int(epoch), 1 if h["up"] else 0,
+                     1 if h.get("filled") else 0, h.get("append_tick"), int(seen_at)))
+                if cur.rowcount:
+                    new += 1
+                elif h.get("append_tick") is not None:
+                    c.execute("UPDATE btc_hours SET append_tick=? WHERE hour=? AND append_tick IS NULL",
+                              (int(h["append_tick"]), int(h["hour"])))
+        return new
+
+    def btc_hours(self, epoch: Optional[int] = None, limit: Optional[int] = None) -> list[dict]:
+        """Stored live hours, oldest first; one epoch, or the newest `limit` overall."""
+        sql, args = "SELECT * FROM btc_hours", []
+        if epoch is not None:
+            sql += " WHERE epoch=?"
+            args.append(int(epoch))
+        sql += " ORDER BY hour DESC"
+        if limit is not None:
+            sql += f" LIMIT {int(limit)}"
+        with self._lock:
+            rows = self._conn.execute(sql, args).fetchall()
+        return [dict(r) for r in reversed(rows)]
+
+    def btc_epochs(self) -> list[dict]:
+        """Per epoch: how many live hours were recorded, how many went up, how many were filled."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT epoch, COUNT(*) AS hours, SUM(up) AS ups, SUM(filled) AS filled, "
+                "MIN(hour) AS first_hour, MAX(hour) AS last_hour "
+                "FROM btc_hours GROUP BY epoch ORDER BY epoch").fetchall()
+        return [dict(r) for r in rows]
+
+    # -- ant colony: solutions, rebuilt networks, calls ----------------------
+    def put_ant_solutions(self, epoch: int, rows: list[dict]) -> int:
+        with self._tx() as c:
+            n = 0
+            for r in rows:
+                cur = c.execute(
+                    "INSERT OR IGNORE INTO ant_solutions (tick,tx_index,epoch,pubkey,nonce,"
+                    "parent_tick,parent_index,anchor_tick,score) VALUES (?,?,?,?,?,?,?,?,?)",
+                    (int(r["tick"]), int(r["tx_index"]), int(epoch), r["pubkey"], r["nonce"],
+                     int(r["parent_tick"]), int(r["parent_index"]), int(r["anchor_tick"]),
+                     int(r["score"])))
+                n += cur.rowcount or 0
+        return n
+
+    def ant_solution(self, tick: int, tx_index: int) -> Optional[dict]:
+        with self._lock:
+            r = self._conn.execute("SELECT * FROM ant_solutions WHERE tick=? AND tx_index=?",
+                                   (int(tick), int(tx_index))).fetchone()
+        return dict(r) if r else None
+
+    def best_ant_solutions(self, epoch: int, limit: int = 1) -> list[dict]:
+        """Lowest logged error first; among equals, the newest."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM ant_solutions WHERE epoch=? ORDER BY score ASC, tick DESC LIMIT ?",
+                (int(epoch), int(limit))).fetchall()
+        return [dict(r) for r in rows]
+
+    def ant_solution_count(self, epoch: int) -> int:
+        with self._lock:
+            r = self._conn.execute("SELECT COUNT(*) FROM ant_solutions WHERE epoch=?", (int(epoch),)).fetchone()
+        return int(r[0])
+
+    def prune_ant_solutions(self, keep_from_epoch: int) -> int:
+        with self._tx() as c:
+            n = c.execute("DELETE FROM ant_solutions WHERE epoch < ?", (int(keep_from_epoch),)).rowcount or 0
+            c.execute("DELETE FROM colony_nets WHERE epoch < ?", (int(keep_from_epoch),))
+            c.execute("DELETE FROM colony_scan WHERE epoch < ?", (int(keep_from_epoch),))
+        return n
+
+    def colony_scan_tick(self, epoch: int) -> Optional[int]:
+        with self._lock:
+            r = self._conn.execute("SELECT last_tick FROM colony_scan WHERE epoch=?", (int(epoch),)).fetchone()
+        return int(r[0]) if r else None
+
+    def set_colony_scan_tick(self, epoch: int, last_tick: int) -> None:
+        with self._tx() as c:
+            c.execute("INSERT INTO colony_scan (epoch,last_tick) VALUES (?,?) "
+                      "ON CONFLICT(epoch) DO UPDATE SET last_tick=excluded.last_tick",
+                      (int(epoch), int(last_tick)))
+
+    def colony_anchor(self, tick: int) -> Optional[str]:
+        with self._lock:
+            r = self._conn.execute("SELECT digest FROM colony_anchors WHERE tick=?", (int(tick),)).fetchone()
+        return r[0] if r else None
+
+    def put_colony_anchor(self, tick: int, digest: str) -> None:
+        with self._tx() as c:
+            c.execute("INSERT OR IGNORE INTO colony_anchors (tick,digest) VALUES (?,?)", (int(tick), digest))
+
+    def put_colony_net(self, row: dict, keep_per_pubkey: int = 2) -> None:
+        with self._tx() as c:
+            c.execute("INSERT OR REPLACE INTO colony_nets (tick,tx_index,epoch,pubkey,shift,error,ann,saved_at) "
+                      "VALUES (?,?,?,?,?,?,?,?)",
+                      (int(row["tick"]), int(row["tx_index"]), int(row["epoch"]), row["pubkey"],
+                       int(row["shift"]), int(row["error"]), row["ann"], int(row["saved_at"])))
+            c.execute("DELETE FROM colony_nets WHERE pubkey=? AND epoch=? AND tick NOT IN ("
+                      "SELECT tick FROM colony_nets WHERE pubkey=? AND epoch=? ORDER BY tick DESC LIMIT ?)",
+                      (row["pubkey"], int(row["epoch"]), row["pubkey"], int(row["epoch"]), int(keep_per_pubkey)))
+
+    def colony_nets(self, epoch: int) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM colony_nets WHERE epoch=? ORDER BY tick DESC",
+                                      (int(epoch),)).fetchall()
+        return [dict(r) for r in rows]
+
+    def put_btc_call(self, row: dict) -> bool:
+        """Record a call once. Returns False if the hour already had one -- a call
+        is never rewritten, or a later, better-informed one could replace a miss."""
+        with self._tx() as c:
+            cur = c.execute(
+                "INSERT OR IGNORE INTO btc_calls (hour,epoch,call,net_tick,net_index,pubkey,"
+                "net_error,net_shift,made_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                (int(row["hour"]), int(row["epoch"]), int(row["call"]), int(row["net_tick"]),
+                 int(row["net_index"]), row["pubkey"], int(row["net_error"]), int(row["net_shift"]),
+                 int(row["made_at"])))
+            return bool(cur.rowcount)
+
+    def btc_calls(self, limit: Optional[int] = None) -> list[dict]:
+        """Calls joined with the hour they were made for (oldest first). `up` is
+        None while the hour has not arrived."""
+        sql = ("SELECT c.*, h.up AS up, h.first_seen_at AS hour_seen_at FROM btc_calls c "
+               "LEFT JOIN btc_hours h ON h.hour = c.hour ORDER BY c.hour DESC")
+        if limit is not None:
+            sql += f" LIMIT {int(limit)}"
+        with self._lock:
+            rows = self._conn.execute(sql).fetchall()
+        return [dict(r) for r in reversed(rows)]
+
+    def set_colony_status(self, state: dict, at: int) -> None:
+        import json as _json
+        with self._tx() as c:
+            c.execute("INSERT INTO colony_status (id,state,updated_at) VALUES (1,?,?) "
+                      "ON CONFLICT(id) DO UPDATE SET state=excluded.state, updated_at=excluded.updated_at",
+                      (_json.dumps(state), int(at)))
+
+    def colony_status(self) -> Optional[dict]:
+        import json as _json
+        with self._lock:
+            r = self._conn.execute("SELECT state, updated_at FROM colony_status WHERE id=1").fetchone()
+        if not r:
+            return None
+        out = _json.loads(r[0])
+        out["updated_at"] = int(r[1])
+        return out
+
 
     # -- market price ------------------------------------------------------
     # How long price points are kept. Hourly rows are permanent, so this costs

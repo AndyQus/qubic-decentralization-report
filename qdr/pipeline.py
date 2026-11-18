@@ -492,6 +492,16 @@ def sample_mining(store: Store, peers: Optional[list[str]] = None) -> Optional[d
         "latency_ms": node.get("latency_ms"),
     }
     store.put_mining_sample(**row)
+
+    # The BTC hours the task grew by this epoch ride along on the same read:
+    # a node answers them only while they are inside the current task, so an
+    # hour not recorded during its epoch cannot be recorded later.
+    btc = data.get("btc") or {}
+    if btc.get("hours") and btc.get("epoch"):
+        try:
+            store.put_btc_hours(int(btc["epoch"]), btc["hours"], row["at"])
+        except Exception:
+            pass
     return row
 
 

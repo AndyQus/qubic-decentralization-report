@@ -5,6 +5,17 @@ WORKDIR /wheels
 COPY requirements.txt .
 RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
 
+# The BPP-9000 replayer (tools/replayer): rebuilds the ant colony's networks from
+# public data with qubic/core's own reference scorer, so the BTC page can show
+# the colony's call for the next hour (qdr/colony.py). Built from the core tag
+# the network runs; linked statically, so it needs nothing from the runtime image.
+FROM ubuntu:24.04 AS replayer
+RUN apt-get update && apt-get install -y --no-install-recommends clang-18 git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+ARG QUBIC_CORE_TAG=v1.313.0
+COPY tools/replayer/ /src/
+RUN tr -d '\r' < /src/build.sh > /src/build.unix.sh && OUT=/qdr-replay sh /src/build.unix.sh "$QUBIC_CORE_TAG"
+
 FROM python:3.12-slim
 WORKDIR /app
 
@@ -14,6 +25,7 @@ ENV PYTHONUNBUFFERED=1 \
     DATA_DIR=/data \
     PORT=8000
 
+COPY --from=replayer /qdr-replay /usr/local/bin/qdr-replay
 COPY --from=build /wheels /wheels
 COPY requirements.txt .
 RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt \

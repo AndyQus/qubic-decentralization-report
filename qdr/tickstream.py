@@ -29,11 +29,15 @@ Two upstream modes, chosen automatically:
 
 Facts the condensing depends on, each measured on the live node:
 
-  * A mining solution is a transaction that sends 1,000,000 QU to the null
-    address and gets it straight back in the same transaction; its log carries a
-    custom message (type 255) whose payload starts with the ASCII bytes
-    ``ANT_SOLU``. It is counted as a solution, never as a burn — the netting in
-    ``qdr.burn.burn_events`` is what guarantees the latter.
+  * A mining solution is a transaction that sends a 1,000,000 QU deposit to the
+    null address; its log carries a custom message (type 255) whose payload
+    starts with the ASCII bytes ``ANT_SOLU`` (``AntSolutionLogMessage`` in the
+    core's logging.h, 92 bytes). Since core v1.309 that message is written for
+    EVERY solution transaction and names its outcome: ``result`` 0/1 is
+    accepted (deposit refunded in the same transaction), anything else a
+    rejection (deposit kept). Both are counted as solutions; the split is
+    ``sol_ok``. A kept deposit is netted by ``qdr.burn.burn_events`` like any
+    other transfer to the null address.
   * A skipped tick arrives with ``isSkipped`` and ``hasNoTickData`` both true and
     the timestamp ``2000-00-00T00:00:00Z``; that timestamp is not a time.
   * A transaction's ``inputType`` is the procedure id of the contract it is sent
@@ -205,6 +209,31 @@ def _norm_log(entry: dict) -> dict:
     }
 
 
+# AntSolutionLogMessage after its 8-byte type: source key (32), nonce (32),
+# parentTick, parentSolutionIndexInTick, anchorTick, score, result (4 each).
+_SOL_TAIL_OFFSET = 8 + 32 + 32
+# ValidityResult Valid and ValidNotStored: accepted, refunded and ranked.
+SOLUTION_ACCEPTED = (0, 1)
+
+
+def solution_outcome(log: dict) -> Optional[tuple[int, int]]:
+    """(score, result) of an ANT_SOLU message, or None when the payload is short.
+
+    `score` is the error count the node recomputed; it is 0 for solutions
+    rejected before scoring.
+    """
+    hexdata = str((log.get("body") or {}).get("hex") or "")
+    try:
+        raw = bytes.fromhex(hexdata[:2 * (_SOL_TAIL_OFFSET + 20)])
+    except ValueError:
+        return None
+    if len(raw) < _SOL_TAIL_OFFSET + 20:
+        return None
+    score = int.from_bytes(raw[_SOL_TAIL_OFFSET + 12:_SOL_TAIL_OFFSET + 16], "little")
+    result = int.from_bytes(raw[_SOL_TAIL_OFFSET + 16:_SOL_TAIL_OFFSET + 20], "little")
+    return score, result
+
+
 def _is_solution(log: dict) -> bool:
     if _int(log.get("type")) != CUSTOM_MESSAGE_TYPE and log.get("logTypeName"):
         return False
@@ -245,6 +274,8 @@ def condense(raw: dict, contracts_by_address: Optional[dict] = None) -> tuple[di
     # Per transaction: solutions, and what reached / left the burn address.
     solution_txs: set[str] = set()
     solutions = 0
+    sol_ok = 0
+    sol_best: Optional[int] = None
     sink_in: dict[str, int] = {}
     sink_out: dict[str, int] = {}
     qu_moved = 0
@@ -255,6 +286,11 @@ def condense(raw: dict, contracts_by_address: Optional[dict] = None) -> tuple[di
         if _is_solution(log):
             solutions += 1
             solution_txs.add(h)
+            outcome = solution_outcome(log)
+            if outcome is not None and outcome[1] in SOLUTION_ACCEPTED:
+                sol_ok += 1
+                if sol_best is None or outcome[0] < sol_best:
+                    sol_best = outcome[0]
             continue
         name = log["logTypeName"]
         if name == burn.QU_TRANSFER:
@@ -341,6 +377,9 @@ def condense(raw: dict, contracts_by_address: Optional[dict] = None) -> tuple[di
         "qu_moved": qu_moved,
         "burned": burned,
         "solutions": solutions,
+        # Accepted of those, and the lowest error among them (fewer is better).
+        "sol_ok": sol_ok,
+        "sol_best": sol_best,
         "contracts": sorted(contract_calls.values(), key=lambda c: -c["calls"]),
         # Shortened identities and no hashes: the summary is what streams twice a
         # second to every viewer, and 60-character strings were most of its bytes.
@@ -377,7 +416,8 @@ def condense_bare(tick: int) -> tuple[dict, dict]:
     summary = {"tick": int(tick), "epoch": None, "ts": None, "state": "ok",
                "bare": True, "catch_up": False, "leader": {"index": None},
                "tx": None, "tx_failed": None, "logs": None, "qu_moved": None,
-               "burned": None, "solutions": None, "contracts": [], "top": []}
+               "burned": None, "solutions": None, "sol_ok": None, "sol_best": None,
+               "contracts": [], "top": []}
     return summary, dict(summary)
 
 

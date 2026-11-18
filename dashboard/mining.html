@@ -627,6 +627,7 @@ html { scroll-behavior: smooth; }
         <a class="how-link qs-link" href="./price.html" data-i18n="priceReport">Price</a>
         <a class="how-link qs-link" href="./mining.html" aria-current="page" data-i18n="miningLive">Mining</a>
         <a class="how-link qs-link" href="./ticks.html" data-i18n="ticksLive">Ticks</a>
+        <a class="how-link qs-link" href="./btc.html" data-i18n="btcLive">BTC</a>
       </nav>
       <div class="qs-seg" id="lang-seg">
         <button data-lang="en">EN</button><button data-lang="de">DE</button>
@@ -791,19 +792,23 @@ html { scroll-behavior: smooth; }
       </p>
       <div class="sc-body">
         <div class="task-params">
-          <!-- Labels for the window rows depend on the scoring model the core runs
-               (task.scoring); renderTask sets them, these are the rolling-frame ones. -->
+          <!-- Since epoch 240 the task is the live BTC feed (qdr/antask.py): a
+               year-long frame plus the hours the oracle has stored this epoch. -->
           <div class="tp-row">
-            <span class="tp-label" data-i18n="seqLen">Sequenzlänge</span>
-            <span class="tp-val"><span id="t-seq">–</span><span class="tp-unit">h</span></span>
+            <span class="tp-label" data-i18n="liveHours">Live-Stunden dieser Epoche</span>
+            <span class="tp-val"><span id="t-live">–</span><span class="tp-unit">h</span></span>
           </div>
           <div class="tp-row">
-            <span class="tp-label" id="t-win-label" data-i18n="frameWin">Bewerteter Rahmen</span>
+            <span class="tp-label" data-i18n="frameWin">Bewerteter Rahmen</span>
             <span class="tp-val"><span id="t-win">–</span><span class="tp-unit">h</span></span>
           </div>
           <div class="tp-row">
             <span class="tp-label" data-i18n="shiftCap">Max. Verschiebung</span>
             <span class="tp-val"><span id="t-shift">–</span><span class="tp-unit">h</span></span>
+          </div>
+          <div class="tp-row">
+            <span class="tp-label" data-i18n="advanceGate">Vorrücken ab (max. Fehler)</span>
+            <span class="tp-val"><span id="t-gate">–</span></span>
           </div>
           <div class="tp-row">
             <span class="tp-label" data-i18n="scoreMax">Score-Obergrenze</span>
@@ -826,7 +831,7 @@ html { scroll-behavior: smooth; }
         </div>
 
         <div class="trit-dist">
-          <div class="trit-label" data-i18n="tritLabel">Zielverteilung — rein binär (0/1, kein „weiß nicht")</div>
+          <div class="trit-label" data-i18n="tritLabel">Zielverteilung — Rahmen und Live-Stunden, rein binär (0/1)</div>
           <div class="trit-bars" id="trit-bars">
             <div class="trit-seg zero"  id="trit-zero"  style="width:49.4%">0</div>
             <div class="trit-seg one"   id="trit-one"   style="width:50.6%">1</div>
@@ -842,17 +847,18 @@ html { scroll-behavior: smooth; }
           </div>
         </div>
 
-        <!-- What the series is comes from Qubic's own statement, not from the
-             protocol -- the task file carries trits, not labels -- so it is cited.
-             Whether the task asks for anything unknown is read from the file. -->
+        <!-- What the series is, is in the protocol itself since core v1.309: the
+             targets are built from the Price oracle's hourly BTC/USDT prices
+             (doc/ant_colony_mining.md section 2.3a), so the source is the core doc. -->
         <div class="task-explain" id="task-explain">
           <div class="te-title" data-i18n="teTitle">Was trainiert wird</div>
           <p>
-            <span data-i18n="teWhat">Laut Qubic ist die Zielreihe die Richtung von Bitcoin-Stundenkerzen: schließt die nächste Stunde höher (1) oder tiefer (0)?</span>
-            <a href="https://qubic.org/blog-detail/anna-reached-zero-what-it-actually-means" target="_blank" rel="noreferrer" data-i18n="teSource">Quelle: Qubic-Blog</a>
+            <span data-i18n="teWhat">Seit Epoche 240 ist die Zielreihe die echte Richtung des Bitcoin-Kurses, Stunde für Stunde: Die Nodes holen jeden Stundenkurs BTC/USDT über Qubics Preis-Oracle (Quelle Binance) und speichern ihn on-chain. Ziel 1 heißt, die Stunde schloss gleich oder höher, 0 tiefer.</span>
+            <a href="https://github.com/qubic/core/blob/main/doc/ant_colony_mining.md" target="_blank" rel="noreferrer" data-i18n="teSource">Quelle: qubic/core</a>
           </p>
           <p id="te-how"></p>
           <p class="te-verdict" id="te-forecast"></p>
+          <p><a href="./btc.html" data-i18n="teBtcLink">Kolonie gegen Bitcoin: die Stunden live →</a></p>
         </div>
       </div>
     </section>
@@ -996,7 +1002,7 @@ html { scroll-behavior: smooth; }
   const I18N = {
     en: {
       navReport: "Report",
-      miningLive: "Mining", ticksLive: "Ticks",
+      miningLive: "Mining", ticksLive: "Ticks", btcLive: "BTC",
       howItWorks: "How it works",
       subtitle: "Ant Colony \u00B7 Qubic Report",
       backToReport: "\u2190 Report", inWord: "in", burnReport: "Burn",
@@ -1029,20 +1035,22 @@ html { scroll-behavior: smooth; }
       peersSub: "answering of {n} peers",
       taskTitle: "The task",
       taskDesc: "These are the parameters the swarm computes against \u2014 the same for every node worldwide.",
-      seqLen: "Sequence length", ctxWin: "Context window", frameWin: "Graded frame",
-      shiftCap: "Max. shift", scoreMax: "Score ceiling", thrLabel: "Threshold (max. errors)",
+      liveHours: "Live hours this epoch", frameWin: "Graded frame",
+      shiftCap: "Max. shift", advanceGate: "Advances at (max. errors)",
+      scoreMax: "Score ceiling", thrLabel: "Threshold (max. errors)",
       freeSlots: "Free ANN slots",
       hashLabel: "Data hash (byte-for-byte verification)",
-      hashOk: "\u2713 Identical to the task file in qubic/core {ref}",
-      hashPending: "Looking up the task file for this hash in qubic/core \u2026",
+      hashOk: "\u2713 K12 of the first {win} targets, read from the node, equals its data hash (constants: qubic/core {ref})",
+      hashBad: "\u2717 The node's targets do not hash to its own data hash \u2014 numbers withheld",
+      hashPending: "Reading the task from the node \u2026",
       teTitle: "What is being trained",
-      teWhat: "According to Qubic, the target series is the direction of Bitcoin hourly candles: does the next hour close higher (1) or lower (0)?",
-      teSource: "Source: Qubic blog",
-      teHowRolling: "The network generates the series on its own (the input trits in the file are not read) and is graded on a {win} h frame (\u2248 {years} year). With at most {gate} errors the frame moves one hour further, up to {cap} h; the best computors are those that got furthest.",
-      teHowWindows: "The network sees {win} h of history at a time and has to match the hour after it; {graded} positions are graded.",
-      teNoForecast: "Not a forecast: all {n} hours the frame can move into are already in the file and known. The network reproduces the past \u2014 it does not publish a prediction for the coming hours.",
-      teOpenHours: "The task contains {n} open hours (target unknown) \u2014 the network is graded on hours nobody knows yet.",
-      tritLabel: "Target distribution \u2014 purely binary (0/1, no \u201Cunknown\u201D)",
+      teWhat: "Since epoch 240 the target series is the real direction of the Bitcoin price, hour by hour: the nodes fetch each hourly BTC/USDT price through Qubic's Price oracle (source: Binance) and store it on-chain. Target 1 means the hour closed level or higher, 0 lower.",
+      teSource: "Source: qubic/core",
+      teHowRolling: "The network sees no prices: it generates the series on its own and is graded on a {win} h frame (\u2248 {years} year up to the epoch start). With at most {gate} errors the frame moves one hour further \u2014 but only into hours the oracle has already delivered, up to {cap} h. The best computors are those that got furthest.",
+      teLive: "{n} of {cap} hours have arrived live since the epoch began; the networks are measured against them. The network publishes no call for the next hour.",
+      teLiveNone: "No live hour yet this epoch \u2014 the oracle delivers the first shortly after the full hour.",
+      teBtcLink: "Colony vs Bitcoin: the hours live \u2192",
+      tritLabel: "Target distribution \u2014 frame and live hours, purely binary (0/1)",
       target0: "Target 0:", target1: "Target 1:", targetUnk: "Unknown (target):",
       tritNote: "\u201CUnknown\u201D (trit 2) is an internal network state, but never a target value \u2014 a deviation simply counts as an error.",
       revTitle: "Revenue distribution (approximate until the epoch closes)",
@@ -1064,7 +1072,7 @@ html { scroll-behavior: smooth; }
     },
     de: {
       navReport: "Report",
-      miningLive: "Mining", ticksLive: "Ticks",
+      miningLive: "Mining", ticksLive: "Ticks", btcLive: "BTC",
       howItWorks: "Wie es funktioniert",
       subtitle: "Ant Colony \u00B7 Qubic Report",
       backToReport: "\u2190 Report", inWord: "in", burnReport: "Burn",
@@ -1097,20 +1105,22 @@ html { scroll-behavior: smooth; }
       peersSub: "antworten von {n} Peers",
       taskTitle: "Die Aufgabe",
       taskDesc: "Gegen diese Parameter rechnet der Schwarm \u2014 dieselben f\u00FCr alle Nodes weltweit.",
-      seqLen: "Sequenzl\u00E4nge", ctxWin: "Kontextfenster", frameWin: "Bewerteter Rahmen",
-      shiftCap: "Max. Verschiebung", scoreMax: "Score-Obergrenze", thrLabel: "Schwelle (max. Fehler)",
+      liveHours: "Live-Stunden dieser Epoche", frameWin: "Bewerteter Rahmen",
+      shiftCap: "Max. Verschiebung", advanceGate: "Vorr\u00FCcken ab (max. Fehler)",
+      scoreMax: "Score-Obergrenze", thrLabel: "Schwelle (max. Fehler)",
       freeSlots: "Freie ANN-Slots",
       hashLabel: "Daten-Hash (byteweise Verifikation)",
-      hashOk: "\u2713 Identisch mit der Task-Datei in qubic/core {ref}",
-      hashPending: "Task-Datei zu diesem Hash wird in qubic/core gesucht \u2026",
+      hashOk: "\u2713 K12 der ersten {win} Ziele, von der Node gelesen, ist gleich ihrem Daten-Hash (Konstanten: qubic/core {ref})",
+      hashBad: "\u2717 Die Ziele der Node passen nicht zu ihrem eigenen Daten-Hash \u2014 keine Zahlen angezeigt",
+      hashPending: "Aufgabe wird von der Node gelesen \u2026",
       teTitle: "Was trainiert wird",
-      teWhat: "Laut Qubic ist die Zielreihe die Richtung von Bitcoin-Stundenkerzen: schlie\u00DFt die n\u00E4chste Stunde h\u00F6her (1) oder tiefer (0)?",
-      teSource: "Quelle: Qubic-Blog",
-      teHowRolling: "Das Netz erzeugt die Reihe selbst (die Eingangs-Trits der Datei werden nicht gelesen) und wird auf einem Rahmen von {win} h (\u2248 {years} Jahr) bewertet. Bei h\u00F6chstens {gate} Fehlern r\u00FCckt der Rahmen eine Stunde weiter, bis zu {cap} h; vorn liegt, wer am weitesten gekommen ist.",
-      teHowWindows: "Das Netz sieht jeweils {win} h Vergangenheit und muss die Stunde danach treffen; bewertet werden {graded} Positionen.",
-      teNoForecast: "Keine Prognose: Alle {n} Stunden, in die der Rahmen vorr\u00FCcken kann, stehen bereits bekannt in der Datei. Das Netz bildet Vergangenheit nach \u2014 eine Vorhersage f\u00FCr die kommenden Stunden ver\u00F6ffentlicht es nicht.",
-      teOpenHours: "Die Aufgabe enth\u00E4lt {n} offene Stunden (Ziel unbekannt) \u2014 das Netz wird an Stunden gemessen, die noch niemand kennt.",
-      tritLabel: "Zielverteilung \u2014 rein bin\u00E4r (0/1, kein \u201Ewei\u00DF nicht\u201C)",
+      teWhat: "Seit Epoche 240 ist die Zielreihe die echte Richtung des Bitcoin-Kurses, Stunde f\u00FCr Stunde: Die Nodes holen jeden Stundenkurs BTC/USDT \u00FCber Qubics Preis-Oracle (Quelle Binance) und speichern ihn on-chain. Ziel 1 hei\u00DFt, die Stunde schloss gleich oder h\u00F6her, 0 tiefer.",
+      teSource: "Quelle: qubic/core",
+      teHowRolling: "Das Netz sieht keine Kurse: Es erzeugt die Reihe selbst und wird auf einem Rahmen von {win} h (\u2248 {years} Jahr bis zum Epochenstart) bewertet. Bei h\u00F6chstens {gate} Fehlern r\u00FCckt der Rahmen eine Stunde weiter \u2014 aber nur in Stunden, die das Oracle schon geliefert hat, bis zu {cap} h. Vorn liegt, wer am weitesten gekommen ist.",
+      teLive: "{n} von {cap} Stunden sind seit Epochenstart live eingetroffen; an ihnen werden die Netze gemessen. Einen Tipp f\u00FCr die n\u00E4chste Stunde ver\u00F6ffentlicht das Netz nicht.",
+      teLiveNone: "In dieser Epoche ist noch keine Live-Stunde eingetroffen \u2014 das Oracle liefert die erste kurz nach der vollen Stunde.",
+      teBtcLink: "Kolonie gegen Bitcoin: die Stunden live \u2192",
+      tritLabel: "Zielverteilung \u2014 Rahmen und Live-Stunden, rein bin\u00E4r (0/1)",
       target0: "Ziel 0:", target1: "Ziel 1:", targetUnk: "Unbekannt (Ziel):",
       tritNote: "\u201EWei\u00DF nicht\u201C (Trit 2) ist interner Netzwerkzustand, aber niemals Zielwert \u2014 Abweichung z\u00E4hlt schlicht als Fehler.",
       revTitle: "Revenue-Verteilung (n\u00E4herungsweise bis Epochenende)",
@@ -1388,7 +1398,7 @@ html { scroll-behavior: smooth; }
       /* The threshold is an upper bound on a single solution's ERROR COUNT, not a
          target the colony fills up. Relating it to solution_count would divide two
          unrelated quantities, so state what it means instead. */
-      const graded = d.task && (d.task.score_max || d.task.graded_windows);
+      const graded = d.task && d.task.hash_verified === true && d.task.score_max;
       if (graded && d.colony.threshold > 0) {
         const hit = ((graded - d.colony.threshold) / graded * 100).toFixed(1);
         thrPct.textContent = t("thresholdHint", { graded: fmtInt(graded), pct: hit });
@@ -1451,18 +1461,21 @@ html { scroll-behavior: smooth; }
     const task = d.task;
     if (!task) return;
 
-    /* Every task figure comes from the core file whose hash the node reported
-       (qdr/antask.py). Until that lookup is done the task carries only the hash, and
-       these stay "–" rather than showing an earlier task's numbers. */
-    const rolling = task.scoring === "rolling-frame";
-    document.getElementById("t-win-label").textContent = t(rolling ? "frameWin" : "ctxWin");
-    document.getElementById("t-seq").textContent      = fmtInt(task.sequence_length);
-    document.getElementById("t-win").textContent      = fmtInt(task.window_width);
-    document.getElementById("t-shift").textContent    = fmtInt(task.shift_cap);
-    document.getElementById("t-graded").textContent   = fmtInt(task.score_max);
+    /* Since epoch 240 the task is read from the node itself and checked there:
+       K12 of the first frame must equal the node's dataHash (qdr/antask.py).
+       Until that check has passed, the figures stay "–" -- never numbers that
+       might not be the ones the network grades. */
+    const ok = task.hash_verified === true;
+    const live = ok && task.shift_limit != null
+      ? fmtInt(task.shift_limit) + " / " + fmtInt(task.shift_cap) : null;
+    document.getElementById("t-live").textContent  = live || "–";
+    document.getElementById("t-win").textContent   = fmtInt(ok ? task.window_width : null);
+    document.getElementById("t-shift").textContent = fmtInt(task.shift_cap);
+    document.getElementById("t-gate").textContent  = fmtInt(task.advance_threshold);
+    document.getElementById("t-graded").textContent = fmtInt(ok ? task.score_max : null);
     /* The accept bound comes from the node's epoch context, not from the task's row
-       count -- those are different numbers (4350 vs 8929) and confusing them made the
-       page state a threshold the network does not use. */
+       count -- those are different numbers and confusing them made the page state
+       a threshold the network does not use. */
     document.getElementById("t-threshold").textContent = fmtInt(
       d.colony ? d.colony.threshold : null);
     document.getElementById("t-free").textContent = fmtInt(
@@ -1480,9 +1493,12 @@ html { scroll-behavior: smooth; }
         : h;
       hashEl.title = h; /* Full hash on hover */
 
-      if (task.hash_verified === true) {
+      if (ok) {
         hashCheck.className = "hash-check";
-        hashCheck.textContent = t("hashOk", { ref: task.source_ref || "" });
+        hashCheck.textContent = t("hashOk", { win: fmtInt(task.window_width), ref: task.source_ref || "main" });
+      } else if (task.hash_verified === false) {
+        hashCheck.className = "hash-check unverified";
+        hashCheck.textContent = t("hashBad");
       } else {
         hashCheck.className = "hash-check unverified";
         hashCheck.textContent = t("hashPending");
@@ -1492,21 +1508,19 @@ html { scroll-behavior: smooth; }
     /* Was trainiert wird */
     const how = document.getElementById("te-how");
     const verdict = document.getElementById("te-forecast");
-    if (task.hash_verified !== true) {
+    if (!ok) {
       how.textContent = "";
       verdict.textContent = "";
-    } else {
-      how.textContent = rolling
-        ? t("teHowRolling", {
-            win: fmtInt(task.window_width),
-            years: (task.window_width / 8760).toLocaleString(lang === "de" ? "de-DE" : "en-US",
-                                                             { maximumFractionDigits: 1 }),
-            gate: fmtInt(task.advance_gate), cap: fmtInt(task.shift_cap) })
-        : t("teHowWindows", { win: fmtInt(task.window_width), graded: fmtInt(task.score_max) });
-      verdict.textContent = task.tail_unknown > 0
-        ? t("teOpenHours", { n: fmtInt(task.tail_unknown) })
-        : t("teNoForecast", { n: fmtInt(task.tail_rows) });
+      return;
     }
+    how.textContent = t("teHowRolling", {
+      win: fmtInt(task.window_width),
+      years: (task.window_width / 8760).toLocaleString(lang === "de" ? "de-DE" : "en-US",
+                                                       { maximumFractionDigits: 1 }),
+      gate: fmtInt(task.advance_threshold), cap: fmtInt(task.shift_cap) });
+    verdict.textContent = task.shift_limit > 0
+      ? t("teLive", { n: fmtInt(task.shift_limit), cap: fmtInt(task.shift_cap) })
+      : t("teLiveNone");
 
     /* Trit-Distribution */
     const zeros   = task.target_zeros   || 0;

@@ -390,6 +390,61 @@ U+00F7, sometimes more); only the 60 letters are kept.
 The old *Qubic Star Rain* source, `wss://rt.qubic.li/live`, still delivered
 `{"Tick":…,"MessageType":"Tick"}` on the same day; it carries no tick content.
 
+## 7.5 The BTC feed behind the mining task (2026-11-18, core v1.313, epoch 240)
+
+Since core v1.309 (live from epoch 240) the BPP-9000 task is no longer a file in
+qubic/core. The nodes fetch the hourly BTC/USDT price through the Price oracle
+(Binance) on-chain, and the targets are its direction:
+`target = usdt(h) >= usdt(h-1)` in whole USDT. A year-long frame of 8,760 hours ends
+at `baseHour` (the last hour known when the epoch began); every hour stored during
+the epoch adds one target, up to `SHIFT_CAP` = 168. Hour `H` is `H` hours after
+2022-04-13 12:00 UTC. Reference: qubic/core `doc/ant_colony_mining.md` §2.3a.
+
+Two public peer messages (port 21841, no signature), both verified live:
+
+| Message | Request | Answer |
+|---|---|---|
+| `REQUEST_BPP9000_TASK_DATA` 80/81 | anchor tick (4 bytes) | 20-byte header (`valid`, `baseHour`, `shiftLimit`) + `8760 + shiftLimit` target bytes |
+| `REQUEST_PRICE_SERIES` 78/79 | `fromHour`, `count` (≤ 256) | 124-byte header (`nextHour`, failed attempts, node-local counters, digest) + 20-byte points (`hour`, `appendTick`, `flags`, `priceE8`) |
+
+Measured 2026-11-18 ~12:45 UTC: `baseHour` 40316 (08:00 UTC), hours 09:00–12:00
+stored in ticks 91,910,016–91,910,051, `shiftLimit` 4, 0 failures. Points from the
+bootstrap file carry `appendTick` 0 and flag bit 1 (undocumented); bit 0 is
+"filled" (oracle failed 24 h, previous price reused, counts as up).
+
+**Verification:** the epoch context's `dataHash` is K12 of the first 8,760 target
+bytes. `qdr/antask.py` recomputes it (pycryptodome's KangarooTwelve). It matched
+the live node on the first try.
+
+**Direction only.** `qdr/antask.py` drops `priceE8` at parse time. The prices are
+Binance market data, and this project republishes no exchange data (§ price
+source in `qdr/pipeline.py`); `tests/test_btc.py` fails if any `/v1/btc` or
+`/v1/mining` field name contains "price".
+
+**What stays closed:** a network's output (its call for the next hour) is only
+readable through `REQUEST_ANT_PARENT_ANN` (74), which needs an operator signature. The
+end-of-epoch export `antColonySolutions.eoe` stays on the node. See
+`docs/CONCEPT_BTC_PREDICTION.de.md` and `docs/BTC_CALL_REQUEST.md`.
+
+**Solutions in the tick logs:** since v1.309 every solution transaction writes an
+`ANT_SOLU` custom message (92 bytes: type, source key, nonce, parent tick/index,
+anchor tick, score, result). Result 0/1 is accepted, anything else rejected; the
+score is the recomputed error, 0 when rejected before scoring. `qdr/tickstream.py`
+reports `solutions`, `sol_ok` and `sol_best` per tick.
+
+## 7.6 Rebuilding the colony's networks (2026-11-18)
+
+The networks themselves stay operator-gated, but everything a rebuild needs is
+public: the epoch's spectrum digest (message 76) seeds the 512 MB pool and the
+control/output neurons; each accepted solution's ANT_SOLU log gives its key,
+nonce, parent (tick, tx index) and anchor tick; `K12(anchorTick ‖ K12(TickData))`
+needs the raw TickData of the anchor (peer `REQUEST_TICK_DATA` 16 → type 8,
+139,376 bytes); and the targets of an anchor are the first frame plus the live
+hours stored in a tick before it. `tools/replayer` runs qubic/core's reference
+scorer on that; `qdr/colony.py` drives it. Bob filters logs by type:
+`qubic_getLogs {fromTick, toTick, logType: 255}` cut 100 ticks from 447 KB to
+67 KB (measured 2026-11-18).
+
 ## 8. Update cadence — measured, not assumed
 
 | Quantity | Rate | Poll |

@@ -9,6 +9,14 @@ Erstellt: 2026-09-09 · Geprüft gegen: `qubic/core` @ `main`, Epoch 230, `rpc.q
 
 ---
 
+## 0b. Nachtrag 2026-11-18 — Core v1.313.0, Epoch 240: abgelöst
+
+Die Task-Datei ist weg. Die Ziele werden live aus stündlichen BTC/USDT-Kursen des
+Preis-Oracles (Binance) gebaut. Es gibt neue öffentliche Nachrichten: 78/79 für die Preisreihe
+und 80/81 für die Task-Daten. Beide sind live geprüft. Die Netze bleiben operator-signiert,
+lassen sich aber aus öffentlichen Daten nachbauen. Weiter in
+[`CONCEPT_BTC_PREDICTION.de.md`](CONCEPT_BTC_PREDICTION.de.md).
+
 ## 0a. Nachtrag 2026-10-14 — Core v1.308.1, Epoch 235
 
 Neue Task-Datei: Laut Blog beginnt die Historie jetzt am 2025-07-01 statt am 2025-01-01,

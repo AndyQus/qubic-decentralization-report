@@ -1,14 +1,18 @@
-"""The task description follows the network across core releases without an edit.
+"""The mining task is read from the network itself, and checked there.
 
-What is pinned here is what made the hard-coded version go wrong: v1.306 changed the
-task and the page kept describing v1.304's. So:
+Since core v1.309 (live from epoch 240) there is no task file: the targets are the
+hourly BTC direction the nodes store through the Price oracle, served by
+REQUEST_BPP9000_TASK_DATA (80); the feed's state by REQUEST_PRICE_SERIES (78).
+What is pinned here:
 
-  * the description is read from the core ref whose task file carries the live hash,
-    including a release tag when `main` has already moved on to the next epoch;
-  * until that lookup succeeds the page gets the hash and nothing else -- never an
-    earlier task's numbers;
-  * a hash nothing matches is not looked up on every 30 s poll;
-  * whether the task asks about hours nobody knows yet is read from the file.
+  * the wire formats parse as the core defines them (doc/ant_colony_mining.md
+    2.7d/2.7e), and a node's `valid = 0` is "no task", not an empty one;
+  * the task counts as verified only when K12 of its first frame equals the
+    node's dataHash -- a mismatch is reported, never shown as numbers;
+  * prices never leave the parser;
+  * the constants a node does not report come from the release tag of the
+    node's own version, and a version nothing matches is not looked up on every
+    poll.
 
 No test here touches the network: GitHub is a dict of URL -> bytes.
 """
@@ -24,45 +28,35 @@ sys.path.insert(0, str(ROOT))
 
 from qdr import antask  # noqa: E402
 
-LIVE = "e835130d" * 8
-PREVIOUS = "979cdc22" * 8
-
-ROLLING_SETTINGS = """
-static constexpr unsigned long long BPP9000_NUMBER_OF_INPUT_NEURONS = 18;
-static constexpr unsigned long long BPP9000_SEQUENCE_LENGTH = 24 * 365 + 24 * 7;
+SETTINGS = """
 static constexpr unsigned long long BPP9000_WINDOW_WIDTH = 24 * 365;
 // How far the frame may slide: production predicts one week ahead.
 static constexpr unsigned long long BPP9000_SHIFT_CAP = 24 * 7;
+static constexpr unsigned int BPP9000_ADVANCE_THRESHOLD = 3504;
 static constexpr unsigned int BPP9000_SOLUTION_THRESHOLD_DEFAULT = 4350;
 """
-WINDOW_SETTINGS = """
-static constexpr unsigned long long BPP9000_SEQUENCE_LENGTH = 24 * 365;
-static constexpr unsigned long long BPP9000_WINDOW_WIDTH = 24 * 28;
-static constexpr unsigned int BPP9000_SOLUTION_THRESHOLD_DEFAULT = 4000;
-"""
+W = 24 * 365
+BASE = 40316
 
 
-def _pack(trits: list[int]) -> bytes:
-    out = bytearray()
-    for i in range(0, len(trits), 5):
-        chunk = trits[i:i + 5] + [0] * (5 - len(trits[i:i + 5]))
-        out.append(sum(t * 3 ** k for k, t in enumerate(chunk)))
-    return bytes(out)
+def targets(live: list[int]) -> bytes:
+    return bytes([i % 2 for i in range(W)] + live)
 
 
-def task_file(data_hash: str, targets: list[int], n_in: int = 18) -> bytes:
-    """A task file in the core's format: header, empty topology, packed rows."""
-    population, neighbors = 0, 0
-    header = struct.pack("<IIIIQII", antask.TASK_MAGIC, 1, n_in, 1, len(targets), population, neighbors)
-    header += b"\0" * 32 + bytes.fromhex(data_hash)
-    assert len(header) == antask.HEADER_SIZE
-    topology = b"\0" * ((n_in + 1 + 1 + population * neighbors) * 4)
-    rows = b"".join(_pack([1] * n_in) + _pack([t]) for t in targets)
-    return header + topology + rows
+def task_payload(tg: bytes, shift_limit: int, valid: int = 1, base: int = BASE,
+                 tick: int = 91_911_000, epoch: int = 240) -> bytes:
+    head = struct.pack("<IIHBBII", tick, tick - 3, epoch, valid, 0, base, shift_limit)
+    return head + (tg if valid else b"")
+
+
+def series_payload(points: list[tuple[int, int, int, int]], next_hour: int,
+                   failed: int = 0, base: int = BASE) -> bytes:
+    head = struct.pack("<IHBBIIIqq32sQQQQQQII", 91_911_000, 240, 1, 0, 1, next_hour, failed,
+                       0, 0, b"\x11" * 32, 4, 0, 0, 0, 0, 0, base, len(points))
+    return head + b"".join(struct.pack("<IIIq", *p) for p in points)
 
 
 def github(files: dict[str, bytes], tags: list[str]):
-    """A fetch() that serves `files` (keyed ref/path) and the tag list, and logs calls."""
     calls: list[str] = []
 
     def fetch(url: str) -> bytes:
@@ -78,100 +72,107 @@ def github(files: dict[str, bytes], tags: list[str]):
     return fetch
 
 
-def rolling_targets(tail: list[int] | None = None) -> list[int]:
-    seq = 24 * 365 + 24 * 7
-    body = [i % 2 for i in range(24 * 365)]
-    tail = tail if tail is not None else [1, 0] * (24 * 7 // 2)
-    return body + tail + [0]   # the core's file carries one row past the sequence
+def resolver(tmp_path, files=None, tags=("v1.313.0", "v1.312.0")):
+    files = files if files is not None else {"v1.313.0/src/public_settings.h": SETTINGS.encode()}
+    return antask.SettingsResolver(cache_file=tmp_path / "s.json",
+                                   fetch=github(files, list(tags)), background=False)
 
 
-def test_settings_expressions_are_evaluated():
-    s = antask.parse_settings(ROLLING_SETTINGS)
-    assert s["BPP9000_SEQUENCE_LENGTH"] == 8928
-    assert s["BPP9000_WINDOW_WIDTH"] == 8760
-    assert s["BPP9000_SHIFT_CAP"] == 168
+# -- wire formats ------------------------------------------------------------
+
+def test_task_data_parses_and_invalid_means_none():
+    tg = targets([0, 1, 1])
+    got = antask.parse_task_data(task_payload(tg, 3))
+    assert got["base_hour"] == BASE and got["shift_limit"] == 3 and got["targets"] == tg
+    assert antask.parse_task_data(task_payload(b"", 0, valid=0)) is None
 
 
-def test_rolling_frame_is_described_from_the_file():
-    task = antask.parse_task_file(task_file(LIVE, rolling_targets()))
-    d = antask.describe(task, antask.parse_settings(ROLLING_SETTINGS), "main")
-
-    assert d["scoring"] == "rolling-frame"
-    assert d["score_max"] == 8760          # error count inside one frame
-    assert d["advance_gate"] == 2920       # a third of the frame
-    assert d["shift_cap"] == 168
-    assert d["inputs_used"] is False
-    # Only the first SEQUENCE_LENGTH rows are graded; the extra row is not counted.
-    assert d["target_zeros"] + d["target_ones"] + d["target_unknown"] == 8928
-    assert d["tail_rows"] == 168 and d["tail_unknown"] == 0
+def test_price_series_drops_every_price():
+    p = antask.parse_price_series(series_payload([(40317, 91910016, 0, 6468533000000)], 40318))
+    assert p["next_hour"] == 40318 and p["points"] == [{"hour": 40317, "append_tick": 91910016, "flags": 0}]
+    assert "price" not in json.dumps(p).lower()
 
 
-def test_open_hours_in_the_frame_tail_are_reported():
-    """UNKNOWN targets where the frame slides to would mean grading unknown hours."""
-    tail = [1, 0] * 80 + [2] * 8
-    task = antask.parse_task_file(task_file(LIVE, rolling_targets(tail)))
-    d = antask.describe(task, antask.parse_settings(ROLLING_SETTINGS), "main")
-    assert d["tail_unknown"] == 8
+def test_hour_zero_is_the_documented_epoch():
+    # doc 2.3a: hour H is H hours after 2022-04-13 12:00:00 UTC; baseHour 40316
+    # was measured live as 2026-11-18 08:00 UTC.
+    assert antask.hour_at(40316) == 1794988800
 
 
-def test_sliding_windows_model_still_reads_correctly():
-    targets = [i % 2 for i in range(24 * 365 + 1)]
-    task = antask.parse_task_file(task_file(PREVIOUS, targets))
-    d = antask.describe(task, antask.parse_settings(WINDOW_SETTINGS), "v1.305.0")
-    assert d["scoring"] == "sliding-windows"
-    assert d["score_max"] == 8088
-    assert d["shift_cap"] is None
+# -- verification -------------------------------------------------------------
+
+def test_verified_only_when_k12_of_the_first_frame_matches(tmp_path):
+    tg = targets([0, 0, 1])
+    task = antask.parse_task_data(task_payload(tg, 3))
+    good = antask.k12_hex(tg[:W])
+    out = antask.task_block(good, task, version=313, resolver=resolver(tmp_path))
+    assert out["hash_verified"] is True
+    assert out["window_width"] == W and out["shift_limit"] == 3 and out["shift_cap"] == 168
+    assert out["advance_threshold"] == 3504 and out["source_ref"] == "v1.313.0"
+    assert out["target_ones"] == sum(tg)
+
+    bad = antask.task_block("00" * 32, task, version=313, resolver=resolver(tmp_path))
+    assert bad["hash_verified"] is False
 
 
-def test_epoch_switch_finds_the_release_tag_when_main_moved_on():
-    """main already holds the next task; the network still mines the previous one."""
-    fetch = github({
-        "main/" + antask.TASK_PATH: task_file(LIVE, rolling_targets()),
-        "main/" + antask.SETTINGS_PATH: ROLLING_SETTINGS.encode(),
-        "v1.306.0/" + antask.TASK_PATH: task_file(LIVE, rolling_targets()),
-        "v1.305.0/" + antask.TASK_PATH: task_file(PREVIOUS, [i % 2 for i in range(8761)]),
-        "v1.305.0/" + antask.SETTINGS_PATH: WINDOW_SETTINGS.encode(),
-    }, tags=["v1.306.0", "v1.305.0"])
-
-    d = antask.find_task(PREVIOUS, fetch)
-    assert d["source_ref"] == "v1.305.0"
-    assert d["window_width"] == 672
-    # main and v1.306.0 carry the same file: the second copy is not parsed again,
-    # and settings are only fetched for the ref that matched.
-    assert not any(u.endswith("main/" + antask.SETTINGS_PATH) for u in fetch.calls)
+def test_live_hours_are_marked_and_carry_their_tick(tmp_path):
+    tg = targets([0, 1])
+    task = antask.parse_task_data(task_payload(tg, 2))
+    series = antask.parse_price_series(series_payload(
+        [(BASE + 1, 500, 0, 1), (BASE + 2, 600, antask.FLAG_FILLED, 1)], BASE + 3))
+    hours = antask.hours_block(task, series)
+    assert len(hours) == antask.RECENT_FRAME_HOURS + 2
+    live = [h for h in hours if h["live"]]
+    assert [(h["hour"], h["up"], h["append_tick"], h["filled"]) for h in live] == [
+        (BASE + 1, False, 500, False), (BASE + 2, True, 600, True)]
+    assert hours[antask.RECENT_FRAME_HOURS - 1]["hour"] == BASE    # frame ends at baseHour
 
 
-def test_unresolved_hash_gives_the_hash_and_no_numbers(tmp_path):
-    fetch = github({}, tags=[])
-    r = antask.TaskResolver(cache_file=tmp_path / "t.json", fetch=fetch, background=False)
-    block = antask.task_block(LIVE, r)
-    assert block == {"data_hash": LIVE, "hash_verified": None}
+def test_no_task_data_gives_the_hash_and_no_numbers(tmp_path):
+    out = antask.task_block("ab" * 32, None, version=313, resolver=resolver(tmp_path))
+    assert out["hash_verified"] is None and "window_width" not in out
+    assert antask.hours_block(None, None) == []
+
+
+def test_a_frame_of_the_wrong_width_is_not_trusted(tmp_path):
+    tg = bytes(100)
+    task = antask.parse_task_data(task_payload(tg, 0))
+    out = antask.task_block(antask.k12_hex(tg), task, version=313, resolver=resolver(tmp_path))
+    assert out["hash_verified"] is False
+
+
+# -- settings -----------------------------------------------------------------
+
+def test_settings_come_from_the_nodes_own_release(tmp_path):
+    files = {"v1.312.0/src/public_settings.h": SETTINGS.replace("3504", "9999").encode(),
+             "v1.313.0/src/public_settings.h": SETTINGS.encode(),
+             "main/src/public_settings.h": SETTINGS.replace("3504", "1").encode()}
+    r = resolver(tmp_path, files)
+    assert r.get(313)["ref"] == "v1.313.0"
+    assert r.get(312)["constants"]["BPP9000_ADVANCE_THRESHOLD"] == 9999
+
+
+def test_a_version_without_a_tag_falls_back_to_main(tmp_path):
+    r = resolver(tmp_path, {"main/src/public_settings.h": SETTINGS.encode()})
+    assert r.get(314)["ref"] == "main"
 
 
 def test_a_failed_lookup_is_not_repeated_every_poll(tmp_path):
-    fetch = github({}, tags=[])
-    r = antask.TaskResolver(cache_file=tmp_path / "t.json", fetch=fetch, background=False)
-    r.get(LIVE)
-    n = len(fetch.calls)
-    for _ in range(5):
-        r.get(LIVE)
-    assert len(fetch.calls) == n
+    r = resolver(tmp_path, files={})
+    assert r.get(313) is None
+    n = len(r.fetch.calls)
+    assert r.get(313) is None
+    assert len(r.fetch.calls) == n
 
 
-def test_resolved_task_survives_a_restart_without_github(tmp_path):
-    files = {
-        "main/" + antask.TASK_PATH: task_file(LIVE, rolling_targets()),
-        "main/" + antask.SETTINGS_PATH: ROLLING_SETTINGS.encode(),
-    }
-    cache = tmp_path / "t.json"
-    first = antask.TaskResolver(cache_file=cache, fetch=github(files, []), background=False)
-    assert antask.task_block(LIVE, first)["hash_verified"] is True
+def test_resolved_settings_survive_a_restart_without_github(tmp_path):
+    assert resolver(tmp_path).get(313) is not None
+    offline = antask.SettingsResolver(cache_file=tmp_path / "s.json",
+                                      fetch=github({}, []), background=False)
+    assert offline.get(313)["ref"] == "v1.313.0"
+    assert offline.fetch.calls == []
 
-    def offline(url):
-        raise OSError("no network")
 
-    second = antask.TaskResolver(cache_file=cache, fetch=offline, background=False)
-    block = antask.task_block(LIVE.upper(), second)   # hash case must not matter
-    assert block["hash_verified"] is True
-    assert block["source_ref"] == "main"
-    assert block["score_max"] == 8760
+def test_settings_expressions_are_evaluated():
+    s = antask.parse_settings(SETTINGS)
+    assert s["BPP9000_WINDOW_WIDTH"] == 8760 and s["BPP9000_SHIFT_CAP"] == 168

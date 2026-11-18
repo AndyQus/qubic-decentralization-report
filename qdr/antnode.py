@@ -8,7 +8,10 @@ Two things are needed and neither is in the RPC:
 
   * a set of reachable node IPs -- there is no official endpoint, so peers come from
     qubic.li's public list with the core's bootstrap IPs as the fallback;
-  * REQUEST_ANT_EPOCH_CONTEXT (76), which is *public*: no signature, no operator key.
+  * the public ant-colony reads (no signature, no operator key):
+    REQUEST_ANT_EPOCH_CONTEXT (76), and since core v1.309 (live from epoch 240)
+    REQUEST_PRICE_SERIES (78) and REQUEST_BPP9000_TASK_DATA (80) -- the BTC feed
+    the task is now built from (qdr/antask.py).
 
 What is deliberately NOT here: per-identity scores. REQUEST_ANT_IDENTITY_TREE (72) is
 operator-signed -- a node answers it only for identities whose operator key signed the
@@ -16,7 +19,7 @@ request. Verified against a live node: an unsigned request draws no response at 
 So the network-wide best score is not readable from outside, and this module does not
 pretend otherwise.
 
-Protocol reference: qubic/core doc/ant_colony_mining.md section 2.7a.
+Protocol reference: qubic/core doc/ant_colony_mining.md sections 2.7a, 2.7d, 2.7e.
 """
 from __future__ import annotations
 
@@ -39,6 +42,10 @@ REQUEST_REVENUE_DATA = 70
 RESPOND_REVENUE_DATA = 71
 REQUEST_ANT_EPOCH_CONTEXT = 76
 RESPOND_ANT_EPOCH_CONTEXT = 77
+REQUEST_PRICE_SERIES = 78
+RESPOND_PRICE_SERIES = 79
+REQUEST_BPP9000_TASK_DATA = 80
+RESPOND_BPP9000_TASK_DATA = 81
 
 # Fixed packed struct sizes, asserted in the core's own headers.
 EPOCH_CONTEXT_SIZE = 120
@@ -159,19 +166,20 @@ def fetch_peers(timeout: float = 10.0) -> list[str]:
 
 
 def _ask(ip: str, req_type: int, resp_type: int, min_size: int,
-         timeout: float = DEFAULT_TIMEOUT_S) -> tuple[bytes, float] | None:
-    """Send an empty, unsigned request and wait for one frame of `resp_type`.
+         timeout: float = DEFAULT_TIMEOUT_S, payload: bytes = b"") -> tuple[bytes, float] | None:
+    """Send an unsigned request and wait for one frame of `resp_type`.
 
-    All three requests used here take no payload and no signature. A node answers with
-    a peer-exchange frame first, so frames have to be walked rather than assuming the
-    reply is the first thing on the wire. Returns (payload, latency_ms) or None.
+    None of the requests used here carries a signature; most carry no payload
+    either. A node answers with a peer-exchange frame first, so frames have to be
+    walked rather than assuming the reply is the first thing on the wire. Returns
+    (payload, latency_ms) or None.
     """
     sock = socket.socket()
     sock.settimeout(timeout)
     started = time.monotonic()
     try:
         sock.connect((ip, PEER_PORT))
-        sock.sendall(_header(0, req_type, dejavu=int(time.time()) & 0xFFFF or 1))
+        sock.sendall(_header(len(payload), req_type, dejavu=int(time.time()) & 0xFFFF or 1) + payload)
         buf = b""
         while time.monotonic() - started < timeout:
             try:
@@ -181,9 +189,9 @@ def _ask(ip: str, req_type: int, resp_type: int, min_size: int,
             if not chunk:
                 break
             buf += chunk
-            for msg_type, payload in _frames(buf):
-                if msg_type == resp_type and len(payload) >= min_size:
-                    return payload, (time.monotonic() - started) * 1000
+            for msg_type, body in _frames(buf):
+                if msg_type == resp_type and len(body) >= min_size:
+                    return body, (time.monotonic() - started) * 1000
     except OSError:
         return None
     finally:
@@ -249,6 +257,89 @@ def query_revenue_data(ip: str, timeout: float = DEFAULT_TIMEOUT_S) -> RevenueDa
         source_ip=ip,
         latency_ms=latency,
     )
+
+
+def query_task_data(ip: str, anchor_tick: int, timeout: float = DEFAULT_TIMEOUT_S) -> dict | None:
+    """The targets and shift limit `anchor_tick` is graded on (message 80).
+
+    None when the node does not answer, or answers `valid = 0` -- an anchor
+    outside the epoch or ahead of the node, or a node without a usable series.
+    """
+    got = _ask(ip, REQUEST_BPP9000_TASK_DATA, RESPOND_BPP9000_TASK_DATA,
+               antask.TASK_DATA_HEADER.size, timeout, struct.pack("<I", int(anchor_tick)))
+    if got is None:
+        return None
+    try:
+        task = antask.parse_task_data(got[0])
+    except ValueError:
+        return None
+    if task is not None:
+        task["source_ip"] = ip
+    return task
+
+
+def query_price_series(ip: str, from_hour: int, count: int,
+                       timeout: float = DEFAULT_TIMEOUT_S) -> dict | None:
+    """The BTC feed's state and, for up to 256 hours, when each was stored (message 78).
+
+    Prices are part of the reply and are discarded by the parser; see qdr/antask.py.
+    """
+    got = _ask(ip, REQUEST_PRICE_SERIES, RESPOND_PRICE_SERIES,
+               antask.PRICE_SERIES_HEADER.size, timeout,
+               struct.pack("<II", int(from_hour), max(0, min(256, int(count)))))
+    if got is None:
+        return None
+    try:
+        return antask.parse_price_series(got[0])
+    except ValueError:
+        return None
+
+
+REQUEST_TICK_DATA = 16
+BROADCAST_FUTURE_TICK_DATA = 8
+# TickData: 16 header bytes, timelock, 4096 transaction digests, 1024 contract fees,
+# signature (src/network_messages/tick.h asserts the same sum).
+TICK_DATA_SIZE = 8 + 8 + 32 + 4096 * 32 + 8 * 1024 + 64
+
+
+def query_tick_data(ip: str, tick: int, timeout: float = 15.0) -> bytes | None:
+    """The raw TickData of `tick` (REQUEST_TICK_DATA), exactly as the node holds it.
+
+    The ant colony seeds a solution's mutation walk with K12(tick || K12(TickData)),
+    so only the byte-exact struct will do. None when the node does not answer, has
+    no data for the tick (an empty tick), or answers a different tick.
+    """
+    got = _ask(ip, REQUEST_TICK_DATA, BROADCAST_FUTURE_TICK_DATA, TICK_DATA_SIZE, timeout,
+               struct.pack("<I", int(tick)))
+    if got is None:
+        return None
+    data = got[0][:TICK_DATA_SIZE]
+    if struct.unpack_from("<I", data, 4)[0] != int(tick):
+        return None
+    return data
+
+
+def read_feed(peers: list[str], info: "SystemInfo | None") -> tuple[dict | None, dict | None]:
+    """The epoch's task data at the newest tick a node has, and the feed state.
+
+    The anchor is the answering node's own current tick, read just before: a tick
+    ahead of a node is `valid = 0`, and nodes differ by a few ticks. The node that
+    answered the system-info query is asked first, since its tick is known.
+    """
+    order = ([info.source_ip] if info else []) + [ip for ip in peers if not info or ip != info.source_ip]
+    for ip in order:
+        tick = info.tick if info and ip == info.source_ip else None
+        if tick is None:
+            other = query_system_info(ip)
+            if other is None:
+                continue
+            tick = other.tick
+        task = query_task_data(ip, tick)
+        if task is None:
+            continue
+        series = query_price_series(ip, task["base_hour"] + 1, task["shift_limit"])
+        return task, series
+    return None, None
 
 
 def _parse_context(payload: bytes, ip: str, latency_ms: float) -> AntEpochContext:
@@ -328,6 +419,8 @@ def collect(peers: list[str] | None = None, attempts: int = 5) -> dict:
         if rev is not None:
             break
 
+    task, series = read_feed(probed, info)
+
     bundle: dict = {
         "status": "live",
         "fetched_at": int(time.time()),
@@ -344,10 +437,15 @@ def collect(peers: list[str] | None = None, attempts: int = 5) -> dict:
             "free_ann_slots": ctx.free_ann_slots,
             "max_children_per_parent": ctx.max_children_per_parent,
         },
-        # The task's shape is not something a node reports and it changes between
-        # core releases; antask reads it from the core file carrying this hash.
-        "task": antask.task_block(ctx.data_hash),
+        # Since epoch 240 the task is the live BTC feed itself (antask): read
+        # from the node, checked against this hash.
+        "task": antask.task_block(ctx.data_hash, task, series,
+                                  version=info.version if info else None),
     }
+    # The hour-by-hour view of the same task, for the BTC page (/v1/btc). Kept
+    # apart from "task" so /v1/mining, which every live page polls, stays small.
+    bundle["btc"] = {"hours": antask.hours_block(task, series),
+                     "epoch": task["epoch"] if task else None}
 
     if info is not None:
         bundle["epoch"] = {
