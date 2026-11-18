@@ -4,7 +4,8 @@
 //
 // Batch protocol on stdin, one command per line (hex is lower or upper case):
 //
-//   seed <hex32>                         epoch spectrum digest; builds the 512 MB pool
+//   seed <hex32> [poolFile]              epoch spectrum digest; builds the 512 MB pool,
+//                                        in memory or (with poolFile) in a mapped file
 //   targets <0/1 string>                 the task's targets as far as they are known
 //   load <id> <shift> <annHex>           a network replayed earlier (ANN layout)
 //   walk <id> <parent|root> <pubkey> <nonce> <anchorDigest> <shiftLimit>
@@ -18,7 +19,11 @@
 #include "score_bpp9000_reference.h"
 
 #include <cstdio>
+#include <fcntl.h>
 #include <iostream>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -145,6 +150,44 @@ static std::string calls(Miner& m, const Net& net, unsigned long long n)
     return out;
 }
 
+// The pool, written to `path` once (regenerated when its size is wrong) and
+// mapped read-only. generateRandom2Pool, chunk by chunk, so no 512 MB buffer
+// ever exists in memory.
+static unsigned char* mapPool(const unsigned char seed[32], const std::string& path)
+{
+    const size_t size = score_reference::POOL_VEC_PADDING_SIZE;
+    struct stat st;
+    if (stat(path.c_str(), &st) != 0 || (size_t)st.st_size != size)
+    {
+        const std::string tmp = path + ".tmp";
+        FILE* f = std::fopen(tmp.c_str(), "wb");
+        if (!f) return nullptr;
+        unsigned char state[200];
+        memcpy(state, seed, 32);
+        memset(state + 32, 0, sizeof(state) - 32);
+        std::vector<unsigned char> buf(200 * 4096);
+        size_t done = 0;
+        while (done < size)
+        {
+            size_t inBuf = 0;
+            while (inBuf < buf.size() && done + inBuf < size)
+            {
+                KeccakP1600_Permute_12rounds(state);
+                memcpy(buf.data() + inBuf, state, 200);
+                inBuf += 200;
+            }
+            if (std::fwrite(buf.data(), 1, inBuf, f) != inBuf) { std::fclose(f); return nullptr; }
+            done += inBuf;
+        }
+        if (std::fclose(f) != 0 || std::rename(tmp.c_str(), path.c_str()) != 0) return nullptr;
+    }
+    const int fd = open(path.c_str(), O_RDONLY);
+    if (fd < 0) return nullptr;
+    void* p = mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
+    close(fd);
+    return p == MAP_FAILED ? nullptr : (unsigned char*)p;
+}
+
 int main()
 {
     std::ios::sync_with_stdio(false);
@@ -159,10 +202,20 @@ int main()
         in >> cmd;
         if (cmd == "seed")
         {
-            std::string h; in >> h;
+            std::string h, poolFile; in >> h >> poolFile;
             unsigned char seed[32];
             if (!hexBytes(h, seed, 32)) { std::printf("err seed bad-hex\n"); return 2; }
-            m->initialize(seed);
+            if (poolFile.empty())
+            {
+                m->initialize(seed);
+            }
+            else
+            {
+                unsigned char* pool = mapPool(seed, poolFile);
+                if (!pool) { std::printf("err seed pool-file\n"); std::fflush(stdout); continue; }
+                m->poolVec.mapped = pool;
+                m->deriveControlOutput(seed);
+            }
             seeded = true;
             std::printf("ok seed\n");
         }

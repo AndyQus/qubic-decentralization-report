@@ -278,13 +278,37 @@ class Replayer:
             raise ReplayerError(f"replayer exited (code {rc}) {err}".strip())
         return out.rstrip("\n")
 
+    def pool_file(self, seed: str) -> Optional[str]:
+        """Where the epoch's 512 MB pool lives on disk, or None to keep it in memory.
+
+        In memory, the pool got the replayer SIGKILLed on report.qubic.tools
+        (2026-11-18, exit -9): the host has no room for another 512 MB of
+        anonymous memory. A mapped file is page cache the kernel can drop and
+        re-read instead. One file per epoch; the previous epoch's is removed.
+        """
+        base = os.environ.get("QDR_COLONY_POOL_DIR") or (
+            os.path.join(os.environ["DATA_DIR"], "raw") if os.environ.get("DATA_DIR") else None)
+        if not base:
+            return None
+        try:
+            os.makedirs(base, exist_ok=True)
+            keep = f"colony-pool-{seed[:16]}.bin"
+            for name in os.listdir(base):
+                if name.startswith("colony-pool-") and name != keep:
+                    os.remove(os.path.join(base, name))
+        except OSError:
+            return None
+        return os.path.join(base, keep)
+
     def start(self, seed: str) -> None:
         self.close()
         self.proc = subprocess.Popen([self.path], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE, text=True, bufsize=1)
-        self._send(f"seed {seed}")
-        if self._read() != "ok seed":
-            raise ReplayerError("seed rejected")
+        pool = self.pool_file(seed)
+        self._send(f"seed {seed} {pool}" if pool else f"seed {seed}")
+        answer = self._read()
+        if answer != "ok seed":
+            raise ReplayerError(f"seed rejected: {answer}")
         self.seed = seed
         self.known = {}
 

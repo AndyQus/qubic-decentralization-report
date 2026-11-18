@@ -23,6 +23,7 @@ cp "$C/src/mining/rating.h" "$C/test/score_common_reference.h" "$WORK/"
 sed -e 's|#include "../src/mining/score_common.h"|#include "platform_shim.h"|' \
     -e 's|#include "../src/mining/rating.h"|#include "rating.h"|' \
     -e 's|#include "../src/mining/task_file.h"||' \
+    -e 's|std::vector<unsigned char> poolVec;|PoolView poolVec;|' \
     "$C/test/score_bpp9000_reference.h" > "$WORK/score_bpp9000_reference.h"
 cp "$HERE/replay_bpp9000.cpp" "$HERE/platform_shim.h" "$WORK/"
 # Two builds: AVX2 (~15 s per walk) and plain x86-64 (~22 s) for hosts without
