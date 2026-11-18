@@ -447,6 +447,7 @@ class Tracker:
         live_ticks = [p["append_tick"] for p in series["points"]]
         cap = SHIFT_CAP
         walked = 0
+        walk_time = 0.0
         last = None
         for i in range(start, min(len(chain), start + WALKS_PER_STEP)):
             node = chain[i]
@@ -455,7 +456,9 @@ class Tracker:
                 return self.status(state="anchor-unavailable", tick=node["anchor_tick"], scanned=scanned)
             parent = "root" if i == 0 else ref_id(chain[i - 1])
             limit = shift_limit_at(node["anchor_tick"], live_ticks, cap)
+            t0 = time.time()
             err, shift = self.rep.walk(ref_id(node), parent, node["pubkey"], node["nonce"], anchor, limit)
+            walk_time += time.time() - t0
             walked += 1
             if err != node["score"]:
                 # A rebuilt network that does not reproduce the node's own score is
@@ -495,12 +498,24 @@ class Tracker:
         v = self.verified
         call = (self._call(epoch, task, series, v, v["error"], v["shift"])
                 if v.get("complete") and ref_id(v) in self.rep.known else None)
+        if walked:
+            self.walk_s = walk_time / walked
         return self.status(state="tracking" if i + 1 == len(chain) else "catching-up",
-                           depth=i + 1, lineage=len(chain), walked=walked, scanned=scanned, call=call)
+                           depth=i + 1, lineage=len(chain), walked=walked, scanned=scanned, call=call,
+                           walk_s=round(getattr(self, "walk_s", 15.0), 1))
 
     def _call(self, epoch: int, task: dict, series: dict, node: dict, err: int, shift: int) -> Optional[dict]:
-        """Record the network's output for the hour the oracle stores next, once."""
-        hour = int(series["next_hour"])
+        """Record the network's output for the COMING hour, once, before it begins.
+
+        The hour the oracle stores next is already running (its move from the
+        last full hour is under way), so a call for it would be made mid-hour.
+        The call is for the hour after it instead: made up to an hour before
+        that hour starts, judged when the oracle stores it (~5 min after it
+        ends). A network emits every position, so this costs nothing extra.
+        """
+        hour = int(series["next_hour"]) + 1
+        if time.time() >= antask.hour_at(hour) - antask.HOUR_S:
+            return None                          # it has begun: too late to call it
         base = int(task["base_hour"])
         j = hour - base - 1                      # emit WINDOW_WIDTH + j is this hour
         if j < 0 or j >= 168:
@@ -515,7 +530,7 @@ class Tracker:
             fresh = antnode.query_price_series(ip, hour, 1)
             if fresh:
                 break
-        if not fresh or int(fresh["next_hour"]) != hour:
+        if not fresh or int(fresh["next_hour"]) != hour - 1:
             return None
         row = {"hour": hour, "epoch": epoch, "call": int(trits[j]), "net_tick": node["tick"],
                "net_index": node["tx_index"], "pubkey": node["pubkey"], "net_error": err,

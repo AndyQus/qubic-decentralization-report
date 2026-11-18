@@ -539,8 +539,10 @@
       }
       var call = d.call || {}, o2 = d.oracle || {};
       if (call.available && o2.next_at) {
-        html += '<br><span class="m-open">' + esc(t("mCall", { from: this.hhmm(o2.next_at - 3600), to: this.hhmm(o2.next_at),
-          c: call.call === 1 ? "▲" : call.call === 0 ? "▼" : "?" })) + "</span>";
+        // The call for the coming hour if there is one, else for the hour under way.
+        var cu = call.upcoming || call.running, start = call.upcoming ? o2.next_at : o2.next_at - 3600;
+        html += '<br><span class="m-open">' + esc(t("mCall", { from: this.hhmm(start), to: this.hhmm(start + 3600),
+          c: cu.call === 1 ? "▲" : cu.call === 0 ? "▼" : "?" })) + "</span>";
       } else {
         html += '<br><span class="m-none">' + esc(t("mNoCall", { s: call.reason || "–" })) + "</span>";
       }

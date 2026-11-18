@@ -665,8 +665,11 @@ def btc_summary():
     nxt = None
     oracle = full.get("oracle") or {}
     if oracle.get("next_at"):
+        run, up = call.get("running") or {}, call.get("upcoming") or {}
         nxt = {"from": oracle["next_at"] - 3600, "to": oracle["next_at"], "due_at": oracle.get("next_due_at"),
-               "call": word.get(call.get("call")) if call.get("available") else None}
+               "call": word.get(run.get("call")) if run else None,
+               "upcoming": {"from": oracle["next_at"], "to": oracle["next_at"] + 3600,
+                            "call": word.get(up.get("call")) if up else None}}
     stats = full.get("stats") or {}
     return {
         "status": full.get("status"),
@@ -696,7 +699,10 @@ _COLONY_REASONS = {
 def _btc_calls_view(store, now: int) -> dict:
     from qdr import antask, colony
 
-    judged = colony.judge(store.btc_calls())
+    # Only calls fixed before their hour began count: the hour's move was not
+    # under way yet. (Calls recorded mid-hour by v0.16.0-v0.16.4 are left out.)
+    judged = colony.judge([c for c in store.btc_calls()
+                           if int(c["made_at"]) < antask.hour_at(int(c["hour"])) - antask.HOUR_S])
     by_hour = {c["hour"]: c for c in judged}
     hours = store.btc_hours()
 
@@ -751,23 +757,41 @@ def _with_calls(hours: list, view: dict) -> list:
     return out
 
 
+def _call_row(c: Optional[dict]) -> Optional[dict]:
+    if c is None:
+        return None
+    return {"hour": c["hour"], "call": int(c["call"]), "made_at": c["made_at"],
+            "network": {"tick": c["net_tick"], "index": c["net_index"], "identity_key": c["pubkey"],
+                        "error": c["net_error"], "shift": c["net_shift"]}}
+
+
 def _current_call(store, view: dict, next_hour) -> dict:
+    """The colony's calls around now: `running` for the hour under way (judged
+    when the oracle stores it), `upcoming` for the hour after (fixed before it
+    begins). The top-level hour/call mirror `upcoming`, else `running`.
+    While the lineage is still being rebuilt, `progress` says how far."""
     status = store.colony_status() or {}
-    c = view["by_hour"].get(int(next_hour)) if next_hour else None
+    running = _call_row(view["by_hour"].get(int(next_hour))) if next_hour else None
+    upcoming = _call_row(view["by_hour"].get(int(next_hour) + 1)) if next_hour else None
+    progress = None
+    if status.get("lineage"):
+        left = max(0, int(status["lineage"]) - int(status.get("depth") or 0))
+        progress = {"done": status.get("depth"), "total": status["lineage"],
+                    "eta_s": round(left * float(status.get("walk_s") or 15.0))}
+    c = upcoming or running
     network = None
     if status.get("network"):
         n = status["network"]
         network = {"tick": n.get("tick"), "index": n.get("tx_index"), "identity_key": n.get("pubkey"),
                    "error": n.get("error"), "shift": n.get("shift")}
     if c is not None:
-        return {"available": True, "hour": c["hour"], "call": int(c["call"]), "made_at": c["made_at"],
-                "network": {"tick": c["net_tick"], "index": c["net_index"], "identity_key": c["pubkey"],
-                            "error": c["net_error"], "shift": c["net_shift"]},
-                "tracker": status.get("state")}
+        return dict(c, available=True, running=running, upcoming=upcoming,
+                    tracker=status.get("state"), progress=progress)
     state = status.get("state") or "no-tracker"
     return {"available": False, "reason": state,
             "detail": _COLONY_REASONS.get(state, "The ingest worker has not reported on the colony yet."),
             "network": network, "tracker_updated_at": status.get("updated_at"),
+            "running": None, "upcoming": None, "progress": progress,
             "tracker_detail": {k: status.get(k) for k in ("detail", "replayer", "cpu_avx2", "memory_limit_mb")
                                if status.get(k) is not None} or None}
 

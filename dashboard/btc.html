@@ -83,20 +83,36 @@ body { background: var(--bg); }
 .card .desc { color: var(--muted); font-size: 14px; margin: 0 0 14px; line-height: 1.5; }
 
 /* ── Next hour + call ─────────────────────────────────────────────── */
-.now-grid { display: grid; grid-template-columns: 220px 1fr; gap: 22px; align-items: center; }
+.now-grid { display: grid; grid-template-columns: 120px 1fr; gap: 18px; align-items: center; }
 @media (max-width: 760px) { .now-grid { grid-template-columns: 1fr; justify-items: center; } }
-.ring { position: relative; width: 200px; height: 200px; }
+.ring { position: relative; width: 116px; height: 116px; }
 .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .ring .track { fill: none; stroke: var(--border-strong); stroke-width: 10; }
 .ring .prog { fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
 .ring.waiting .prog { stroke: var(--warn); }
 .ring-in { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-.ring-in .big { font-family: var(--mono); font-size: 32px; font-weight: 700; }
-.ring-in .small { font-size: 12px; color: var(--muted); max-width: 140px; }
+.ring-in .big { font-family: var(--mono); font-size: 20px; font-weight: 700; }
+.ring-in .small { font-size: 10.5px; color: var(--muted); max-width: 90px; line-height: 1.25; }
 .ring.waiting .big { animation: blink 1.6s ease-in-out infinite; }
 @keyframes blink { 50% { opacity: .45; } }
 
 .next-label { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.slot { display: grid; grid-template-columns: 110px 34px 1fr; gap: 10px; align-items: center; padding: 7px 0; }
+.slot + .slot { border-top: 1px solid var(--border); }
+.slot .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; line-height: 1.3; }
+.slot .lbl b { display: block; font-family: var(--display); font-size: 15px; color: var(--text); text-transform: none; letter-spacing: 0; }
+.slot .g { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; font-size: 18px; font-weight: 700;
+  color: var(--faint); border: 2px solid var(--border-strong); }
+.slot .g.up   { background: var(--up);   color: var(--cell-ink); border-color: transparent; }
+.slot .g.down { background: var(--down); color: var(--cell-ink); border-color: transparent; }
+.slot .g.unsure { color: var(--warn); border-color: var(--warn); }
+.slot .txt { font-size: 14px; color: var(--muted); line-height: 1.4; }
+.slot .txt b { color: var(--text); }
+.progress { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+.progress .bar { flex: 0 0 140px; margin-top: 0; }
+.now-meta { font-size: 12px; color: var(--faint); margin-top: 6px; }
+.now-meta a { color: var(--accent); }
+@media (max-width: 760px) { .slot { grid-template-columns: 92px 34px 1fr; } }
 .next-hour { font-family: var(--display); font-size: 24px; margin: 2px 0 10px; }
 .call {
   border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 12px 14px;
@@ -131,7 +147,11 @@ body { background: var(--bg); }
 .hits-wrap { overflow-x: auto; }
 
 /* ── KPI tiles ─────────────────────────────────────────────────────── */
-.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, 1fr); } }
+.kpi .v .dir { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 7px;
+  color: var(--cell-ink); font-size: 16px; vertical-align: -4px; margin-right: 6px; }
+.kpi .v .dir.up { background: var(--up); } .kpi .v .dir.down { background: var(--down); }
 @media (max-width: 860px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
 .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
 .kpi .l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
@@ -279,6 +299,11 @@ body { background: var(--bg); }
   <!-- ── Key figures ──────────────────────────────────────────────────── -->
   <div class="kpis">
     <div class="kpi">
+      <div class="l" data-i18n="kLast">Last hour</div>
+      <div class="v" id="k-last">–</div>
+      <div class="s" id="k-last-s"></div>
+    </div>
+    <div class="kpi">
       <div class="l" data-i18n="kLive">Live hours</div>
       <div class="v" id="k-live">–</div>
       <div class="s" id="k-live-s"></div>
@@ -336,18 +361,20 @@ body { background: var(--bg); }
         </div>
       </div>
       <div>
-        <div class="next-label" data-i18n="nextLabel">Next hour on the network</div>
-        <div class="next-hour" id="next-hour">–</div>
-        <div class="call">
-          <div class="q" id="call-glyph" aria-hidden="true">?</div>
-          <div>
-            <b data-i18n="callTitle">The colony's call for this hour</b>
-            <div class="verdict" id="call-verdict"></div>
-            <p id="call-text"></p>
-            <div class="meta" id="call-meta"></div>
-            <p><a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_PREDICTION.de.md" target="_blank" rel="noreferrer" data-i18n="callConcept">How the call is made (concept, German) →</a></p>
-          </div>
+        <div class="next-label" data-i18n="callTitle">The colony's calls</div>
+        <div class="slot">
+          <div class="lbl"><span data-i18n="slotRun">Running</span><b id="run-when">–</b></div>
+          <div class="g" id="run-g" aria-hidden="true">?</div>
+          <div class="txt" id="run-txt"></div>
         </div>
+        <div class="slot">
+          <div class="lbl"><span data-i18n="slotNext">Next</span><b id="up-when">–</b></div>
+          <div class="g" id="up-g" aria-hidden="true">?</div>
+          <div class="txt" id="up-txt"></div>
+        </div>
+        <div class="progress" id="progress" hidden><div class="bar"><i id="prog-bar"></i></div><span id="prog-txt"></span></div>
+        <div class="now-meta"><span id="call-meta"></span>
+          <a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_PREDICTION.de.md" target="_blank" rel="noreferrer" data-i18n="callConcept">How the call is made (concept, German) →</a></div>
       </div>
     </div>
   </section>
@@ -432,12 +459,17 @@ body { background: var(--bg); }
       nextLabel: "Next hour on the network",
       nextHour: "{from} – {to}",
       ringDue: "earliest on the network", ringWait: "due — the oracle is being asked", ringLate: "overdue · {n} failed attempts",
-      callTitle: "The colony's call for this hour",
+      callTitle: "The colony's calls",
       callConcept: "How the call is made (concept, German) →",
       callUp: "▲ up or level", callDown: "▼ down", callUnsure: "? unsure",
       callText: "The output of the colony's best network for this hour. The network was rebuilt from public data with qubic/core's own reference scorer and reproduces the error the node logged; the call was fixed before the hour existed on-chain.",
       callMeta: "fixed {t} · network in tick {tick} · {err} errors over the year frame · shift {shift}",
       callNone: "No call yet",
+      slotRun: "Running", slotNext: "Next",
+      sRun: "call <b>{c}</b> · result from {t}", sUp: "call <b>{c}</b> · fixed {t}",
+      sRunNone: "no call for this hour", sUpNone: "call follows before {t}",
+      progTxt: "rebuilding the best network: {d} of {n} checked · first call in about {m} min",
+      netMeta: "Best network: {err} errors over the year frame ({pct} % right) · shift {shift} · ",
       rNoTracker: "The ingest worker has not reported on the colony yet.",
       rNoReplayer: "The replayer that rebuilds the colony's networks is not installed on this server.",
       rCatchingUp: "The best network's lineage is still being rebuilt, one solution after the other; its call follows.",
@@ -447,6 +479,7 @@ body { background: var(--bg); }
       rAnchor: "No node served the tick data a rebuild needs; retried every minute.",
       rOther: "No call for this hour (tracker: {s}).",
       rFailed: "The replayer stopped on this server; no call until it runs again.",
+      kLast: "Last hour", kLastUp: "up", kLastDown: "down", kLastCall: "call {c} {v}",
       kLive: "Live hours", kLiveS: "of {cap} possible this epoch",
       kDir: "Direction so far", kDirS: "of the live hours",
       kOracle: "Oracle", kOracleS: "{fail} failed now · {filled} filled · node-local counters",
@@ -496,12 +529,17 @@ body { background: var(--bg); }
       nextLabel: "Nächste Stunde im Netz",
       nextHour: "{from} – {to}",
       ringDue: "frühestens im Netz", ringWait: "fällig — das Oracle wird gefragt", ringLate: "überfällig · {n} Fehlversuche",
-      callTitle: "Der Tipp der Kolonie für diese Stunde",
+      callTitle: "Die Tipps der Kolonie",
       callConcept: "Wie der Tipp entsteht (Konzept) →",
       callUp: "▲ rauf oder gleich", callDown: "▼ runter", callUnsure: "? unsicher",
       callText: "Die Ausgabe des besten Netzes der Kolonie für diese Stunde. Das Netz wurde aus öffentlichen Daten mit dem Referenz-Scorer von qubic/core nachgebaut und trifft den Fehler, den die Node protokolliert hat; der Tipp stand fest, bevor die Stunde on-chain existierte.",
       callMeta: "festgelegt {t} · Netz aus Tick {tick} · {err} Fehler über den Jahresrahmen · Shift {shift}",
       callNone: "Noch kein Tipp",
+      slotRun: "Läuft", slotNext: "Als Nächstes",
+      sRun: "Tipp <b>{c}</b> · Ergebnis ab {t}", sUp: "Tipp <b>{c}</b> · festgelegt {t}",
+      sRunNone: "kein Tipp für diese Stunde", sUpNone: "Tipp folgt vor {t}",
+      progTxt: "Nachbau des besten Netzes: {d} von {n} geprüft · erster Tipp in ca. {m} Min.",
+      netMeta: "Bestes Netz: {err} Fehler über den Jahresrahmen ({pct} % richtig) · Shift {shift} · ",
       rNoTracker: "Der Worker hat zur Kolonie noch nichts gemeldet.",
       rNoReplayer: "Der Nachbau der Netze ist auf diesem Server nicht installiert.",
       rCatchingUp: "Die Linie des besten Netzes wird noch nachgebaut, eine Lösung nach der anderen; sein Tipp folgt.",
@@ -511,6 +549,7 @@ body { background: var(--bg); }
       rAnchor: "Keine Node lieferte die Tick-Daten für den Nachbau; neuer Versuch jede Minute.",
       rOther: "Kein Tipp für diese Stunde (Tracker: {s}).",
       rFailed: "Der Nachbau ist auf diesem Server abgebrochen; kein Tipp, bis er wieder läuft.",
+      kLast: "Letzte Stunde", kLastUp: "rauf", kLastDown: "runter", kLastCall: "Tipp {c} {v}",
       kLive: "Live-Stunden", kLiveS: "von {cap} möglichen in dieser Epoche",
       kDir: "Richtung bisher", kDirS: "der Live-Stunden",
       kOracle: "Oracle", kOracleS: "{fail} Fehlversuche gerade · {filled} aufgefüllt · Zähler der Node",
@@ -589,6 +628,14 @@ body { background: var(--bg); }
   function renderKpis() {
     var task = (D && D.task) || {}, ok = task.hash_verified === true;
     var live = liveHours();
+    // The newest stored hour: which way BTC went, when, and how the colony called it.
+    var hs = (D && D.hours) || [], last = ok && hs.length ? hs[hs.length - 1] : null;
+    if (last) {
+      $("k-last").innerHTML = '<span class="dir ' + (last.up ? "up" : "down") + '">' + (last.up ? "▲" : "▼") + "</span>" +
+        esc(t(last.up ? "kLastUp" : "kLastDown"));
+      $("k-last-s").textContent = hm(last.at - 3600) + "–" + hm(last.at) +
+        (last.call != null ? " · " + t("kLastCall", { c: GLYPH[last.call], v: last.hit === true ? "✓" : last.hit === false ? "✗" : "" }) : "");
+    }
     $("k-live").textContent = ok ? fmtInt(task.shift_limit) : "–";
     $("k-live-s").textContent = ok ? t("kLiveS", { cap: fmtInt(task.shift_cap) }) : "";
     $("k-live-bar").style.width = ok && task.shift_cap ? (100 * task.shift_limit / task.shift_cap).toFixed(1) + "%" : "0";
@@ -646,7 +693,7 @@ body { background: var(--bg); }
     // the very first answer after a restart; a missing cap is no reason to hide
     // the hour that is coming.
     if (o && o.next_at && (task.shift_cap == null || task.shift_limit < task.shift_cap)) {
-      var mine = call.available && call.hour === o.next_hour ? call.call : null;
+      var mine = call.running && call.running.hour === o.next_hour ? call.running.call : null;
       html += '<div class="col"><div class="cell pending" title="' + esc(t("pendTip", { from: dayHm(o.next_at - 3600), to: hm(o.next_at) })) + '">?</div>' +
         markHtml({ call: mine }) + "</div>";
     }
@@ -656,30 +703,51 @@ body { background: var(--bg); }
   }
 
   function renderNext() {
-    var o = D && D.oracle, task = (D && D.task) || {};
     renderCall();
-    if (!o || !o.next_at || task.hash_verified !== true) { $("next-hour").textContent = "–"; return; }
-    $("next-hour").textContent = t("nextHour", { from: dayHm(o.next_at - 3600), to: hm(o.next_at) });
     tickRing();
   }
 
   var REASON = { "no-tracker": "rNoTracker", "no-replayer": "rNoReplayer", "catching-up": "rCatchingUp",
     "mismatch": "rMismatch", "no-solutions": "rNoSolutions", "lineage-incomplete": "rLineage",
     "anchor-unavailable": "rAnchor", "replayer-failed": "rFailed" };
+  function glyph(el, c) {
+    el.textContent = c == null ? "?" : GLYPH[c];
+    el.className = "g" + (c === 1 ? " up" : c === 0 ? " down" : c === 2 ? " unsure" : "");
+  }
+  function word(c) { return t(c === 1 ? "callUp" : c === 0 ? "callDown" : "callUnsure"); }
+  // The card: the hour under way (judged when the oracle stores it) and the
+  // hour after it (called before it begins). While the best network is still
+  // being rebuilt, a bar says how far and roughly how long.
   function renderCall() {
-    var c = (D && D.call) || {}, g = $("call-glyph");
-    if (c.available) {
-      g.textContent = GLYPH[c.call]; g.className = "q " + (c.call === 1 ? "up" : c.call === 0 ? "down" : "unsure");
-      $("call-verdict").textContent = t(c.call === 1 ? "callUp" : c.call === 0 ? "callDown" : "callUnsure");
-      $("call-text").textContent = t("callText");
-      var n = c.network || {};
-      $("call-meta").textContent = t("callMeta", { t: dayHm(c.made_at), tick: fmtInt(n.tick), err: fmtInt(n.error), shift: fmtInt(n.shift) });
+    var c = (D && D.call) || {}, o = (D && D.oracle) || {}, task = (D && D.task) || {};
+    var ok = o.next_at && task.hash_verified === true;
+    var run = c.running, up = c.upcoming;
+    $("run-when").textContent = ok ? hm(o.next_at - 3600) + "–" + hm(o.next_at) : "–";
+    $("up-when").textContent = ok ? hm(o.next_at) + "–" + hm(o.next_at + 3600) : "–";
+    glyph($("run-g"), run ? run.call : null);
+    glyph($("up-g"), up ? up.call : null);
+    $("run-txt").innerHTML = run ? t("sRun", { c: esc(word(run.call)), t: esc(hm(o.next_due_at)) }) : esc(t("sRunNone"));
+    if (up) {
+      $("up-txt").innerHTML = t("sUp", { c: esc(word(up.call)), t: esc(hm(up.made_at)) });
+    } else if (c.reason && c.reason !== "catching-up" && c.reason !== "tracking" && REASON[c.reason]) {
+      $("up-txt").textContent = t(REASON[c.reason]);
     } else {
-      g.textContent = "?"; g.className = "q";
-      $("call-verdict").textContent = t("callNone");
-      $("call-text").textContent = REASON[c.reason] ? t(REASON[c.reason]) : t("rOther", { s: c.reason || "–" });
-      $("call-meta").textContent = "";
+      $("up-txt").textContent = ok ? t("sUpNone", { t: hm(o.next_at) }) : "";
     }
+    var pr = c.progress, prog = $("progress");
+    if (pr && pr.total && pr.done < pr.total) {
+      prog.hidden = false;
+      $("prog-bar").style.width = (100 * pr.done / pr.total).toFixed(1) + "%";
+      $("prog-txt").textContent = t("progTxt", { d: fmtInt(pr.done), n: fmtInt(pr.total),
+        m: Math.max(1, Math.round((pr.eta_s || 0) / 60)) });
+    } else {
+      prog.hidden = true;
+    }
+    var n = (up || run || {}).network || c.network;
+    $("call-meta").textContent = n && n.error != null && task.window_width
+      ? t("netMeta", { err: fmtInt(n.error), shift: fmtInt(n.shift),
+          pct: (Math.round((1 - n.error / task.window_width) * 1000) / 10).toLocaleString(locale()) })
+      : "";
   }
 
   function rateCell(r) {

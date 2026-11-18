@@ -172,6 +172,10 @@ def live(monkeypatch, tmp_path):
     monkeypatch.setattr(antnode, "query_price_series", lambda ip, h, n: {"next_hour": BASE + 3})
     monkeypatch.setattr(colony.Replayer, "available", staticmethod(lambda path="": True))
     monkeypatch.setattr(colony, "scan", lambda *a, **k: {"calls": 0, "new": 0})
+    monkeypatch.setattr(colony, "indexed_head", lambda bob, tick: tick)
+    # Half way through the running hour BASE+3; the coming hour BASE+4 starts
+    # when BASE+3 ends.
+    monkeypatch.setattr(colony.time, "time", lambda: antask.hour_at(BASE + 3) - 1800)
     store = Store(str(tmp_path / "q.db"))
     store.put_ant_solutions(240, [colony.parse_solution(e) for e in (
         entry(200, 0, anchor=120, score=4300), entry(300, 1, parent=(200, 0), anchor=260, score=4200))])
@@ -180,22 +184,23 @@ def live(monkeypatch, tmp_path):
     return store
 
 
-def test_a_verified_lineage_produces_one_call_for_the_unknown_hour(live):
-    rep = FakeReplayer({"200:0": 4300, "300:1": 4200}, trits="011")
+def test_a_verified_lineage_calls_the_coming_hour_before_it_begins(live):
+    rep = FakeReplayer({"200:0": 4300, "300:1": 4200}, trits="0001")
     tracker = colony.Tracker(live, rep)
     st = tracker.step(object(), ["203.0.113.7"])
     assert st["state"] == "tracking", st
     # Anchors 120 and 260: 0 and 2 live hours stored before them.
     assert [w[2] for w in rep.walked] == [0, 2]
     calls = live.btc_calls()
-    assert len(calls) == 1 and calls[0]["hour"] == BASE + 3
-    assert calls[0]["call"] == 1            # trits[j], j = hour - base - 1 = 2
+    assert len(calls) == 1 and calls[0]["hour"] == BASE + 4
+    assert calls[0]["call"] == 1            # trits[j], j = hour - base - 1 = 3
+    assert calls[0]["made_at"] < antask.hour_at(BASE + 4) - 3600
     assert calls[0]["net_tick"] == 300 and calls[0]["net_error"] == 4200
 
 
 def test_no_call_while_the_lineage_is_still_being_caught_up(live, monkeypatch):
     monkeypatch.setattr(colony, "WALKS_PER_STEP", 1)
-    rep = FakeReplayer({"200:0": 4300, "300:1": 4200}, trits="011")
+    rep = FakeReplayer({"200:0": 4300, "300:1": 4200}, trits="0001")
     tracker = colony.Tracker(live, rep)
     st = tracker.step(object(), ["x"])
     assert st["state"] == "catching-up" and st["call"] is None
@@ -214,6 +219,12 @@ def test_a_rebuild_that_misses_the_logged_error_records_nothing(live):
 def test_no_call_once_the_hour_has_arrived(live, monkeypatch):
     monkeypatch.setattr(antnode, "query_price_series", lambda ip, h, n: {"next_hour": BASE + 4})
     colony.Tracker(live, FakeReplayer({"200:0": 4300, "300:1": 4200})).step(object(), ["x"])
+    assert live.btc_calls() == []
+
+
+def test_no_call_once_the_coming_hour_has_begun(live, monkeypatch):
+    monkeypatch.setattr(colony.time, "time", lambda: antask.hour_at(BASE + 3) + 10)
+    colony.Tracker(live, FakeReplayer({"200:0": 4300, "300:1": 4200}, trits="0001")).step(object(), ["x"])
     assert live.btc_calls() == []
 
 
