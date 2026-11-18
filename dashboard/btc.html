@@ -68,11 +68,11 @@ body { background: var(--bg); }
   position: fixed; inset: 0; width: 100%; height: 100%;
   pointer-events: none; z-index: 0; opacity: .55;
 }
-.page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 22px var(--gutter) 40px; }
+.page { position: relative; z-index: 1; max-width: var(--content-width); margin: 0 auto; padding: 22px var(--gutter) 40px; }
 @media (max-width: 700px) { .page { padding: 16px var(--gutter-mobile) 32px; } }
 
 .hero-title { font-family: var(--display); font-size: clamp(26px, 4.4vw, 40px); margin: 6px 0 6px; letter-spacing: -.01em; }
-.hero-sub { color: var(--muted); max-width: 820px; margin: 0 0 18px; line-height: 1.5; }
+.hero-sub { color: var(--muted); margin: 0 0 18px; line-height: 1.5; }
 
 .card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -198,9 +198,44 @@ body { background: var(--bg); }
 .status { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
 .status.bad { color: var(--warn); }
 
+/* ── Loading: until the first node answer, every place data will land shows a
+   shimmering placeholder of its final size, so the page never looks empty and
+   nothing jumps when the data arrives. Same shimmer as the report page. */
+.page.is-loading .kpi .v, .page.is-loading .kpi .s, .page.is-loading #next-hour,
+.page.is-loading #call-verdict, .page.is-loading #call-text, .skel, .sk-cell, .pulse:empty {
+  color: transparent; border-radius: 6px;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--muted) 14%, transparent) 25%,
+    color-mix(in srgb, var(--muted) 26%, transparent) 50%,
+    color-mix(in srgb, var(--muted) 14%, transparent) 75%);
+  background-size: 200% 100%; animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.page.is-loading .kpi .v { max-width: 7ch; }
+.page.is-loading .kpi .s { max-width: 16ch; min-height: 1.1em; }
+.page.is-loading #next-hour { max-width: 18ch; }
+.page.is-loading #call-verdict { max-width: 10ch; min-height: 1.2em; }
+.page.is-loading #call-text { min-height: 3em; }
+.page.is-loading .call .q { animation: blink 1.6s ease-in-out infinite; }
+.page.is-loading .ring-in .big { visibility: hidden; }
+.page.is-loading .ring svg { animation: spin 1.2s linear infinite; }
+.page.is-loading .ring .prog { stroke-dasharray: 140 412.9; stroke-dashoffset: 0; transition: none; }
+@keyframes spin { from { transform: rotate(-90deg); } to { transform: rotate(270deg); } }
+.sk-cell { flex: 0 0 auto; width: 22px; height: 38px; border-radius: 4px; }
+.sk-cell.tall { height: 46px; }
+.pulse:empty { border-radius: 6px 6px 0 0; }
+.skel { height: 16px; margin: 0 0 6px; }
+.skel.head { width: 30%; height: 18px; margin-bottom: 10px; }
+.status.loading::before {
+  content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; vertical-align: -1px;
+  border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #ants { display: none; }
   .cell.arrive, .cell.pending, .ring.waiting .big { animation: none; }
+  .skel, .sk-cell, .pulse:empty, .page.is-loading *, .status.loading::before { animation: none !important; }
 }
 </style>
 </head>
@@ -236,10 +271,56 @@ body { background: var(--bg); }
   </div>
 </header>
 
-<main class="page">
+<main class="page is-loading" id="page" aria-busy="true">
   <h2 class="hero-title" data-i18n="heroTitle">Colony vs Bitcoin</h2>
   <p class="hero-sub" data-i18n="heroSub">Since epoch 240 Qubic's mining is graded on the real direction of Bitcoin: every hour the nodes store the BTC/USDT price on-chain through Qubic's Price oracle, and the ant colony searches for networks whose output matches up and down. Here is every hour as it arrives.</p>
   <p class="status" id="status" data-i18n="loading">Reading from a Qubic node …</p>
+
+  <!-- ── Key figures ──────────────────────────────────────────────────── -->
+  <div class="kpis">
+    <div class="kpi">
+      <div class="l" data-i18n="kLive">Live hours</div>
+      <div class="v" id="k-live">–</div>
+      <div class="s" id="k-live-s"></div>
+      <div class="bar"><i id="k-live-bar"></i></div>
+    </div>
+    <div class="kpi">
+      <div class="l" data-i18n="kDir">Direction so far</div>
+      <div class="v" id="k-dir">–</div>
+      <div class="s" id="k-dir-s"></div>
+    </div>
+    <div class="kpi">
+      <div class="l" data-i18n="kOracle">Oracle</div>
+      <div class="v" id="k-oracle">–</div>
+      <div class="s" id="k-oracle-s"></div>
+    </div>
+    <div class="kpi">
+      <div class="l" data-i18n="kColony">Colony</div>
+      <div class="v" id="k-colony">–</div>
+      <div class="s" id="k-colony-s"></div>
+    </div>
+  </div>
+
+  <!-- ── Colony pulse ─────────────────────────────────────────────────── -->
+  <section class="card">
+    <h2 data-i18n="pulseTitle">Colony pulse</h2>
+    <p class="desc" data-i18n="pulseDesc">Mining solutions per tick, live from the tick stream. Each one is a network that beat its parent; the node logs whether it was accepted and how many errors it made over the year-long frame.</p>
+    <div class="pulse" id="pulse" role="img" aria-label="Accepted solutions per tick"></div>
+    <div class="pulse-meta" id="pulse-meta"><span data-i18n="pulseWait">Waiting for ticks …</span></div>
+  </section>
+
+  <!-- ── The tape ─────────────────────────────────────────────────────── -->
+  <section class="card">
+    <h2 data-i18n="tapeTitle">Hour by hour</h2>
+    <p class="desc" data-i18n="tapeDesc">Each cell is one hour: ▲ closed level or higher than the hour before (in whole USDT), ▼ lower. Pale: the last hours of the year-long frame the epoch started with. Bright: hours stored live during this epoch — the ones the colony could not know in advance. Dashed: the hour still to come.</p>
+    <div class="tape-wrap" id="tape-wrap"><div class="tape" id="tape"></div></div>
+    <div class="tape-legend">
+      <span><i class="u"></i><span data-i18n="lgUp">▲ up or level</span></span>
+      <span><i class="d"></i><span data-i18n="lgDown">▼ down</span></span>
+      <span><i class="f"></i><span data-i18n="lgFrame">frame (known at epoch start)</span></span>
+      <span><i class="p"></i><span data-i18n="lgPending">next hour</span></span>
+    </div>
+  </section>
 
   <!-- ── The next hour, and the colony's call for it ─────────────────── -->
   <section class="card" id="now-card">
@@ -271,63 +352,17 @@ body { background: var(--bg); }
     </div>
   </section>
 
-  <!-- ── Key figures ──────────────────────────────────────────────────── -->
-  <div class="kpis">
-    <div class="kpi">
-      <div class="l" data-i18n="kLive">Live hours</div>
-      <div class="v" id="k-live">–</div>
-      <div class="s" id="k-live-s"></div>
-      <div class="bar"><i id="k-live-bar"></i></div>
-    </div>
-    <div class="kpi">
-      <div class="l" data-i18n="kDir">Direction so far</div>
-      <div class="v" id="k-dir">–</div>
-      <div class="s" id="k-dir-s"></div>
-    </div>
-    <div class="kpi">
-      <div class="l" data-i18n="kOracle">Oracle</div>
-      <div class="v" id="k-oracle">–</div>
-      <div class="s" id="k-oracle-s"></div>
-    </div>
-    <div class="kpi">
-      <div class="l" data-i18n="kColony">Colony</div>
-      <div class="v" id="k-colony">–</div>
-      <div class="s" id="k-colony-s"></div>
-    </div>
-  </div>
-
-  <!-- ── The tape ─────────────────────────────────────────────────────── -->
-  <section class="card">
-    <h2 data-i18n="tapeTitle">Hour by hour</h2>
-    <p class="desc" data-i18n="tapeDesc">Each cell is one hour: ▲ closed level or higher than the hour before (in whole USDT), ▼ lower. Pale: the last hours of the year-long frame the epoch started with. Bright: hours stored live during this epoch — the ones the colony could not know in advance. Dashed: the hour still to come.</p>
-    <div class="tape-wrap" id="tape-wrap"><div class="tape" id="tape"></div></div>
-    <div class="tape-legend">
-      <span><i class="u"></i><span data-i18n="lgUp">▲ up or level</span></span>
-      <span><i class="d"></i><span data-i18n="lgDown">▼ down</span></span>
-      <span><i class="f"></i><span data-i18n="lgFrame">frame (known at epoch start)</span></span>
-      <span><i class="p"></i><span data-i18n="lgPending">next hour</span></span>
-    </div>
-  </section>
-
-  <!-- ── Colony pulse ─────────────────────────────────────────────────── -->
-  <section class="card">
-    <h2 data-i18n="pulseTitle">Colony pulse</h2>
-    <p class="desc" data-i18n="pulseDesc">Mining solutions per tick, live from the tick stream. Each one is a network that beat its parent; the node logs whether it was accepted and how many errors it made over the year-long frame.</p>
-    <div class="pulse" id="pulse" role="img" aria-label="Accepted solutions per tick"></div>
-    <div class="pulse-meta" id="pulse-meta"><span data-i18n="pulseWait">Waiting for ticks …</span></div>
-  </section>
-
   <!-- ── Track record ─────────────────────────────────────────────────── -->
   <section class="card">
     <h2 data-i18n="recTitle">Record</h2>
     <p class="desc" data-i18n="recDesc">Every live hour this server has recorded, one week per epoch (one row per day, one column per hour of the day, UTC). A node only answers for the running epoch, so the record starts with this server's first reading — earlier hours are not filled in afterwards.</p>
-    <div id="record"><div class="empty" data-i18n="recEmpty">No hour recorded yet.</div></div>
+    <div id="record"><div class="skel head"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
   </section>
 
   <section class="card">
     <h2 data-i18n="hitTitle">Hit rate</h2>
     <p class="desc" data-i18n="hitDesc">How often the colony's call matched the hour, against 50 % for a coin toss. It appears once calls can be read; a call counts only if it was fixed before its hour arrived.</p>
-    <div id="hit-box"><div class="empty" data-i18n="hitEmpty">No call has been judged yet.</div></div>
+    <div id="hit-box"><div class="skel head"></div><div class="skel"></div><div class="skel"></div></div>
   </section>
 
   <p class="note" data-i18n="footNote">Directions only, no prices: the prices come from Binance via Qubic's Price oracle, and this report does not republish exchange data. Times in your local time zone. Not investment advice — a research experiment of the Qubic network.</p>
@@ -539,8 +574,8 @@ body { background: var(--bg); }
   /* ── Render ───────────────────────────────────────────────────────── */
   function renderStatus() {
     var el = $("status");
-    if (apiBase === null) { el.textContent = t("noApi"); el.className = "status bad"; return; }
-    if (!D) { el.textContent = t("loading"); el.className = "status"; return; }
+    if (apiBase === null) { el.textContent = t("noApi"); el.className = "status bad"; setLoading(false); return; }
+    if (!D) { el.textContent = t("loading"); el.className = "status loading"; return; }
     if (D.status !== "live") { el.textContent = t("unavailable"); el.className = "status bad"; return; }
     var ok = D.task && D.task.hash_verified === true;
     var s = t(ok ? "live" : "unverified", { ip: (D.node && D.node.ip) || "–", ep: D.epoch ? D.epoch.epoch : "–" });
@@ -748,9 +783,22 @@ body { background: var(--bg); }
   }
   var HOUR_ZERO = 1649851200;   // hour 0 = 2022-04-13 12:00 UTC (qubic/core doc 2.3a)
 
+  // Placeholder cells for the tape until the first answer; renderTape replaces them.
+  (function tapeSkeleton() {
+    var h = "";
+    for (var i = 0; i < 48; i++) h += '<i class="sk-cell' + (i >= 36 ? " tall" : "") + '"></i>';
+    $("tape").innerHTML = h;
+  })();
+  function setLoading(on) {
+    var p = $("page");
+    p.classList.toggle("is-loading", on);
+    p.setAttribute("aria-busy", on ? "true" : "false");
+  }
+
   function renderAll() {
     renderStatus();
     if (!D) return;
+    setLoading(false);
     renderKpis(); renderNext(); renderTape(); renderRecord(); renderHits();
   }
 
