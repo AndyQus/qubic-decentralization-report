@@ -161,6 +161,54 @@ def lineage(store, tick: int, tx_index: int, limit: int = 100_000) -> Optional[l
     return chain
 
 
+def indexed_head(bob, node_tick: int) -> int:
+    """The last tick Bob has indexed, never beyond the node's own tick.
+
+    A tick Bob has not indexed yet answers with an empty log, which looks
+    exactly like "no solutions" -- and a scan that moved past it would lose
+    those solutions for good (the burn scan learned this on 2026-09-19).
+    Without a status answer the scan keeps a margin of 100 ticks.
+    """
+    try:
+        indexed = int((bob.status() or {}).get("currentIndexingTick") or 0)
+    except Exception:
+        indexed = 0
+    return min(int(node_tick), indexed - 1) if indexed else int(node_tick) - 100
+
+
+def missing_ref(store, tick: int, tx_index: int) -> Optional[tuple[int, int]]:
+    """The first ancestor of (tick, tx_index) that is not stored, or None."""
+    ref = (int(tick), int(tx_index))
+    for _ in range(100_000):
+        if ref == ROOT:
+            return None
+        row = store.ant_solution(*ref)
+        if row is None:
+            return ref
+        ref = (row["parent_tick"], row["parent_index"])
+    return None
+
+
+def heal(store, bob, epoch: int, tick: int, tx_index: int, max_ticks: int = 60) -> int:
+    """Re-read the ticks of missing ancestors, one at a time, until the lineage
+    is whole or `max_ticks` reads are spent. Returns solutions recovered."""
+    got = 0
+    for _ in range(max_ticks):
+        ref = missing_ref(store, tick, tx_index)
+        if ref is None:
+            break
+        try:
+            logs = custom_logs(bob, ref[0], ref[0])
+        except Exception:
+            break
+        rows = [s for s in (parse_solution(e) for e in logs) if s and s["result"] in ACCEPTED]
+        n = store.put_ant_solutions(epoch, rows)
+        got += n
+        if store.ant_solution(*ref) is None:
+            break            # the node does not have it either: stop, report incomplete
+    return got
+
+
 # -- what a walk needs ------------------------------------------------------------
 
 def shift_limit_at(anchor_tick: int, live_append_ticks: list[int], cap: int) -> int:
@@ -341,14 +389,17 @@ class Tracker:
             self.epoch, self.verified = epoch, None
             self.store.prune_ant_solutions(keep_from_epoch=epoch - 1)
 
-        scanned = scan(self.store, bob, epoch, info.initial_tick, info.tick)
+        scanned = scan(self.store, bob, epoch, info.initial_tick, indexed_head(bob, info.tick))
 
         best = self.store.best_ant_solutions(epoch, 1)
         if not best:
             return self.status(state="no-solutions", scanned=scanned)
         chain = lineage(self.store, best[0]["tick"], best[0]["tx_index"])
         if chain is None:
-            return self.status(state="lineage-incomplete", scanned=scanned)
+            healed = heal(self.store, bob, epoch, best[0]["tick"], best[0]["tx_index"])
+            chain = lineage(self.store, best[0]["tick"], best[0]["tx_index"])
+            if chain is None:
+                return self.status(state="lineage-incomplete", scanned=scanned, healed=healed)
 
         if self.rep.seed != ctx.spectrum_digest:
             self.rep.start(ctx.spectrum_digest)

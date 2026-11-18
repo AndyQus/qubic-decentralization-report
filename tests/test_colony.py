@@ -282,3 +282,29 @@ def test_a_dying_replayer_is_reported_with_its_reasons(live):
     assert st["state"] == "replayer-failed" and "code -4" in st["detail"]
     assert "cpu_avx2" in st and "memory_limit_mb" in st
     assert live.btc_calls() == []
+
+
+def test_the_scan_stops_where_bob_has_indexed():
+    class Bob:
+        def status(self):
+            return {"currentIndexingTick": 950}
+    assert colony.indexed_head(Bob(), 1000) == 949
+
+    class Mute:
+        def status(self):
+            raise OSError("down")
+    assert colony.indexed_head(Mute(), 1000) == 900
+
+
+def test_a_missing_ancestor_is_read_again_from_its_tick(tmp_path):
+    store = Store(str(tmp_path / "q.db"))
+    store.put_ant_solutions(240, [colony.parse_solution(entry(300, 0, parent=(200, 2)))])
+
+    class Bob:
+        def _call(self, method, params):
+            assert params[0]["fromTick"] == params[0]["toTick"] == 200
+            return [entry(200, 2), entry(200, 3)]
+
+    assert colony.lineage(store, 300, 0) is None
+    assert colony.heal(store, Bob(), 240, 300, 0) == 2
+    assert [r["tick"] for r in colony.lineage(store, 300, 0)] == [200, 300]
