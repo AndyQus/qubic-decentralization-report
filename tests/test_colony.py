@@ -277,10 +277,11 @@ def test_the_summary_is_small_and_wordy(client):
     client.store.put_btc_call(_call(BASE + 2, 1))
     client.store.put_btc_call(_call(BASE + 3, 0))
     s = client.get("/v1/btc/summary").json()
-    assert set(s) == {"status", "epoch", "updated_at", "next", "call_status", "last", "rates", "coin_toss"}
+    assert set(s) == {"status", "epoch", "updated_at", "next", "call_status", "last", "rates", "coin_toss",
+                      "price_source"}
     assert s["next"]["call"] == "down" and s["call_status"] == "available"
     assert s["last"][-1] == {"from": s["last"][-1]["to"] - 3600, "to": s["last"][-1]["to"],
-                             "dir": "up", "call": "up", "hit": True}
+                             "dir": "up", "price": None, "change_pct": None, "call": "up", "hit": True}
     assert len(client.get("/v1/btc/summary").content) < 3000
 
 
@@ -319,3 +320,34 @@ def test_a_missing_ancestor_is_read_again_from_its_tick(tmp_path):
     assert colony.lineage(store, 300, 0) is None
     assert colony.heal(store, Bob(), 240, 300, 0) == 2
     assert [r["tick"] for r in colony.lineage(store, 300, 0)] == [200, 300]
+
+
+def test_the_overview_sums_prices_moves_and_calls(client):
+    hours = [{"hour": BASE + 1, "up": False, "live": True, "append_tick": 1, "price": 100.0},
+             {"hour": BASE + 2, "up": True, "live": True, "append_tick": 2, "price": 110.0},
+             {"hour": BASE + 3, "up": False, "live": True, "append_tick": 3, "price": 99.0}]
+    client.store.put_btc_hours(240, hours, seen_at=1)
+    client.store.put_btc_call(_call(BASE + 2, 1))      # hit
+    client.store.put_btc_call(_call(BASE + 3, 1))      # miss
+    by_hour = client.get("/v1/btc/overview?group=hour").json()
+    rows = {r["hour"]: r for r in by_hour["rows"]}
+    assert rows[BASE + 2]["change_pct"] == 10.0 and rows[BASE + 2]["hit"] is True
+    assert rows[BASE + 3]["change_pct"] == -10.0 and rows[BASE + 3]["hit"] is False
+    assert rows[BASE + 1]["change_pct"] is None              # nothing stored before it
+    ep = client.get("/v1/btc/overview?group=epoch").json()["rows"][0]
+    assert (ep["epoch"], ep["hours"], ep["open"], ep["close"], ep["calls"], ep["hits"]) == (240, 3, 100.0, 99.0, 2, 1)
+    assert ep["change_pct"] == -1.0 and ep["rate"] == 0.5
+    assert client.get("/v1/btc/overview?group=month").json()["rows"][0]["month"] == "2026-11"
+
+
+def test_an_old_store_gains_the_price_column(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.db"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE btc_hours (hour INTEGER PRIMARY KEY, epoch INTEGER NOT NULL, up INTEGER NOT NULL,"
+                " filled INTEGER NOT NULL DEFAULT 0, append_tick INTEGER, first_seen_at INTEGER NOT NULL)")
+    con.execute("INSERT INTO btc_hours VALUES (1, 240, 1, 0, 5, 9)")
+    con.commit(); con.close()
+    store = Store(str(path))
+    store.put_btc_hours(240, [{"hour": 1, "up": True, "live": True, "price": 123.0}], seen_at=10)
+    assert store.btc_hours()[0]["price"] == 123.0 and store.btc_hours()[0]["first_seen_at"] == 9

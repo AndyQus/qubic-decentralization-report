@@ -89,11 +89,18 @@ def _keys(obj, path=""):
             yield from _keys(v, f"{path}[{i}]")
 
 
-def test_no_price_ever_leaves_the_btc_or_mining_endpoints(client):
-    for url in ("/v1/btc", "/v1/mining"):
+def test_prices_leave_only_the_btc_endpoints_and_always_with_their_source(client):
+    """Since 2026-11-18 (the user's decision) the BTC page shows the hourly
+    BTC/USDT price Qubic's Price oracle stored on-chain. It is Binance data,
+    so it never appears without its attribution -- and /v1/mining, which every
+    live page polls, carries none."""
+    for where, key in _keys(client.get("/v1/mining").json()):
+        assert "price" not in key.lower(), f"/v1/mining carries a price field at {where}"
+    for url in ("/v1/btc", "/v1/btc/summary", "/v1/btc/overview"):
         body = client.get(url).json()
+        assert "Binance" in body["price_source"] and "oracle" in body["price_source"], url
         for where, key in _keys(body):
-            assert "price" not in key.lower(), f"{url} carries a price field at {where}"
+            assert "volume" not in key.lower(), f"{url} carries a volume field at {where}"
 
 
 def test_the_hours_ride_on_btc_only(client):
@@ -223,8 +230,6 @@ def test_no_third_party_code_or_fonts():
         assert not tag.startswith(("http://", "https://", "//")), f"external resource: {tag}"
 
 
-def test_the_page_never_shows_a_price():
-    """Direction only: the page has no place a price could be written into."""
-    src = html().lower()
-    assert "pricee8" not in src and "usdt(" not in src
-    assert "toFixed(2)" not in html()
+def test_the_page_names_the_source_of_its_prices():
+    src = html()
+    assert "Binance" in src and "price_source" in src

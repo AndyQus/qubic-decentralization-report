@@ -231,6 +231,7 @@ def api_index():
             "/v1/mining/series",
             "/v1/btc",
             "/v1/btc/summary",
+            "/v1/btc/overview",
             "/v1/ticks/stream",
             "/v1/ticks/recent",
             "/v1/ticks/{tick}",
@@ -616,7 +617,7 @@ def btc(compact: bool = Query(False, description="Only the epoch's live hours, t
     now = int(_t.time())
     view = _btc_calls_view(store, now)
     record = None if compact else {"epochs": store.btc_epochs(),
-                                   "hours": _with_calls(store.btc_hours(limit=BTC_RECORD_HOURS), view)}
+                                   "hours": _with_calls(_with_change(store.btc_hours(limit=BTC_RECORD_HOURS)), view)}
     try:
         data = _mining_bundle()
     except HTTPException:
@@ -644,6 +645,7 @@ def btc(compact: bool = Query(False, description="Only the epoch's live hours, t
         "call": _current_call(store, view, (task.get("oracle") or {}).get("next_hour")),
         "stats": _headline(view["stats"]) if compact else view["stats"],
         "record": record,
+        "price_source": antask_price_source(),
     }
 
 
@@ -659,6 +661,7 @@ def btc_summary():
     hours = [h for h in (full.get("hours") or []) if h.get("live")]
     word = {0: "down", 1: "up", 2: "unsure"}
     last = [{"from": h["at"] - 3600, "to": h["at"], "dir": "up" if h["up"] else "down",
+             "price": h.get("price"), "change_pct": h.get("change_pct"),
              "call": word.get(h.get("call")) if h.get("call") is not None else None,
              "hit": h.get("hit")} for h in hours[-12:]]
     call = full.get("call") or {}
@@ -680,7 +683,86 @@ def btc_summary():
         "last": last,
         "rates": {k: stats.get(k) for k in ("h6", "h24", "today", "epoch")},
         "coin_toss": 0.5,
+        "price_source": antask_price_source(),
     }
+
+
+@app.get("/v1/btc/overview", tags=["service"], summary="BTC per hour, day, epoch or month, with the colony's hit rate")
+def btc_overview(
+    group: str = Query("day", pattern="^(hour|day|epoch|month)$",
+                       description="hour: the hours of one UTC day; day, epoch, month: aggregates"),
+    day: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$",
+                               description="For group=hour: the UTC day (YYYY-MM-DD); default the latest"),
+):
+    """Every recorded live hour with the oracle's BTC price, its move, the
+    colony's call and whether it hit -- by hour, or summed per UTC day, epoch
+    or month. Calls count only if fixed before their hour began. Prices are
+    Binance BTC/USDT as Qubic's Price oracle stored them on-chain
+    (`price_source`); hours recorded before 2026-11-18 may have none."""
+    import time as _t
+    from qdr import antask
+
+    store = get_store()
+    now = int(_t.time())
+    view = _btc_calls_view(store, now)
+    hourly = []
+    for h in _with_calls(_with_change(store.btc_hours()), view):
+        start = antask.hour_at(h["hour"]) - 3600
+        hourly.append({
+            "hour": h["hour"], "from": start, "to": start + 3600, "epoch": h["epoch"],
+            "day": _t_day(start), "month": _t_day(start)[:7],
+            "price": h.get("price"), "change_pct": h.get("change_pct"),
+            "up": bool(h["up"]), "call": h.get("call"), "hit": h.get("hit"),
+        })
+    days = sorted({r["day"] for r in hourly})
+    out = {"group": group, "days": days, "price_source": antask.PRICE_SOURCE, "coin_toss": 0.5}
+    if group == "hour":
+        d = day or (days[-1] if days else None)
+        out["day"] = d
+        out["rows"] = [r for r in hourly if r["day"] == d][::-1]
+        return out
+    key = {"day": "day", "epoch": "epoch", "month": "month"}[group]
+    groups: dict = {}
+    for r in hourly:
+        groups.setdefault(r[key], []).append(r)
+    by_hour = {r["hour"]: r for r in hourly}
+    rows = []
+    for k, rs in groups.items():
+        prices = [r["price"] for r in rs if r["price"] is not None]
+        before = by_hour.get(rs[0]["hour"] - 1)
+        open_ = before["price"] if before and before["price"] is not None else (prices[0] if prices else None)
+        close = prices[-1] if prices else None
+        judged = [r for r in rs if r["hit"] is not None]
+        hits = sum(1 for r in judged if r["hit"])
+        rows.append({
+            key: k, "from": rs[0]["from"], "to": rs[-1]["to"], "hours": len(rs),
+            "ups": sum(1 for r in rs if r["up"]), "downs": sum(1 for r in rs if not r["up"]),
+            "open": open_, "close": close, "high": max(prices) if prices else None,
+            "low": min(prices) if prices else None,
+            "change_pct": round((close / open_ - 1) * 100, 3) if open_ and close else None,
+            "calls": len(judged), "hits": hits,
+            "rate": round(hits / len(judged), 4) if judged else None,
+        })
+    out["rows"] = sorted(rows, key=lambda r: r["from"], reverse=True)
+    return out
+
+
+def antask_price_source() -> str:
+    from qdr import antask
+    return antask.PRICE_SOURCE
+
+
+def _with_change(hours: list) -> list:
+    """Stored hours with `change_pct` against the stored hour before, when both have a price."""
+    out, prev = [], None
+    for h in hours:
+        row = dict(h)
+        if (prev is not None and prev["hour"] == h["hour"] - 1 and prev.get("price")
+                and h.get("price")):
+            row["change_pct"] = round((h["price"] / prev["price"] - 1) * 100, 3)
+        out.append(row)
+        prev = h
+    return out
 
 
 # Four epochs of live hours at most; an epoch adds up to 168.

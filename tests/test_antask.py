@@ -87,10 +87,19 @@ def test_task_data_parses_and_invalid_means_none():
     assert antask.parse_task_data(task_payload(b"", 0, valid=0)) is None
 
 
-def test_price_series_drops_every_price():
+def test_price_series_keeps_the_oracle_price_in_usdt():
     p = antask.parse_price_series(series_payload([(40317, 91910016, 0, 6468533000000)], 40318))
-    assert p["next_hour"] == 40318 and p["points"] == [{"hour": 40317, "append_tick": 91910016, "flags": 0}]
-    assert "price" not in json.dumps(p).lower()
+    assert p["next_hour"] == 40318
+    assert p["points"] == [{"hour": 40317, "append_tick": 91910016, "flags": 0, "price": 64685.33}]
+
+
+def test_live_hours_carry_their_price_and_move():
+    tg = targets([0])
+    task = antask.parse_task_data(task_payload(tg, 1))
+    series = antask.parse_price_series(series_payload(
+        [(BASE, 0, 2, 6500000000000), (BASE + 1, 500, 0, 6435000000000)], BASE + 2))
+    live = [h for h in antask.hours_block(task, series) if h["live"]]
+    assert live[0]["price"] == 64350.0 and live[0]["change_pct"] == -1.0
 
 
 def test_hour_zero_is_the_documented_epoch():

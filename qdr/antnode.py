@@ -337,7 +337,8 @@ def read_feed(peers: list[str], info: "SystemInfo | None") -> tuple[dict | None,
         task = query_task_data(ip, tick)
         if task is None:
             continue
-        series = query_price_series(ip, task["base_hour"] + 1, task["shift_limit"])
+        # From baseHour itself: its price is what the first live hour moved from.
+        series = query_price_series(ip, task["base_hour"], task["shift_limit"] + 1)
         return task, series
     return None, None
 

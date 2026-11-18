@@ -275,6 +275,7 @@ CREATE TABLE IF NOT EXISTS btc_hours (
     up             INTEGER NOT NULL,      -- target bit, 0 or 1
     filled         INTEGER NOT NULL DEFAULT 0,  -- oracle failed 24 h; previous price reused
     append_tick    INTEGER,
+    price          REAL,                  -- USDT, the oracle's on-chain price (since 2026-11-18)
     first_seen_at  INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_btc_hours_epoch ON btc_hours(epoch, hour);
@@ -519,6 +520,11 @@ class Store:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
         conn.executescript(SCHEMA)
+        # Columns added after a table first shipped: CREATE TABLE IF NOT EXISTS
+        # does not touch an existing table, so they are added here.
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(btc_hours)")}
+        if "price" not in cols:
+            conn.execute("ALTER TABLE btc_hours ADD COLUMN price REAL")
         conn.commit()
         return conn
 
@@ -1301,15 +1307,20 @@ class Store:
                 if not h.get("live"):
                     continue
                 cur = c.execute(
-                    "INSERT INTO btc_hours (hour,epoch,up,filled,append_tick,first_seen_at) "
-                    "VALUES (?,?,?,?,?,?) ON CONFLICT(hour) DO NOTHING",
+                    "INSERT INTO btc_hours (hour,epoch,up,filled,append_tick,first_seen_at,price) "
+                    "VALUES (?,?,?,?,?,?,?) ON CONFLICT(hour) DO NOTHING",
                     (int(h["hour"]), int(epoch), 1 if h["up"] else 0,
-                     1 if h.get("filled") else 0, h.get("append_tick"), int(seen_at)))
+                     1 if h.get("filled") else 0, h.get("append_tick"), int(seen_at), h.get("price")))
                 if cur.rowcount:
                     new += 1
-                elif h.get("append_tick") is not None:
-                    c.execute("UPDATE btc_hours SET append_tick=? WHERE hour=? AND append_tick IS NULL",
-                              (int(h["append_tick"]), int(h["hour"])))
+                else:
+                    # Fill in what an earlier read lacked; never overwrite.
+                    if h.get("append_tick") is not None:
+                        c.execute("UPDATE btc_hours SET append_tick=? WHERE hour=? AND append_tick IS NULL",
+                                  (int(h["append_tick"]), int(h["hour"])))
+                    if h.get("price") is not None:
+                        c.execute("UPDATE btc_hours SET price=? WHERE hour=? AND price IS NULL",
+                                  (float(h["price"]), int(h["hour"])))
         return new
 
     def btc_hours(self, epoch: Optional[int] = None, limit: Optional[int] = None) -> list[dict]:

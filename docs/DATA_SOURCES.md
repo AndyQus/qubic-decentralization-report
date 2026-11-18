@@ -416,10 +416,12 @@ bootstrap file carry `appendTick` 0 and flag bit 1 (undocumented); bit 0 is
 bytes. `qdr/antask.py` recomputes it (pycryptodome's KangarooTwelve). It matched
 the live node on the first try.
 
-**Direction only.** `qdr/antask.py` drops `priceE8` at parse time. The prices are
-Binance market data, and this project republishes no exchange data (§ price
-source in `qdr/pipeline.py`); `tests/test_btc.py` fails if any `/v1/btc` or
-`/v1/mining` field name contains "price".
+**Prices (changed 2026-11-18).** Until then `qdr/antask.py` dropped `priceE8` and the
+BTC page showed directions only. By the maintainer's decision the oracle's on-chain
+hourly price is now kept (`btc_hours.price`) and shown on the BTC page and in
+`/v1/btc*`, always with `price_source` ("Binance BTC/USDT via Qubic's Price oracle").
+Nothing is fetched from an exchange, and no volume exists; `tests/test_btc.py` pins
+that `/v1/mining` carries no price and every BTC endpoint names its source.
 
 **What stays closed:** a network's output (its call for the next hour) is only
 readable through `REQUEST_ANT_PARENT_ANN` (74), which needs an operator signature. The

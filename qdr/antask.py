@@ -25,10 +25,11 @@ Verification is the same idea as before, against a different object: the epoch
 context's `dataHash` is K12 of the epoch's first W target bytes, so recomputing it
 from message 80 proves the targets shown are the ones the network grades.
 
-Prices are deliberately dropped at parse time and never leave this module. They
-originate at Binance, and this project republishes no exchange market data
-(see the price-source note in qdr/pipeline.py); the direction bits are the
-network's own consensus task, and they are what the pages show.
+Prices: until 2026-11-18 they were dropped here and only directions shown.
+Since then -- the user's decision -- the hourly BTC/USDT price the oracle stored
+on-chain is kept and shown on the BTC page, always attributed (PRICE_SOURCE).
+They are Binance prices relayed by Qubic's consensus; this project still fetches
+no exchange API itself and shows no volume.
 
 What a node does not report -- SHIFT_CAP, ADVANCE_THRESHOLD, the default
 threshold -- is still read from qubic/core's `src/public_settings.h`, at the
@@ -75,6 +76,8 @@ PRICE_POINT = struct.Struct("<IIIq")                      # 20 bytes, packed
 # own hours: two days is enough to see the pattern the live hours continue.
 RECENT_FRAME_HOURS = 48
 
+PRICE_SOURCE = "Binance BTC/USDT via Qubic's Price oracle (stored on-chain, read from a node)"
+
 _DATA_DIR = os.environ.get("DATA_DIR")
 DEFAULT_CACHE_FILE = (
     Path(_DATA_DIR) / "raw" if _DATA_DIR
@@ -118,11 +121,8 @@ def parse_task_data(payload: bytes) -> Optional[dict]:
 
 
 def parse_price_series(payload: bytes) -> dict:
-    """RESPOND_PRICE_SERIES (79), with every price dropped on the spot.
-
-    What is kept per point is when it was stored and whether it was filled in --
-    the feed's behaviour, not the market's.
-    """
+    """RESPOND_PRICE_SERIES (79): the feed's state and, per hour, when it was
+    stored, whether it was filled in, and the price in USDT (priceE8 / 1e8)."""
     if len(payload) < PRICE_SERIES_HEADER.size:
         raise ValueError("price series shorter than its header")
     (tick, epoch, synced, bound, source, next_hour, failed, _first_fail, _last_fail,
@@ -133,8 +133,9 @@ def parse_price_series(payload: bytes) -> dict:
     for _ in range(count):
         if off + PRICE_POINT.size > len(payload):
             break
-        hour, append_tick, flags, _price = PRICE_POINT.unpack_from(payload, off)
-        points.append({"hour": hour, "append_tick": append_tick, "flags": flags})
+        hour, append_tick, flags, price_e8 = PRICE_POINT.unpack_from(payload, off)
+        points.append({"hour": hour, "append_tick": append_tick, "flags": flags,
+                       "price": round(price_e8 / 1e8, 2)})
         off += PRICE_POINT.size
     return {
         "tick": tick, "epoch": epoch, "synced": bool(synced), "bound": bool(bound),
@@ -367,6 +368,11 @@ def hours_block(task: Optional[dict], series: Optional[dict],
         if row["live"] and p is not None:
             row["append_tick"] = p["append_tick"]
             row["filled"] = bool(p["flags"] & FLAG_FILLED)
+            if p.get("price"):
+                row["price"] = p["price"]
+                prev = meta.get(hour - 1)
+                if prev and prev.get("price"):
+                    row["change_pct"] = round((p["price"] / prev["price"] - 1) * 100, 3)
         out.append(row)
     return out
 
