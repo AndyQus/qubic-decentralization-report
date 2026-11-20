@@ -299,6 +299,7 @@ body { background: var(--bg); }
 .week .c.miss { box-shadow: inset 0 0 0 2px var(--danger); }
 
 .note { font-size: 13px; color: var(--faint); line-height: 1.5; margin: 8px 0 0; }
+.note.verdict { color: var(--muted); font-size: 13.5px; }
 .empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
 .status { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
 .status.bad { color: var(--warn); }
@@ -576,10 +577,11 @@ body { background: var(--bg); }
       callMeta: "fixed {t} · network in tick {tick} · {err} errors over the year frame · shift {shift}",
       callNone: "No call yet",
       slotRun: "Running", slotNext: "Next",
-      sRun: "call <b>{c}</b> · result from {t}", sUp: "call <b>{c}</b> · fixed {t}",
+      sRun: "call <b>{c}</b> · fixed {f} · result from {t}", sUp: "call <b>{c}</b> · fixed {t}",
       sRunNone: "no call for this hour", sUpNone: "call follows before {t}",
       progTxt: "rebuilding the best network: {d} of {n} checked · first call in about {m} min",
-      netMeta: "Best network: {err} errors over the year frame ({pct} % right) · shift {shift} · ",
+      callWhen: "Each call is fixed as soon as the hour before it is on-chain — about 55 min before its own hour begins, so it sees none of the move it calls. ",
+      netMeta: "Calls come from the single best network (fewest errors), not a vote of several: {err} errors over the year frame ({pct} % right on the hours it was mined against — a fit, not a forecast) · shift {shift} · ",
       rNoTracker: "The ingest worker has not reported on the colony yet.",
       rNoReplayer: "The replayer that rebuilds the colony's networks is not installed on this server.",
       rCatchingUp: "The best network's lineage is still being rebuilt, one solution after the other; its call follows.",
@@ -619,10 +621,13 @@ body { background: var(--bg); }
       recShardTip: "Epoch {ep}: {n} of 168 live hours recorded · {hits} of {calls} calls hit",
       recEpoch: "Epoch {ep}", recSum: "{n} hours · {up} % ▲ · {filled} filled",
       hitTitle: "Hit rate",
-      hPeriod: "Period", hCalls: "Calls", hHits: "Hits", hRate: "Hit rate", hAlways: "always ▲", hRepeat: "as hour before",
+      hPeriod: "Period", hCalls: "Calls", hHits: "Hits", hRate: "Hit rate", hAlways: "always ▲", hNever: "always ▼", hRepeat: "as hour before",
       hH6: "last 6 hours", hH24: "last 24 hours", hToday: "today (UTC)", hEpoch: "this epoch",
       hDays: "per day (UTC)", hEpochs: "per epoch", hEpochN: "epoch {ep}",
-      hNote: "The bar's line marks 50 % — a coin toss. \"always ▲\" and \"as hour before\" are what two naive rules scored on the same hours. \"?\" calls count as misses, as in the scorer.",
+      hNote: "The bar's line marks 50 % — a coin toss. \"always ▲\", \"always ▼\" and \"as hour before\" are what three naive rules scored on the same hours. \"?\" calls count as misses, as in the scorer.",
+      hVerdict: "This epoch: colony {rate} % on {n} calls · always ▲ {up} % · always ▼ {down} %. With {n} calls a pure coin toss lands between {lo} % and {hi} % 19 times out of 20",
+      hVerdictIn: " — so the record is still too short to tell skill from luck.",
+      hVerdictOut: " — the colony is outside that range; whether it beats always ▼ / ▲ is the harder test.",
       markHit: "hit", markMiss: "miss",
       hitDesc: "How often the colony's call matched the hour. Only calls fixed before their hour arrived are counted, and each is judged against the direction the network itself stored.",
       hitEmpty: "No call has been judged yet. The first verdict comes one hour after the first call.",
@@ -655,10 +660,11 @@ body { background: var(--bg); }
       callMeta: "festgelegt {t} · Netz aus Tick {tick} · {err} Fehler über den Jahresrahmen · Shift {shift}",
       callNone: "Noch kein Tipp",
       slotRun: "Läuft", slotNext: "Als Nächstes",
-      sRun: "Tipp <b>{c}</b> · Ergebnis ab {t}", sUp: "Tipp <b>{c}</b> · festgelegt {t}",
+      sRun: "Tipp <b>{c}</b> · festgelegt {f} · Ergebnis ab {t}", sUp: "Tipp <b>{c}</b> · festgelegt {t}",
       sRunNone: "kein Tipp für diese Stunde", sUpNone: "Tipp folgt vor {t}",
       progTxt: "Nachbau des besten Netzes: {d} von {n} geprüft · erster Tipp in ca. {m} Min.",
-      netMeta: "Bestes Netz: {err} Fehler über den Jahresrahmen ({pct} % richtig) · Shift {shift} · ",
+      callWhen: "Jeder Tipp wird festgelegt, sobald die Stunde davor on-chain ist — rund 55 Min. bevor seine eigene Stunde beginnt; von ihrer Bewegung sieht er nichts. ",
+      netMeta: "Die Tipps kommen vom einzelnen besten Netz (wenigste Fehler), nicht aus einer Abstimmung mehrerer: {err} Fehler über den Jahresrahmen ({pct} % richtig auf den Stunden, gegen die es gemined wurde — eine Anpassung, keine Prognose) · Shift {shift} · ",
       rNoTracker: "Der Worker hat zur Kolonie noch nichts gemeldet.",
       rNoReplayer: "Der Nachbau der Netze ist auf diesem Server nicht installiert.",
       rCatchingUp: "Die Linie des besten Netzes wird noch nachgebaut, eine Lösung nach der anderen; sein Tipp folgt.",
@@ -698,10 +704,13 @@ body { background: var(--bg); }
       recShardTip: "Epoche {ep}: {n} von 168 Live-Stunden aufgezeichnet · {hits} von {calls} Tipps getroffen",
       recEpoch: "Epoche {ep}", recSum: "{n} Stunden · {up} % ▲ · {filled} aufgefüllt",
       hitTitle: "Trefferquote",
-      hPeriod: "Zeitraum", hCalls: "Tipps", hHits: "Treffer", hRate: "Quote", hAlways: "immer ▲", hRepeat: "wie Vorstunde",
+      hPeriod: "Zeitraum", hCalls: "Tipps", hHits: "Treffer", hRate: "Quote", hAlways: "immer ▲", hNever: "immer ▼", hRepeat: "wie Vorstunde",
       hH6: "letzte 6 Stunden", hH24: "letzte 24 Stunden", hToday: "heute (UTC)", hEpoch: "diese Epoche",
       hDays: "pro Tag (UTC)", hEpochs: "pro Epoche", hEpochN: "Epoche {ep}",
-      hNote: "Der Strich im Balken markiert 50 % — einen Münzwurf. „immer ▲“ und „wie Vorstunde“ zeigen, was zwei einfache Regeln auf denselben Stunden erreicht hätten. „?“-Tipps zählen wie im Scorer als Fehler.",
+      hNote: "Der Strich im Balken markiert 50 % — einen Münzwurf. „immer ▲“, „immer ▼“ und „wie Vorstunde“ zeigen, was drei einfache Regeln auf denselben Stunden erreicht hätten. „?“-Tipps zählen wie im Scorer als Fehler.",
+      hVerdict: "Diese Epoche: Kolonie {rate} % bei {n} Tipps · immer ▲ {up} % · immer ▼ {down} %. Bei {n} Tipps landet ein reiner Münzwurf in 19 von 20 Fällen zwischen {lo} % und {hi} %",
+      hVerdictIn: " — die Reihe ist also noch zu kurz, um Können von Glück zu unterscheiden.",
+      hVerdictOut: " — die Kolonie liegt außerhalb; ob sie auch immer ▼ / ▲ schlägt, ist der härtere Test.",
       markHit: "Treffer", markMiss: "Fehler",
       hitDesc: "Wie oft der Tipp der Kolonie die Stunde getroffen hat. Gezählt werden nur Tipps, die feststanden, bevor ihre Stunde eintraf; jeder wird an der Richtung gemessen, die das Netz selbst gespeichert hat.",
       hitEmpty: "Noch kein Tipp ausgewertet. Das erste Urteil kommt eine Stunde nach dem ersten Tipp.",
@@ -865,7 +874,7 @@ body { background: var(--bg); }
     $("up-when").textContent = ok ? hm(o.next_at) + "–" + hm(o.next_at + 3600) : "–";
     glyph($("run-g"), run ? run.call : null);
     glyph($("up-g"), up ? up.call : null);
-    $("run-txt").innerHTML = run ? t("sRun", { c: esc(word(run.call)), t: esc(hm(o.next_due_at)) }) : esc(t("sRunNone"));
+    $("run-txt").innerHTML = run ? t("sRun", { c: esc(word(run.call)), f: esc(hm(run.made_at)), t: esc(hm(o.next_due_at)) }) : esc(t("sRunNone"));
     if (up) {
       $("up-txt").innerHTML = t("sUp", { c: esc(word(up.call)), t: esc(hm(up.made_at)) });
     } else if (c.reason && c.reason !== "catching-up" && c.reason !== "tracking" && REASON[c.reason]) {
@@ -884,7 +893,7 @@ body { background: var(--bg); }
     }
     var n = (up || run || {}).network || c.network;
     $("call-meta").textContent = n && n.error != null && task.window_width
-      ? t("netMeta", { err: fmtInt(n.error), shift: fmtInt(n.shift),
+      ? t("callWhen") + t("netMeta", { err: fmtInt(n.error), shift: fmtInt(n.shift),
           pct: (Math.round((1 - n.error / task.window_width) * 1000) / 10).toLocaleString(locale()) })
       : "";
   }
@@ -899,28 +908,39 @@ body { background: var(--bg); }
   function hitRow(label, r, cls) {
     var b = (r && r.baselines) || {};
     return '<tr class="' + (cls || "") + '"><td>' + esc(label) + "</td><td>" + fmtInt(r ? r.calls : 0) + "</td><td>" +
-      fmtInt(r ? r.hits : 0) + "</td>" + rateCell(r) + pctCell(b.always_up) + pctCell(b.repeat_last) + "</tr>";
+      fmtInt(r ? r.hits : 0) + "</td>" + rateCell(r) + pctCell(b.always_up) + pctCell(b.always_down) + pctCell(b.repeat_last) + "</tr>";
+  }
+  // One line that reads the epoch's rate against chance and the two one-sided
+  // rules. It stays visible on phones, where the baseline columns are hidden.
+  function verdict(r) {
+    if (!r || !r.calls || r.rate == null) return "";
+    var b = r.baselines || {}, half = 1.96 * Math.sqrt(0.25 / r.calls);
+    var p = function (v) { return v == null ? "–" : (Math.round(v * 1000) / 10).toLocaleString(locale()); };
+    var lo = Math.max(0, 0.5 - half), hi = Math.min(1, 0.5 + half);
+    var inside = r.rate >= lo && r.rate <= hi;
+    return '<p class="note verdict">' + esc(t("hVerdict", { rate: p(r.rate), n: fmtInt(r.calls), up: p(b.always_up),
+      down: p(b.always_down), lo: p(lo), hi: p(hi) }) + t(inside ? "hVerdictIn" : "hVerdictOut")) + "</p>";
   }
   function renderHits() {
     var st = (D && D.stats) || null, box = $("hit-box");
     var total = st && st.epochs ? st.epochs.reduce(function (a, e) { return a + (e.calls || 0); }, 0) : 0;
     if (!st || !total) { box.innerHTML = '<div class="empty">' + esc(t("hitEmpty")) + "</div>"; return; }
     var h = '<div class="hits-wrap"><table class="hits"><thead><tr><th>' + esc(t("hPeriod")) + "</th><th>" + esc(t("hCalls")) +
-      "</th><th>" + esc(t("hHits")) + "</th><th>" + esc(t("hRate")) + "</th><th>" + esc(t("hAlways")) + "</th><th>" +
+      "</th><th>" + esc(t("hHits")) + "</th><th>" + esc(t("hRate")) + "</th><th>" + esc(t("hAlways")) + "</th><th>" + esc(t("hNever")) + "</th><th>" +
       esc(t("hRepeat")) + "</th></tr></thead><tbody>";
     h += hitRow(t("hH6"), st.h6) + hitRow(t("hH24"), st.h24) + hitRow(t("hToday"), st.today) + hitRow(t("hEpoch"), st.epoch);
     if ((st.days || []).length) {
-      h += '<tr class="group"><td colspan="6">' + esc(t("hDays")) + "</td></tr>";
+      h += '<tr class="group"><td colspan="7">' + esc(t("hDays")) + "</td></tr>";
       st.days.slice().reverse().forEach(function (d) {
         var label = new Date(d.day + "T00:00:00Z").toLocaleDateString(locale(), { weekday: "short", day: "2-digit", month: "2-digit", timeZone: "UTC" });
         h += hitRow(label, d, "sub");
       });
     }
     if ((st.epochs || []).length) {
-      h += '<tr class="group"><td colspan="6">' + esc(t("hEpochs")) + "</td></tr>";
+      h += '<tr class="group"><td colspan="7">' + esc(t("hEpochs")) + "</td></tr>";
       st.epochs.slice().reverse().forEach(function (e) { h += hitRow(t("hEpochN", { ep: e.epoch }), e, "sub"); });
     }
-    h += '</tbody></table></div><p class="note">' + esc(t("hNote")) + "</p>";
+    h += "</tbody></table></div>" + verdict(st.epoch) + '<p class="note">' + esc(t("hNote")) + "</p>";
     box.innerHTML = h;
   }
 

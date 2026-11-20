@@ -105,6 +105,7 @@ def test_baselines_are_scored_on_the_same_hours():
     judged = colony.judge([{"hour": h, "call": 1, "up": u} for h, u in ((2, 1), (3, 0), (4, 0))])
     b = colony.baselines(hours, judged)
     assert b["always_up"] == round(1 / 3, 4)
+    assert b["always_down"] == round(2 / 3, 4)
     assert b["repeat_last"] == round(2 / 3, 4)      # 1->1 yes, 1->0 no, 0->0 yes
 
 

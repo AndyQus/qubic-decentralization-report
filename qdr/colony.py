@@ -563,13 +563,17 @@ def rate(judged: list[dict]) -> dict:
 
 
 def baselines(hours: list[dict], judged: list[dict]) -> dict:
-    """What naive rules would have scored on the same hours: always up, and
-    'same as the hour before' -- so a colony rate can be read against them."""
+    """What naive rules would have scored on the same hours: always up, always
+    down, and 'same as the hour before' -- so a colony rate can be read against
+    them. Always down matters as much as always up: in a falling market a
+    network that mostly calls down scores well without any skill."""
     up = {h["hour"]: int(h["up"]) for h in hours}
     done = [c for c in judged if c["hit"] is not None]
     if not done:
-        return {"always_up": None, "repeat_last": None}
+        return {"always_up": None, "always_down": None, "repeat_last": None}
     always = sum(1 for c in done if up.get(c["hour"]) == 1) / len(done)
+    never = sum(1 for c in done if up.get(c["hour"]) == 0) / len(done)
     rep = [c for c in done if (c["hour"] - 1) in up]
     repeat = (sum(1 for c in rep if up[c["hour"] - 1] == up[c["hour"]]) / len(rep)) if rep else None
-    return {"always_up": round(always, 4), "repeat_last": round(repeat, 4) if repeat is not None else None}
+    return {"always_up": round(always, 4), "always_down": round(never, 4),
+            "repeat_last": round(repeat, 4) if repeat is not None else None}
