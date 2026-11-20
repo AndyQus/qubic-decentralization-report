@@ -793,6 +793,12 @@ def _btc_calls_view(store, now: int) -> dict:
     def block(cs):
         out = colony.rate(cs)
         out["baselines"] = colony.baselines(hours, cs)
+        st = colony.streak(cs)
+        # What a coin toss reaches by luck alone: with the same number of
+        # calls, and over a whole epoch of 168 hours.
+        st["coin_same"] = colony.run_chance(out["calls"], st["longest"]) if st["longest"] else None
+        st["coin_epoch"] = colony.run_chance(168, st["longest"]) if st["longest"] else None
+        out["streak"] = st
         return out
 
     def at(c):

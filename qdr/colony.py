@@ -577,3 +577,44 @@ def baselines(hours: list[dict], judged: list[dict]) -> dict:
     repeat = (sum(1 for c in rep if up[c["hour"] - 1] == up[c["hour"]]) / len(rep)) if rep else None
     return {"always_up": round(always, 4), "always_down": round(never, 4),
             "repeat_last": round(repeat, 4) if repeat is not None else None}
+
+
+def streak(judged: list[dict]) -> dict:
+    """The longest run of hits in consecutive hours, and the run still going.
+
+    An hour without a judged call breaks a run, the same as a miss: a streak
+    means hours in a row, not calls that happen to sit next to each other.
+    """
+    done = sorted((c for c in judged if c["hit"] is not None), key=lambda c: int(c["hour"]))
+    longest = cur = 0
+    prev = None
+    for c in done:
+        if prev is not None and int(c["hour"]) != prev + 1:
+            cur = 0
+        cur = cur + 1 if c["hit"] else 0
+        longest = max(longest, cur)
+        prev = int(c["hour"])
+    return {"longest": longest, "current": cur}
+
+
+def run_chance(n: int, k: int, p: float = 0.5) -> Optional[float]:
+    """Chance that n independent calls, each right with probability p, hold at
+    least one run of k hits -- what luck alone gives a streak of that length.
+
+    Streaks look like skill and mostly are not: over one epoch (168 hours) a
+    coin toss gets 5 in a row 94 % of the time.
+    """
+    if k <= 0:
+        return 1.0
+    if n < k:
+        return 0.0
+    # dist[j]: chance that no run of k has happened yet and the current run is j.
+    dist = [1.0] + [0.0] * (k - 1)
+    for _ in range(n):
+        nxt = [0.0] * k
+        nxt[0] = sum(dist) * (1 - p)
+        for j in range(k - 1):
+            nxt[j + 1] = dist[j] * p
+        dist = nxt
+    return round(1.0 - sum(dist), 4)
+

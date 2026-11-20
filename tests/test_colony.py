@@ -109,6 +109,23 @@ def test_baselines_are_scored_on_the_same_hours():
     assert b["repeat_last"] == round(2 / 3, 4)      # 1->1 yes, 1->0 no, 0->0 yes
 
 
+def test_a_streak_needs_hits_in_consecutive_hours():
+    judged = colony.judge([{"hour": h, "call": 1, "up": u} for h, u in
+                           ((1, 1), (2, 1), (3, 0), (4, 1), (5, 1), (6, 1), (8, 1), (9, 1))])
+    # 4-6 is the longest run; hour 7 has no call, so 8-9 starts a new one.
+    assert colony.streak(judged) == {"longest": 3, "current": 2}
+    assert colony.streak([]) == {"longest": 0, "current": 0}
+
+
+def test_run_chance_is_what_luck_alone_gives():
+    assert colony.run_chance(1, 1) == 0.5
+    assert colony.run_chance(2, 2) == 0.25
+    assert colony.run_chance(3, 2) == 0.375          # HHx, xHH minus HHH counted twice
+    assert colony.run_chance(4, 5) == 0.0
+    assert colony.run_chance(168, 5) == 0.9409       # a streak of 5 is near certain per epoch
+    assert 0.44 < colony.run_chance(38, 5) < 0.46
+
+
 def test_a_call_is_never_rewritten(tmp_path):
     store = Store(str(tmp_path / "q.db"))
     row = {"hour": BASE + 3, "epoch": 240, "call": 1, "net_tick": 5, "net_index": 0, "pubkey": "aa",

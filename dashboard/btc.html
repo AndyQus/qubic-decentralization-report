@@ -78,6 +78,7 @@ body { background: var(--bg); }
 
 .hero-title { font-family: var(--display); font-size: clamp(26px, 4.4vw, 40px); margin: 4px 0 4px; letter-spacing: -.01em; }
 .hero-sub { color: var(--muted); margin: 0 0 8px; line-height: 1.5; font-size: 14px; }
+#how-card a { color: var(--accent); }
 /* Title left, the colony's calls right; stacked on tablets in portrait and phones. */
 .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 600px); gap: 16px; align-items: center; margin-bottom: 16px; }
 .hero .card { margin-bottom: 0; }
@@ -106,7 +107,6 @@ body { background: var(--bg); }
   .ring-in .big { font-size: 15px !important; }
   .ring-in .small { font-size: 8.5px !important; max-width: 56px !important; }
   .now-card { padding: 14px 14px; }
-  .now-meta { font-size: 11.5px; line-height: 1.45; }
 }
 .ring { position: relative; width: 116px; height: 116px; }
 .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
@@ -133,13 +133,6 @@ body { background: var(--bg); }
 .slot .txt b { color: var(--text); }
 .progress { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--muted); }
 .progress .bar { flex: 0 0 140px; margin-top: 0; }
-.now-meta { font-size: 12px; color: var(--faint); margin-top: 6px; }
-.now-meta a { color: var(--accent); }
-.now-meta summary { cursor: pointer; color: var(--muted); list-style: none; display: inline-flex; gap: 6px; min-height: 28px; align-items: center; }
-.now-meta summary::-webkit-details-marker { display: none; }
-.now-meta summary::before { content: "▸"; font-size: 10px; }
-.now-meta[open] summary::before { content: "▾"; }
-.now-meta summary:hover { color: var(--text); }
 @media (max-width: 520px) {
   .progress { flex-wrap: wrap; } .progress .bar { flex: 1 0 100%; }
 }
@@ -456,11 +449,6 @@ body { background: var(--bg); }
             <div class="txt" id="up-txt"></div>
           </div>
           <div class="progress" id="progress" hidden><div class="bar"><i id="prog-bar"></i></div><span id="prog-txt"></span></div>
-          <!-- Open on wide screens, folded on phones: there the paragraph would
-               push the figures a whole screen down. -->
-          <details class="now-meta" id="now-meta"><summary data-i18n="callHow">How the calls are made</summary>
-            <span id="call-meta"></span>
-            <a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_PREDICTION.de.md" target="_blank" rel="noreferrer" data-i18n="callConcept">How the call is made (concept, German) →</a></details>
         </div>
         <div class="ring" id="ring">
           <svg viewBox="0 0 200 200" aria-hidden="true">
@@ -569,6 +557,16 @@ body { background: var(--bg); }
   <p class="hero-sub" data-i18n="heroSub">Since epoch 240 Qubic's mining is graded on the real direction of Bitcoin: every hour the nodes store the BTC/USDT price on-chain through Qubic's Price oracle, and the ant colony searches for networks whose output matches up and down. Here is every hour as it arrives.</p>
     <p class="note" data-i18n="footNote">Directions only, no prices: the prices come from Binance via Qubic's Price oracle, and this report does not republish exchange data. Times in your local time zone. Not investment advice — a research experiment of the Qubic network.</p>
   </section>
+
+  <!-- How the calls are made: moved out of the calls card, where it pushed the
+       figures down. Filled with the network's live numbers by renderCall(). -->
+  <section class="card info-card" id="how-card">
+    <h2 data-i18n="callHow">How the calls are made</h2>
+    <p class="hero-sub" data-i18n="callText">The output of the colony's best network for that hour.</p>
+    <p class="hero-sub" data-i18n="callWhen">Each call is fixed as soon as the hour before it is on-chain.</p>
+    <p class="hero-sub" id="call-meta"></p>
+    <p class="note"><a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_PREDICTION.de.md" target="_blank" rel="noreferrer" data-i18n="callConcept">How the call is made (concept, German) →</a></p>
+  </section>
 </main>
 
 <footer class="qs-footer">
@@ -638,15 +636,15 @@ body { background: var(--bg); }
       callTitle: "The colony's calls",
       callConcept: "How the call is made (concept, German) →", callHow: "How the calls are made",
       callUp: "▲ Up or level", callDown: "▼ Down", callUnsure: "? unsure",
-      callText: "The output of the colony's best network for this hour. The network was rebuilt from public data with qubic/core's own reference scorer and reproduces the error the node logged; the call was fixed before the hour existed on-chain.",
+      callText: "Each call is the output of the colony's best network for its hour. The network was rebuilt from public data with qubic/core's own reference scorer and reproduces the error the node logged; the call was fixed before the hour existed on-chain.",
       callMeta: "fixed {t} · network in tick {tick} · {err} errors over the year frame · shift {shift}",
       callNone: "No call yet",
       slotRun: "Running", slotNext: "Next",
       sRun: "call <b>{c}</b> · fixed {f} · result from {t}", sUp: "call <b>{c}</b> · fixed {t}",
       sRunNone: "no call for this hour", sUpNone: "call follows before {t}",
       progTxt: "rebuilding the best network: {d} of {n} checked · first call in about {m} min",
-      callWhen: "Each call is fixed as soon as the hour before it is on-chain — about 55 min before its own hour begins, so it sees none of the move it calls. ",
-      netMeta: "Calls come from the single best network (fewest errors), not a vote of several: {err} errors over the year frame ({pct} % right on the hours it was mined against — a fit, not a forecast) · shift {shift} · ",
+      callWhen: "Each call is fixed as soon as the hour before it is on-chain — about 55 min before its own hour begins, so it sees none of the move it calls.",
+      netMeta: "The calls come from the single best network (fewest errors), not from a vote of several. Right now it has {err} errors over the year frame ({pct} % right on the hours it was mined against — a fit, not a forecast), shift {shift}.",
       rNoTracker: "The ingest worker has not reported on the colony yet.",
       rNoReplayer: "The replayer that rebuilds the colony's networks is not installed on this server.",
       rCatchingUp: "The best network's lineage is still being rebuilt, one solution after the other; its call follows.",
@@ -695,6 +693,7 @@ body { background: var(--bg); }
       hVerdict: "This epoch: colony {rate} % on {n} calls · always ▲ {up} % · always ▼ {down} %. With {n} calls a pure coin toss lands between {lo} % and {hi} % 19 times out of 20",
       hVerdictIn: " — so the record is still too short to tell skill from luck.",
       hVerdictOut: " — the colony is outside that range; whether it beats always ▼ / ▲ is the harder test.",
+      hStreak: "Longest streak this epoch: {k} right in a row (running now: {c}). Luck alone gets there too: a coin toss reaches {k} in a row with {n} calls {same} % of the time, over a whole epoch of 168 hours {ep} % — a streak says little, the hit rate over many calls is the test.",
       markHit: "hit", markMiss: "miss",
       hitDesc: "How often the colony's call matched the hour. Only calls fixed before their hour arrived are counted, and each is judged against the direction the network itself stored.",
       hitEmpty: "No call has been judged yet. The first verdict comes one hour after the first call.",
@@ -723,15 +722,15 @@ body { background: var(--bg); }
       callTitle: "Die Tipps der Kolonie",
       callConcept: "Wie der Tipp entsteht (Konzept) →", callHow: "Wie die Tipps entstehen",
       callUp: "▲ Up oder gleich", callDown: "▼ Down", callUnsure: "? unsicher",
-      callText: "Die Ausgabe des besten Netzes der Kolonie für diese Stunde. Das Netz wurde aus öffentlichen Daten mit dem Referenz-Scorer von qubic/core nachgebaut und trifft den Fehler, den die Node protokolliert hat; der Tipp stand fest, bevor die Stunde on-chain existierte.",
+      callText: "Jeder Tipp ist die Ausgabe des besten Netzes der Kolonie für seine Stunde. Das Netz wurde aus öffentlichen Daten mit dem Referenz-Scorer von qubic/core nachgebaut und trifft den Fehler, den die Node protokolliert hat; der Tipp stand fest, bevor die Stunde on-chain existierte.",
       callMeta: "festgelegt {t} · Netz aus Tick {tick} · {err} Fehler über den Jahresrahmen · Shift {shift}",
       callNone: "Noch kein Tipp",
       slotRun: "Läuft", slotNext: "Als Nächstes",
       sRun: "Tipp <b>{c}</b> · festgelegt {f} · Ergebnis ab {t}", sUp: "Tipp <b>{c}</b> · festgelegt {t}",
       sRunNone: "kein Tipp für diese Stunde", sUpNone: "Tipp folgt vor {t}",
       progTxt: "Nachbau des besten Netzes: {d} von {n} geprüft · erster Tipp in ca. {m} Min.",
-      callWhen: "Jeder Tipp wird festgelegt, sobald die Stunde davor on-chain ist — rund 55 Min. bevor seine eigene Stunde beginnt; von ihrer Bewegung sieht er nichts. ",
-      netMeta: "Die Tipps kommen vom einzelnen besten Netz (wenigste Fehler), nicht aus einer Abstimmung mehrerer: {err} Fehler über den Jahresrahmen ({pct} % richtig auf den Stunden, gegen die es gemined wurde — eine Anpassung, keine Prognose) · Shift {shift} · ",
+      callWhen: "Jeder Tipp wird festgelegt, sobald die Stunde davor on-chain ist — rund 55 Min. bevor seine eigene Stunde beginnt; von ihrer Bewegung sieht er nichts.",
+      netMeta: "Die Tipps kommen vom einzelnen besten Netz (wenigste Fehler), nicht aus einer Abstimmung mehrerer. Gerade hat es {err} Fehler über den Jahresrahmen ({pct} % richtig auf den Stunden, gegen die es gemined wurde — eine Anpassung, keine Prognose), Shift {shift}.",
       rNoTracker: "Der Worker hat zur Kolonie noch nichts gemeldet.",
       rNoReplayer: "Der Nachbau der Netze ist auf diesem Server nicht installiert.",
       rCatchingUp: "Die Linie des besten Netzes wird noch nachgebaut, eine Lösung nach der anderen; sein Tipp folgt.",
@@ -780,6 +779,7 @@ body { background: var(--bg); }
       hVerdict: "Diese Epoche: Kolonie {rate} % bei {n} Tipps · immer ▲ {up} % · immer ▼ {down} %. Bei {n} Tipps landet ein reiner Münzwurf in 19 von 20 Fällen zwischen {lo} % und {hi} %",
       hVerdictIn: " — die Reihe ist also noch zu kurz, um Können von Glück zu unterscheiden.",
       hVerdictOut: " — die Kolonie liegt außerhalb; ob sie auch immer ▼ / ▲ schlägt, ist der härtere Test.",
+      hStreak: "Längste Serie dieser Epoche: {k} richtig in Folge (läuft gerade: {c}). Das schafft auch Glück: Ein Münzwurf erreicht {k} in Folge bei {n} Tipps in {same} % der Fälle, über eine ganze Epoche mit 168 Stunden in {ep} % — eine Serie sagt wenig, der Test ist die Quote über viele Tipps.",
       markHit: "Treffer", markMiss: "Fehler",
       hitDesc: "Wie oft der Tipp der Kolonie die Stunde getroffen hat. Gezählt werden nur Tipps, die feststanden, bevor ihre Stunde eintraf; jeder wird an der Richtung gemessen, die das Netz selbst gespeichert hat.",
       hitEmpty: "Noch kein Tipp ausgewertet. Das erste Urteil kommt eine Stunde nach dem ersten Tipp.",
@@ -972,7 +972,7 @@ body { background: var(--bg); }
     }
     var n = (up || run || {}).network || c.network;
     $("call-meta").textContent = n && n.error != null && task.window_width
-      ? t("callWhen") + t("netMeta", { err: fmtInt(n.error), shift: fmtInt(n.shift),
+      ? t("netMeta", { err: fmtInt(n.error), shift: fmtInt(n.shift),
           pct: (Math.round((1 - n.error / task.window_width) * 1000) / 10).toLocaleString(locale()) })
       : "";
   }
@@ -1018,6 +1018,15 @@ body { background: var(--bg); }
     });
     return h + "</div>";
   }
+  // The longest run of hits, read against what a coin toss reaches by luck.
+  function streakLine(r) {
+    var s = r && r.streak;
+    if (!s || !s.longest || s.coin_same == null) return "";
+    // Never "100 %": luck makes a streak near certain, not certain.
+    var p = function (v) { return v >= 0.995 ? "> 99" : Math.round(v * 100).toLocaleString(locale()); };
+    return '<p class="note verdict">' + esc(t("hStreak", { k: fmtInt(s.longest), c: fmtInt(s.current), n: fmtInt(r.calls),
+      same: p(s.coin_same), ep: p(s.coin_epoch) })) + "</p>";
+  }
   function renderHits() {
     var st = (D && D.stats) || null, box = $("hit-box");
     var total = st && st.epochs ? st.epochs.reduce(function (a, e) { return a + (e.calls || 0); }, 0) : 0;
@@ -1037,7 +1046,7 @@ body { background: var(--bg); }
       h += '<tr class="group"><td colspan="7">' + esc(t("hEpochs")) + "</td></tr>";
       st.epochs.slice().reverse().forEach(function (e) { h += hitRow(t("hEpochN", { ep: e.epoch }), e, "sub"); });
     }
-    h += "</tbody></table></div>" + verdict(st.epoch) + '<p class="note">' + esc(t("hNote")) + "</p>";
+    h += "</tbody></table></div>" + verdict(st.epoch) + streakLine(st.epoch) + '<p class="note">' + esc(t("hNote")) + "</p>";
     box.innerHTML = h;
   }
 
@@ -1401,7 +1410,6 @@ body { background: var(--bg); }
   function stopTimers() { clearInterval(loadTimer); clearInterval(ringTimer); loadTimer = ringTimer = null; }
 
   $("foot-year").textContent = new Date().getFullYear();
-  if (!(window.matchMedia && matchMedia("(max-width: 520px)").matches)) $("now-meta").open = true;
   applyLang();
   Ants.init();
   load(); startTimers(); Pulse.start();
