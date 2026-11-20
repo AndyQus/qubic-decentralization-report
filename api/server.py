@@ -711,8 +711,8 @@ def btc_overview(
         hourly.append({
             "hour": h["hour"], "from": start, "to": start + 3600, "epoch": h["epoch"],
             "day": _t_day(start), "month": _t_day(start)[:7],
-            "price": h.get("price"), "change_pct": h.get("change_pct"),
-            "up": bool(h["up"]), "call": h.get("call"), "hit": h.get("hit"),
+            "prev_price": h.get("prev_price"), "price": h.get("price"),
+            "change_pct": h.get("change_pct"), "up": bool(h["up"]), "call": h.get("call"), "hit": h.get("hit"),
         })
     days = sorted({r["day"] for r in hourly})
     out = {"group": group, "days": days, "price_source": antask.PRICE_SOURCE, "coin_toss": 0.5}
@@ -753,12 +753,14 @@ def antask_price_source() -> str:
 
 
 def _with_change(hours: list) -> list:
-    """Stored hours with `change_pct` against the stored hour before, when both have a price."""
+    """Stored hours with `prev_price` (the stored hour before's close, i.e. this
+    hour's opening price) and `change_pct` against it, when both have a price."""
     out, prev = [], None
     for h in hours:
         row = dict(h)
         if (prev is not None and prev["hour"] == h["hour"] - 1 and prev.get("price")
                 and h.get("price")):
+            row["prev_price"] = prev["price"]
             row["change_pct"] = round((h["price"] / prev["price"] - 1) * 100, 3)
         out.append(row)
         prev = h

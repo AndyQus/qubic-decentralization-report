@@ -137,7 +137,7 @@
       mNoCall: "Tipp der Kolonie: noch keiner ({s})",
       mCall: "Tipp der Kolonie für {from}–{to} UTC: {c}",
       mRate: "Trefferquote 24 h: {r} ({n} Tipps) · Münzwurf 50 %",
-      mTip: "Live von einem Qubic-Node. Seit Epoche 240 speichern die Nodes jede Stunde den Bitcoin-Kurs über Qubics Preis-Oracle; die Miner suchen Netze, die das Rauf/Runter dieser Stunden treffen. ▲ = gleich oder höher geschlossen, ▼ = tiefer. Mehr auf der BTC-Seite.",
+      mTip: "Live von einem Qubic-Node. Seit Epoche 240 speichern die Nodes jede Stunde den Bitcoin-Kurs über Qubics Preis-Oracle; die Miner suchen Netze, die das Up/Down dieser Stunden treffen. ▲ = gleich oder höher geschlossen, ▼ = tiefer. Mehr auf der BTC-Seite.",
       noApi: "Diese Seite wurde als Datei geöffnet und hat keine API. Starte den Server und öffne sie darüber: python -m uvicorn api.server:app --port 8000 → http://127.0.0.1:8000/dashboard/ticks.html",
       discLabel: "Hinweis:", discBeta: "Diese Seite befindet sich im Beta-Status.",
       discData: "Die Ticks kommen live von einem Bob-Node (liefert er nicht mehr, übernimmt ein anderer); auf dieser Seite wird nichts gespeichert oder geschätzt.",

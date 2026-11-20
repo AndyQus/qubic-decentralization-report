@@ -334,7 +334,9 @@ def test_the_overview_sums_prices_moves_and_calls(client):
     rows = {r["hour"]: r for r in by_hour["rows"]}
     assert rows[BASE + 2]["change_pct"] == 10.0 and rows[BASE + 2]["hit"] is True
     assert rows[BASE + 3]["change_pct"] == -10.0 and rows[BASE + 3]["hit"] is False
+    assert rows[BASE + 2]["prev_price"] == 100.0 and rows[BASE + 3]["prev_price"] == 110.0
     assert rows[BASE + 1]["change_pct"] is None              # nothing stored before it
+    assert rows[BASE + 1]["prev_price"] is None
     ep = client.get("/v1/btc/overview?group=epoch").json()["rows"][0]
     assert (ep["epoch"], ep["hours"], ep["open"], ep["close"], ep["calls"], ep["hits"]) == (240, 3, 100.0, 99.0, 2, 1)
     assert ep["change_pct"] == -1.0 and ep["rate"] == 0.5

@@ -57,11 +57,14 @@
   --up:    #0369a1;
   --down:  #7e6fff;
   --cell-ink: #ffffff;
+  /* Bitcoin orange for the tiles' accent -- the same step burn takes with its
+     ember: a deep amber in light mode (readable as text), the bright one in dark. */
+  --btc:   #b45309;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --up: #1597b8; --down: #7e6fff; }
+  :root:not([data-theme="light"]) { --up: #1597b8; --down: #7e6fff; --btc: #f7931a; }
 }
-:root[data-theme="dark"] { --up: #1597b8; --down: #7e6fff; }
+:root[data-theme="dark"] { --up: #1597b8; --down: #7e6fff; --btc: #f7931a; }
 
 body { background: var(--bg); }
 /* [hidden] must win over the display: flex of .progress, .ov-day and the like. */
@@ -90,12 +93,20 @@ body { background: var(--bg); }
 .card .desc { color: var(--muted); font-size: 14px; margin: 0 0 14px; line-height: 1.5; }
 
 /* ── Next hour + call ─────────────────────────────────────────────── */
-.now-grid { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 16px; align-items: center; }
+.now-grid { display: grid; grid-template-columns: minmax(0, 1fr) 120px; grid-template-areas: "head ring" "body ring";
+  gap: 4px 16px; align-items: center; }
+.now-head { grid-area: head; align-self: end; }
+.now-body { grid-area: body; min-width: 0; align-self: start; }
+.ring { grid-area: ring; }
+/* Phone: the ring moves up beside the heading, the slots get the whole width. */
 @media (max-width: 520px) {
-  .now-grid { grid-template-columns: minmax(0, 1fr) 86px; gap: 10px; }
-  .ring { width: 84px !important; height: 84px !important; }
+  .now-grid { grid-template-columns: minmax(0, 1fr) 76px; grid-template-areas: "head ring" "body body"; gap: 6px 10px; }
+  .now-head { align-self: center; }
+  .ring { width: 76px !important; height: 76px !important; }
   .ring-in .big { font-size: 15px !important; }
-  .ring-in .small { font-size: 9px !important; max-width: 64px !important; }
+  .ring-in .small { font-size: 8.5px !important; max-width: 56px !important; }
+  .now-card { padding: 14px 14px; }
+  .now-meta { font-size: 11.5px; line-height: 1.45; }
 }
 .ring { position: relative; width: 116px; height: 116px; }
 .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
@@ -124,6 +135,15 @@ body { background: var(--bg); }
 .progress .bar { flex: 0 0 140px; margin-top: 0; }
 .now-meta { font-size: 12px; color: var(--faint); margin-top: 6px; }
 .now-meta a { color: var(--accent); }
+.now-meta summary { cursor: pointer; color: var(--muted); list-style: none; display: inline-flex; gap: 6px; min-height: 28px; align-items: center; }
+.now-meta summary::-webkit-details-marker { display: none; }
+.now-meta summary::before { content: "▸"; font-size: 10px; }
+.now-meta[open] summary::before { content: "▾"; }
+.now-meta summary:hover { color: var(--text); }
+@media (max-width: 520px) {
+  .progress { flex-wrap: wrap; } .progress .bar { flex: 1 0 100%; }
+}
+.hits.ov td.callc, .chg span { white-space: nowrap; }
 @media (max-width: 760px) { .slot { grid-template-columns: 84px 30px minmax(0, 1fr); gap: 8px; } .slot .g { width: 30px; height: 30px; font-size: 16px; } .slot .txt { font-size: 13px; } }
 .next-hour { font-family: var(--display); font-size: 24px; margin: 2px 0 10px; }
 .call {
@@ -180,23 +200,60 @@ body { background: var(--bg); }
 .vd.hit { color: var(--success); font-weight: 700; } .vd.miss { color: var(--danger); font-weight: 700; }
 .dirg { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; color: var(--cell-ink); font-size: 11px; }
 .dirg.up { background: var(--up); } .dirg.down { background: var(--down); }
+.hits.ov td.pr { white-space: nowrap; }
+.hits.ov td.pr.prev { color: var(--muted); }
+.dirw { margin-left: 6px; font-family: var(--sans); }
 @media (max-width: 700px) {
   .hits.ov th.opt, .hits.ov td.opt { display: none; }
   .chg { min-width: 0; } .chg .cb { flex-basis: 44px; } .chg span { min-width: 0; }
 }
-@media (max-width: 600px) { .hits th:nth-child(n+5), .hits td:nth-child(n+5) { display: none; } .rate { min-width: 0; } .hits td, .hits th { padding: 6px 4px; } }
+/* The hit table drops its baseline columns on phones (the verdict line under it
+   carries them). Scoped to it: the overview keeps every column it shows -- the
+   unscoped rule used to hide the overview's Calls and Hit rate columns. */
+@media (max-width: 600px) {
+  .hits:not(.ov) th:nth-child(n+5), .hits:not(.ov) td:nth-child(n+5) { display: none; }
+  .rate { min-width: 0; } .rate .rb { min-width: 34px; }
+  .hits td, .hits th { padding: 6px 4px; }
+  .hits { font-size: 12.5px; }
+  .hits th { font-size: 10.5px; letter-spacing: .02em; }
+  .hits.ov .chg .cb, .hits.ov .cur, .hits.ov .hto, .dirw { display: none; }
+  .ov-head { gap: 8px; }
+  .ov-head h2 { flex: 1 0 100%; }
+  .ov-day { flex: 1 0 100%; }
+  .ov-day select { flex: 1; min-width: 0; }
+}
 
-/* ── KPI tiles ─────────────────────────────────────────────────────── */
-.kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
-@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, 1fr); } }
-.kpi .v .dir { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 7px;
-  color: var(--cell-ink); font-size: 16px; vertical-align: -4px; margin-right: 6px; }
-.kpi .v .dir.up { background: var(--up); } .kpi .v .dir.down { background: var(--down); }
-@media (max-width: 860px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
-.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
-.kpi .l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-.kpi .v { font-family: var(--mono); font-size: 24px; font-weight: 700; margin-top: 4px; }
-.kpi .s { font-size: 12px; color: var(--faint); margin-top: 2px; }
+/* ── Key figures: the shared .qs-stat tiles from theme.css, as on Burn and
+   Price. `themed` tiles (the hit rates) carry this page's Bitcoin orange; the
+   others cycle through the house hues. Six tiles: 6 / 3 / 2 per row. */
+.kpis { --stat-accent: var(--btc); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .kpis .qs-stat { padding: 12px 12px; }
+  .kpis .qs-stat .s-label { font-size: 10.5px; letter-spacing: .03em; }
+}
+.kpis .qs-stat { min-width: 0; }
+.kpis .s-val { font-family: var(--mono); }
+.kpis .s-val .dir { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px;
+  color: var(--cell-ink); font-size: 13px; vertical-align: -3px; margin-right: 6px; }
+.kpis .s-val .dir.up { background: var(--up); } .kpis .s-val .dir.down { background: var(--down); }
+
+/* ── Hit rate per day: one bar per UTC day, the dashed line is a coin toss ── */
+.dr-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 8px; }
+.dayrates { display: flex; flex-wrap: wrap; gap: 10px 8px; align-items: flex-end; margin-bottom: 14px; }
+.dr { flex: 0 0 62px; text-align: center; }
+.dr-pct { font-family: var(--mono); font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.dr-bar { position: relative; height: 84px; border-radius: 7px; overflow: hidden;
+  background: color-mix(in srgb, var(--muted) 12%, transparent); border: 1px solid var(--border); }
+.dr-bar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 5px 5px 0 0;
+  background: linear-gradient(180deg, var(--btc), color-mix(in srgb, var(--btc) 35%, transparent)); }
+.dr-bar b { position: absolute; left: 0; right: 0; bottom: 50%; border-top: 2px dashed var(--text); opacity: .45; }
+.dr-day { font-size: 11.5px; color: var(--muted); margin-top: 5px; white-space: nowrap; }
+.dr-n { font-size: 11px; color: var(--faint); font-family: var(--mono); }
+.dr.today .dr-day { color: var(--text); font-weight: 600; }
+.dr.today .dr-bar { border-color: var(--btc); }
+@media (max-width: 600px) { .dr { flex-basis: 52px; } .dr-bar { height: 68px; } .dr-pct { font-size: 13px; } }
 .bar { height: 6px; border-radius: 3px; background: var(--border-strong); margin-top: 8px; overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .8s ease; }
 
@@ -307,7 +364,7 @@ body { background: var(--bg); }
 /* ── Loading: until the first node answer, every place data will land shows a
    shimmering placeholder of its final size, so the page never looks empty and
    nothing jumps when the data arrives. Same shimmer as the report page. */
-.page.is-loading .kpi .v, .page.is-loading .kpi .s, .page.is-loading #next-hour,
+.page.is-loading .kpis .s-val, .page.is-loading .kpis .s-sub, .page.is-loading #next-hour,
 .page.is-loading #call-verdict, .page.is-loading #call-text, .skel, .sk-cell, .pulse:empty {
   color: transparent; border-radius: 6px;
   background: linear-gradient(90deg,
@@ -317,8 +374,8 @@ body { background: var(--bg); }
   background-size: 200% 100%; animation: shimmer 1.4s linear infinite;
 }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-.page.is-loading .kpi .v { max-width: 7ch; }
-.page.is-loading .kpi .s { max-width: 16ch; min-height: 1.1em; }
+.page.is-loading .kpis .s-val { max-width: 7ch; }
+.page.is-loading .kpis .s-sub { max-width: 16ch; min-height: 1.1em; }
 .page.is-loading #next-hour { max-width: 18ch; }
 .page.is-loading #call-verdict { max-width: 10ch; min-height: 1.2em; }
 .page.is-loading #call-text { min-height: 3em; }
@@ -386,8 +443,8 @@ body { background: var(--bg); }
   <!-- ── The next hour, and the colony's call for it ─────────────────── -->
     <section class="card now-card" id="now-card">
       <div class="now-grid">
-        <div>
-          <div class="next-label" data-i18n="callTitle">The colony's calls</div>
+        <div class="next-label now-head" data-i18n="callTitle">The colony's calls</div>
+        <div class="now-body">
           <div class="slot">
             <div class="lbl"><span data-i18n="slotRun">Running</span><b id="run-when">–</b></div>
             <div class="g" id="run-g" aria-hidden="true">?</div>
@@ -399,8 +456,11 @@ body { background: var(--bg); }
             <div class="txt" id="up-txt"></div>
           </div>
           <div class="progress" id="progress" hidden><div class="bar"><i id="prog-bar"></i></div><span id="prog-txt"></span></div>
-          <div class="now-meta"><span id="call-meta"></span>
-            <a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_PREDICTION.de.md" target="_blank" rel="noreferrer" data-i18n="callConcept">How the call is made (concept, German) →</a></div>
+          <!-- Open on wide screens, folded on phones: there the paragraph would
+               push the figures a whole screen down. -->
+          <details class="now-meta" id="now-meta"><summary data-i18n="callHow">How the calls are made</summary>
+            <span id="call-meta"></span>
+            <a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_PREDICTION.de.md" target="_blank" rel="noreferrer" data-i18n="callConcept">How the call is made (concept, German) →</a></details>
         </div>
         <div class="ring" id="ring">
           <svg viewBox="0 0 200 200" aria-hidden="true">
@@ -418,31 +478,36 @@ body { background: var(--bg); }
 
   <!-- ── Key figures ──────────────────────────────────────────────────── -->
   <div class="kpis">
-    <div class="kpi">
-      <div class="l" data-i18n="kLast">Last hour</div>
-      <div class="v" id="k-last">–</div>
-      <div class="s" id="k-last-s"></div>
+    <div class="qs-stat glass-card">
+      <div class="s-label" data-i18n="kLast">Last hour</div>
+      <div class="s-val small" id="k-last">–</div>
+      <div class="s-sub" id="k-last-s"></div>
     </div>
-    <div class="kpi">
-      <div class="l" data-i18n="kLive">Live hours</div>
-      <div class="v" id="k-live">–</div>
-      <div class="s" id="k-live-s"></div>
+    <div class="qs-stat glass-card themed">
+      <div class="s-label" data-i18n="kToday">Hit rate today</div>
+      <div class="s-val small" id="k-today">–</div>
+      <div class="s-sub" id="k-today-s"></div>
+    </div>
+    <div class="qs-stat glass-card themed">
+      <div class="s-label" data-i18n="kEpochRate">Hit rate this epoch</div>
+      <div class="s-val small" id="k-ep">–</div>
+      <div class="s-sub" id="k-ep-s"></div>
+    </div>
+    <div class="qs-stat glass-card">
+      <div class="s-label" data-i18n="kLive">Live hours</div>
+      <div class="s-val small" id="k-live">–</div>
+      <div class="s-sub" id="k-live-s"></div>
       <div class="bar"><i id="k-live-bar"></i></div>
     </div>
-    <div class="kpi">
-      <div class="l" data-i18n="kDir">Direction so far</div>
-      <div class="v" id="k-dir">–</div>
-      <div class="s" id="k-dir-s"></div>
+    <div class="qs-stat glass-card">
+      <div class="s-label" data-i18n="kDir">Up / Down so far</div>
+      <div class="s-val small" id="k-dir">–</div>
+      <div class="s-sub" id="k-dir-s"></div>
     </div>
-    <div class="kpi">
-      <div class="l" data-i18n="kOracle">Oracle</div>
-      <div class="v" id="k-oracle">–</div>
-      <div class="s" id="k-oracle-s"></div>
-    </div>
-    <div class="kpi">
-      <div class="l" data-i18n="kColony">Colony</div>
-      <div class="v" id="k-colony">–</div>
-      <div class="s" id="k-colony-s"></div>
+    <div class="qs-stat glass-card">
+      <div class="s-label" data-i18n="kColony">Colony</div>
+      <div class="s-val small" id="k-colony">–</div>
+      <div class="s-sub" id="k-colony-s"></div>
     </div>
   </div>
 
@@ -571,8 +636,8 @@ body { background: var(--bg); }
       nextHour: "{from} – {to}",
       ringDue: "earliest on the network", ringWait: "due — the oracle is being asked", ringLate: "overdue · {n} failed attempts",
       callTitle: "The colony's calls",
-      callConcept: "How the call is made (concept, German) →",
-      callUp: "▲ up or level", callDown: "▼ down", callUnsure: "? unsure",
+      callConcept: "How the call is made (concept, German) →", callHow: "How the calls are made",
+      callUp: "▲ Up or level", callDown: "▼ Down", callUnsure: "? unsure",
       callText: "The output of the colony's best network for this hour. The network was rebuilt from public data with qubic/core's own reference scorer and reproduces the error the node logged; the call was fixed before the hour existed on-chain.",
       callMeta: "fixed {t} · network in tick {tick} · {err} errors over the year frame · shift {shift}",
       callNone: "No call yet",
@@ -591,25 +656,27 @@ body { background: var(--bg); }
       rAnchor: "No node served the tick data a rebuild needs; retried every minute.",
       rOther: "No call for this hour (tracker: {s}).",
       rFailed: "The replayer stopped on this server; no call until it runs again.",
-      kLast: "Last hour", kLastUp: "up", kLastDown: "down", kLastCall: "call {c} {v}",
+      kLast: "Last hour", kLastUp: "Up", kLastDown: "Down", kLastCall: "call {c} {v}",
+      kToday: "Hit rate today", kEpochRate: "Hit rate this epoch",
+      kRateS: "{hits} of {calls} calls · coin toss 50 %", kRateNone: "no call judged yet",
+      kTodayS: "{hits} of {calls} calls (UTC day)",
+      drTitle: "Hit rate per day (UTC)", drTip: "{day}: {hits} of {calls} calls hit",
       ovTitle: "Overview", ovHour: "Hours", ovDay: "Days", ovEpoch: "Epochs", ovMonth: "Months",
-      ovDesc: "How Bitcoin moved and how the colony called it — by hour of a day, or summed per day, epoch or month. Δ is the move from the end of the period before; a call counts only if it was fixed before its hour began.",
-      ovColHour: "Hour", ovColPeriod: "Period", ovColPrice: "BTC", ovColClose: "BTC close", ovColChange: "Δ",
-      ovColDir: "Move", ovColCall: "Call", ovColHit: "", ovColHours: "Hours", ovColUpDown: "▲ / ▼",
+      ovDesc: "How Bitcoin moved and how the colony called it — by hour of a day, or summed per day, epoch or month. \"BTC before\" is the price an hour earlier, \"BTC after\" the price at the hour's end; Δ is the move between them. A call counts only if it was fixed before its hour began.",
+      ovColHour: "Hour", ovColPeriod: "Period", ovColClose: "BTC close", ovColChange: "Δ",
+      ovColDir: "Up/Down", ovColCall: "Call", ovColPrev: "BTC before", ovColAfter: "BTC after", ovColHit: "", ovColHours: "Hours", ovColUpDown: "▲ / ▼",
       ovColCalls: "Calls", ovColRate: "Hit rate", ovEmpty: "No recorded hour in this view yet.",
       ovSrc: "Prices: {s}. Days and months in UTC, hours in your local time.",
       ovSumMove: "Bitcoin {chg}", ovSumRate: "Colony {hits} of {calls} right", ovSumHours: "{n} hours",
       ovEpochN: "Epoch {ep}",
       kLive: "Live hours", kLiveS: "of {cap} possible this epoch",
-      kDir: "Direction so far", kDirS: "of the live hours",
-      kOracle: "Oracle", kOracleS: "{fail} failed now · {filled} filled · node-local counters",
-      kOracleOk: "on time", kOracleBusy: "asking", kOracleLate: "retrying",
+      kDir: "Up / Down so far", kDirS: "of the live hours",
       kColony: "Colony", kColonyS: "solutions · threshold {th} errors",
       tapeTitle: "Hour by hour",
       tapeDesc: "Each cell is one hour: ▲ closed level or higher than the hour before (in whole USDT), ▼ lower. Pale: the last hours of the year-long frame the epoch started with. Bright: hours stored live during this epoch — the ones the colony could not know in advance. Dashed: the hour still to come. Below each live hour: the colony's call, ✓ when it matched, ✗ when not.",
-      lgUp: "▲ up or level", lgDown: "▼ down", lgFrame: "frame (known at epoch start)", lgPending: "next hour",
+      lgUp: "▲ Up or level", lgDown: "▼ Down", lgFrame: "frame (known at epoch start)", lgPending: "next hour",
       cellTip: "{from} – {to} · {dir}", cellLive: "stored live in tick {tick}", cellFrame: "part of the frame", cellFilled: "oracle failed for 24 h, previous price reused (counts as ▲)",
-      dirUp: "▲ up or level", dirDown: "▼ down", pendTip: "{from} – {to} · not on the network yet",
+      dirUp: "▲ Up or level", dirDown: "▼ Down", pendTip: "{from} – {to} · not on the network yet",
       pulseTitle: "Colony pulse",
       pulseDesc: "Mining solutions per tick, live from the tick stream. Each one is a network that beat its parent; the node logs whether it was accepted and how many errors it made over the year-long frame.",
       pulseWait: "Waiting for ticks …",
@@ -643,7 +710,7 @@ body { background: var(--bg); }
       ticksLive: "Ticks", btcLive: "BTC", howItWorks: "So funktioniert's",
       pageTitle: "Kolonie gegen Bitcoin", subtitle: "BPP-9000 live · Qubic Report",
       heroTitle: "Kolonie gegen Bitcoin", infoTitle: "Über diese Seite",
-      heroSub: "Seit Epoche 240 wird Qubics Mining an der echten Richtung von Bitcoin gemessen: Jede Stunde speichern die Nodes den BTC/USDT-Kurs über Qubics Preis-Oracle on-chain, und die Ameisenkolonie sucht Netze, deren Ausgabe das Rauf und Runter trifft. Hier ist jede Stunde, sobald sie eintrifft.",
+      heroSub: "Seit Epoche 240 wird Qubics Mining an der echten Richtung von Bitcoin gemessen: Jede Stunde speichern die Nodes den BTC/USDT-Kurs über Qubics Preis-Oracle on-chain, und die Ameisenkolonie sucht Netze, deren Ausgabe Up und Down trifft. Hier ist jede Stunde, sobald sie eintrifft.",
       loading: "Lese von einem Qubic-Node …",
       live: "Live von Node {ip} · Epoche {ep} · geprüft: Die Ziele ergeben den Daten-Hash der Node.",
       unverified: "Live von Node {ip} · Epoche {ep} · die Ziele ließen sich noch nicht gegen den Daten-Hash der Node prüfen — keine Zahlen angezeigt.",
@@ -654,8 +721,8 @@ body { background: var(--bg); }
       nextHour: "{from} – {to}",
       ringDue: "frühestens im Netz", ringWait: "fällig — das Oracle wird gefragt", ringLate: "überfällig · {n} Fehlversuche",
       callTitle: "Die Tipps der Kolonie",
-      callConcept: "Wie der Tipp entsteht (Konzept) →",
-      callUp: "▲ rauf oder gleich", callDown: "▼ runter", callUnsure: "? unsicher",
+      callConcept: "Wie der Tipp entsteht (Konzept) →", callHow: "Wie die Tipps entstehen",
+      callUp: "▲ Up oder gleich", callDown: "▼ Down", callUnsure: "? unsicher",
       callText: "Die Ausgabe des besten Netzes der Kolonie für diese Stunde. Das Netz wurde aus öffentlichen Daten mit dem Referenz-Scorer von qubic/core nachgebaut und trifft den Fehler, den die Node protokolliert hat; der Tipp stand fest, bevor die Stunde on-chain existierte.",
       callMeta: "festgelegt {t} · Netz aus Tick {tick} · {err} Fehler über den Jahresrahmen · Shift {shift}",
       callNone: "Noch kein Tipp",
@@ -674,25 +741,27 @@ body { background: var(--bg); }
       rAnchor: "Keine Node lieferte die Tick-Daten für den Nachbau; neuer Versuch jede Minute.",
       rOther: "Kein Tipp für diese Stunde (Tracker: {s}).",
       rFailed: "Der Nachbau ist auf diesem Server abgebrochen; kein Tipp, bis er wieder läuft.",
-      kLast: "Letzte Stunde", kLastUp: "rauf", kLastDown: "runter", kLastCall: "Tipp {c} {v}",
+      kLast: "Letzte Stunde", kLastUp: "Up", kLastDown: "Down", kLastCall: "Tipp {c} {v}",
+      kToday: "Treffer heute", kEpochRate: "Treffer diese Epoche",
+      kRateS: "{hits} von {calls} Tipps · Münzwurf 50 %", kRateNone: "noch kein Tipp ausgewertet",
+      kTodayS: "{hits} von {calls} Tipps (UTC-Tag)",
+      drTitle: "Trefferquote pro Tag (UTC)", drTip: "{day}: {hits} von {calls} Tipps getroffen",
       ovTitle: "Übersicht", ovHour: "Stunden", ovDay: "Tage", ovEpoch: "Epochen", ovMonth: "Monate",
-      ovDesc: "Wie sich Bitcoin bewegt hat und wie die Kolonie getippt hat — je Stunde eines Tages oder zusammengefasst pro Tag, Epoche oder Monat. Δ ist die Bewegung seit dem Ende des Zeitraums davor; ein Tipp zählt nur, wenn er vor Beginn seiner Stunde feststand.",
-      ovColHour: "Stunde", ovColPeriod: "Zeitraum", ovColPrice: "BTC", ovColClose: "BTC Schluss", ovColChange: "Δ",
-      ovColDir: "Richtung", ovColCall: "Tipp", ovColHit: "", ovColHours: "Stunden", ovColUpDown: "▲ / ▼",
+      ovDesc: "Wie sich Bitcoin bewegt hat und wie die Kolonie getippt hat — je Stunde eines Tages oder zusammengefasst pro Tag, Epoche oder Monat. „BTC vorher“ ist der Kurs eine Stunde davor, „BTC nachher“ der Kurs am Ende der Stunde; Δ ist die Bewegung dazwischen. Ein Tipp zählt nur, wenn er vor Beginn seiner Stunde feststand.",
+      ovColHour: "Stunde", ovColPeriod: "Zeitraum", ovColClose: "BTC Schluss", ovColChange: "Δ",
+      ovColDir: "Up/Down", ovColCall: "Tipp", ovColPrev: "BTC vorher", ovColAfter: "BTC nachher", ovColHit: "", ovColHours: "Stunden", ovColUpDown: "▲ / ▼",
       ovColCalls: "Tipps", ovColRate: "Quote", ovEmpty: "In dieser Ansicht ist noch keine Stunde aufgezeichnet.",
       ovSrc: "Kurse: {s}. Tage und Monate in UTC, Stunden in deiner Ortszeit.",
       ovSumMove: "Bitcoin {chg}", ovSumRate: "Kolonie {hits} von {calls} richtig", ovSumHours: "{n} Stunden",
       ovEpochN: "Epoche {ep}",
       kLive: "Live-Stunden", kLiveS: "von {cap} möglichen in dieser Epoche",
-      kDir: "Richtung bisher", kDirS: "der Live-Stunden",
-      kOracle: "Oracle", kOracleS: "{fail} Fehlversuche gerade · {filled} aufgefüllt · Zähler der Node",
-      kOracleOk: "pünktlich", kOracleBusy: "fragt", kOracleLate: "wiederholt",
+      kDir: "Up / Down bisher", kDirS: "der Live-Stunden",
       kColony: "Kolonie", kColonyS: "Lösungen · Schwelle {th} Fehler",
       tapeTitle: "Stunde für Stunde",
       tapeDesc: "Jede Zelle ist eine Stunde: ▲ gleich oder höher geschlossen als die Stunde davor (in ganzen USDT), ▼ tiefer. Blass: die letzten Stunden des Jahresrahmens, mit dem die Epoche begann. Kräftig: Stunden, die während dieser Epoche live gespeichert wurden — die die Kolonie vorher nicht kennen konnte. Gestrichelt: die Stunde, die noch kommt. Unter jeder Live-Stunde: der Tipp der Kolonie, ✓ wenn er traf, ✗ wenn nicht.",
-      lgUp: "▲ rauf oder gleich", lgDown: "▼ runter", lgFrame: "Rahmen (bei Epochenstart bekannt)", lgPending: "nächste Stunde",
+      lgUp: "▲ Up oder gleich", lgDown: "▼ Down", lgFrame: "Rahmen (bei Epochenstart bekannt)", lgPending: "nächste Stunde",
       cellTip: "{from} – {to} · {dir}", cellLive: "live gespeichert in Tick {tick}", cellFrame: "Teil des Rahmens", cellFilled: "Oracle 24 h ausgefallen, Vorstundenkurs übernommen (zählt als ▲)",
-      dirUp: "▲ rauf oder gleich", dirDown: "▼ runter", pendTip: "{from} – {to} · noch nicht im Netz",
+      dirUp: "▲ Up oder gleich", dirDown: "▼ Down", pendTip: "{from} – {to} · noch nicht im Netz",
       pulseTitle: "Kolonie-Puls",
       pulseDesc: "Mining-Lösungen pro Tick, live aus dem Tick-Stream. Jede ist ein Netz, das seinen Elternknoten geschlagen hat; die Node protokolliert, ob es angenommen wurde und wie viele Fehler es über den Jahresrahmen gemacht hat.",
       pulseWait: "Warte auf Ticks …",
@@ -780,15 +849,25 @@ body { background: var(--bg); }
     var ups = live.filter(function (h) { return h.up; }).length;
     $("k-dir").textContent = ok && live.length ? "▲" + ups + " ▼" + (live.length - ups) : "–";
     $("k-dir-s").textContent = ok && live.length ? t("kDirS") : "";
-    var o = (D && D.oracle) || null;
-    if (o) {
-      $("k-oracle").textContent = o.failed_attempts > 0 ? t("kOracleLate") : (o.querying ? t("kOracleBusy") : t("kOracleOk"));
-      $("k-oracle-s").textContent = t("kOracleS", { fail: fmtInt(o.failed_attempts), filled: fmtInt(o.filled) });
-    }
+    // The two hit rates people come for: today (UTC) and the running epoch.
+    var st = (D && D.stats) || {};
+    rateTile("k-today", "k-today-s", st.today, "kTodayS");
+    rateTile("k-ep", "k-ep-s", st.epoch, "kRateS");
     var c = (D && D.colony) || null;
     if (c) {
       $("k-colony").textContent = fmtInt(c.solution_count);
       $("k-colony-s").textContent = t("kColonyS", { th: fmtInt(c.threshold) });
+    }
+  }
+
+  function pct1(v) { return (Math.round(v * 1000) / 10).toLocaleString(locale()) + " %"; }
+  function rateTile(vId, sId, r, subKey) {
+    if (r && r.calls && r.rate != null) {
+      $(vId).textContent = pct1(r.rate);
+      $(sId).textContent = t(subKey, { hits: fmtInt(r.hits), calls: fmtInt(r.calls) });
+    } else {
+      $(vId).textContent = "–";
+      $(sId).textContent = t("kRateNone");
     }
   }
 
@@ -921,11 +1000,29 @@ body { background: var(--bg); }
     return '<p class="note verdict">' + esc(t("hVerdict", { rate: p(r.rate), n: fmtInt(r.calls), up: p(b.always_up),
       down: p(b.always_down), lo: p(lo), hi: p(hi) }) + t(inside ? "hVerdictIn" : "hVerdictOut")) + "</p>";
   }
+  // One bar per UTC day: how many of that day's calls hit. The dashed line is
+  // 50 % (a coin toss); the count under each bar says how much a day weighs.
+  function dayRates(days) {
+    var judged = days.filter(function (d) { return d.calls; });
+    if (!judged.length) return "";
+    var today = new Date().toISOString().slice(0, 10);
+    var h = '<div class="dr-title">' + esc(t("drTitle")) + '</div><div class="dayrates">';
+    judged.slice(-14).forEach(function (d) {
+      var label = new Date(d.day + "T00:00:00Z").toLocaleDateString(locale(), { weekday: "short", day: "2-digit", month: "2-digit", timeZone: "UTC" });
+      var pct = d.rate == null ? 0 : Math.round(d.rate * 100);
+      h += '<div class="dr' + (d.day === today ? " today" : "") + '" title="' +
+        esc(t("drTip", { day: label, hits: fmtInt(d.hits), calls: fmtInt(d.calls) })) + '">' +
+        '<div class="dr-pct">' + pct + " %</div>" +
+        '<div class="dr-bar"><i style="height:' + pct + '%"></i><b></b></div>' +
+        '<div class="dr-day">' + esc(label) + '</div><div class="dr-n">' + fmtInt(d.hits) + "/" + fmtInt(d.calls) + "</div></div>";
+    });
+    return h + "</div>";
+  }
   function renderHits() {
     var st = (D && D.stats) || null, box = $("hit-box");
     var total = st && st.epochs ? st.epochs.reduce(function (a, e) { return a + (e.calls || 0); }, 0) : 0;
     if (!st || !total) { box.innerHTML = '<div class="empty">' + esc(t("hitEmpty")) + "</div>"; return; }
-    var h = '<div class="hits-wrap"><table class="hits"><thead><tr><th>' + esc(t("hPeriod")) + "</th><th>" + esc(t("hCalls")) +
+    var h = dayRates(st.days || []) + '<div class="hits-wrap"><table class="hits"><thead><tr><th>' + esc(t("hPeriod")) + "</th><th>" + esc(t("hCalls")) +
       "</th><th>" + esc(t("hHits")) + "</th><th>" + esc(t("hRate")) + "</th><th>" + esc(t("hAlways")) + "</th><th>" + esc(t("hNever")) + "</th><th>" +
       esc(t("hRepeat")) + "</th></tr></thead><tbody>";
     h += hitRow(t("hH6"), st.h6) + hitRow(t("hH24"), st.h24) + hitRow(t("hToday"), st.today) + hitRow(t("hEpoch"), st.epoch);
@@ -1052,7 +1149,7 @@ body { background: var(--bg); }
 
   /* ── Overview: per hour of a day, or per day / epoch / month ───────── */
   // ?ov=hour|day|epoch|month and &ovday=YYYY-MM-DD open the overview on that view (shareable).
-  var OV = { group: /^(hour|day|epoch|month)$/.test(params.get("ov") || "") ? params.get("ov") : "day",
+  var OV = { group: /^(hour|day|epoch|month)$/.test(params.get("ov") || "") ? params.get("ov") : "hour",
     day: /^\d{4}-\d{2}-\d{2}$/.test(params.get("ovday") || "") ? params.get("ovday") : null, data: null, busy: false };
   function chgCell(v, maxAbs) {
     if (v == null) return "<td>–</td>";
@@ -1061,7 +1158,13 @@ body { background: var(--bg); }
       "<span>" + esc(fmtChg(v)) + "</span></div></td>";
   }
   function dirCell(up) {
-    return '<td class="dirc"><span class="dirg ' + (up ? "up" : "down") + '">' + (up ? "▲" : "▼") + "</span></td>";
+    return '<td class="dirc"><span class="dirg ' + (up ? "up" : "down") + '">' + (up ? "▲" : "▼") + '</span><span class="dirw">' +
+      esc(up ? "Up" : "Down") + "</span></td>";
+  }
+  // A price in a table cell; the "$" lives in its own span so a phone can drop it.
+  function priceCell(v, cls) {
+    return '<td class="pr' + (cls ? " " + cls : "") + '">' + (v == null ? "–"
+      : esc(Number(v).toLocaleString(locale(), { maximumFractionDigits: 0 })) + '<span class="cur"> $</span>') + "</td>";
   }
   function loadOverview() {
     if (apiBase === null || OV.busy) return;
@@ -1095,12 +1198,13 @@ body { background: var(--bg); }
     var h = "";
     var calls = 0, hits = 0, hours = 0, first = null, last = null;
     if (OV.group === "hour") {
-      h += "<thead><tr><th>" + esc(t("ovColHour")) + '</th><th class="opt">' + esc(t("ovColPrice")) + "</th><th>" + esc(t("ovColChange")) +
-        "</th><th>" + esc(t("ovColDir")) + "</th><th>" + esc(t("ovColCall")) + "</th></tr></thead><tbody>";
+      h += "<thead><tr><th>" + esc(t("ovColHour")) + "</th><th>" + esc(t("ovColPrev")) + "</th><th>" + esc(t("ovColAfter")) +
+        "</th><th>" + esc(t("ovColChange")) + "</th><th>" + esc(t("ovColDir")) + "</th><th>" + esc(t("ovColCall")) + "</th></tr></thead><tbody>";
       rows.forEach(function (r) {
         var v = r.call == null ? "–" : GLYPH[r.call] + (r.hit === true ? ' <span class="vd hit">✓</span>' : r.hit === false ? ' <span class="vd miss">✗</span>' : "");
-        h += "<tr><td>" + esc(hm(r.from) + "–" + hm(r.to)) + '</td><td class="opt">' + esc(fmtUsd(r.price)) + "</td>" + chgCell(r.change_pct, maxAbs) +
-          dirCell(r.up) + "<td>" + v + "</td></tr>";
+        h += "<tr><td>" + esc(hm(r.from)) + '<span class="hto">–' + esc(hm(r.to)) + "</span></td>" +
+          priceCell(r.prev_price, "prev") + priceCell(r.price) + chgCell(r.change_pct, maxAbs) +
+          dirCell(r.up) + '<td class="callc">' + v + "</td></tr>";
         hours++; if (r.hit != null) { calls++; if (r.hit) hits++; }
       });
       // The day's move: from the price before its oldest hour with a known move, to its newest price.
@@ -1297,6 +1401,7 @@ body { background: var(--bg); }
   function stopTimers() { clearInterval(loadTimer); clearInterval(ringTimer); loadTimer = ringTimer = null; }
 
   $("foot-year").textContent = new Date().getFullYear();
+  if (!(window.matchMedia && matchMedia("(max-width: 520px)").matches)) $("now-meta").open = true;
   applyLang();
   Ants.init();
   load(); startTimers(); Pulse.start();
