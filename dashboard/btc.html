@@ -332,14 +332,6 @@ body { background: var(--bg); }
 :root[data-theme="dark"] { --chart-halo: #0b0f14; }
 .day-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 4px; }
 .day-head h2 { margin: 0; }
-.day-title { min-width: 0; }
-.day-now { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 6px; }
-.day-now .dn-price { font-family: var(--mono); font-weight: 700; font-size: clamp(22px, 3.4vw, 30px); letter-spacing: -.02em;
-  color: var(--btc); font-variant-numeric: tabular-nums; }
-.day-now .dn-price small { font-family: var(--sans); font-size: 13px; color: var(--muted); font-weight: 600; margin-left: 4px; }
-.day-now .dn-chg { font-family: var(--mono); font-weight: 700; font-size: 14px; }
-.day-now .dn-chg.pos { color: var(--up); } .day-now .dn-chg.neg { color: var(--down); }
-.day-now .dn-when { font-size: 12.5px; color: var(--muted); }
 .day-svg .dc-focus { pointer-events: none; }
 .day-sum { margin: 0; }
 .day-sum b.pos { color: var(--up); } .day-sum b.neg { color: var(--down); }
@@ -551,10 +543,7 @@ body { background: var(--bg); }
   <!-- ── The last 24 hours: price line, the colony's call under each hour ── -->
   <section class="card" id="day-card">
     <div class="day-head">
-      <div class="day-title">
-        <h2 data-i18n="dayTitle">Bitcoin, last 24 hours</h2>
-        <div class="day-now" id="day-now"></div>
-      </div>
+      <h2 data-i18n="dayTitle">Bitcoin, last 24 hours</h2>
       <div class="ov-sum day-sum" id="day-sum"></div>
     </div>
     <div class="day-chart" id="day-chart"><div class="skel day-skel"></div></div>
@@ -750,9 +739,7 @@ body { background: var(--bg); }
       dayEmpty: "Not enough hours with a price recorded yet.",
       dayAria: "Bitcoin price over the last 24 hours with the colony's call for each hour",
       dayAhead: "calls ahead", dayCallLbl: "Call", dayRun: "Running", dayNext: "Next",
-      dayTipCall: "call {c}", dayTipNone: "no call yet",
-      dayNowWhen: "as of {t} · stored hourly by the oracle · next ≈ {n}", dayNowVs: "vs. {t}",
-      dayLgLine: "price at the full hour", dayLgSeg: "stretch: call hit / missed / no call", dayLgCall: "colony's call ▲ / ▼",
+      dayTipCall: "call {c}", dayTipNone: "no call yet",      dayLgLine: "price at the full hour", dayLgSeg: "stretch: call hit / missed / no call", dayLgCall: "colony's call ▲ / ▼",
       dayLgHit: "hit / missed", dayLgAhead: "hours ahead, call already fixed",
       pulseTitle: "Colony pulse",
       pulseDesc: "Mining solutions per tick, live from the tick stream. Each one is a network that beat its parent; the node logs whether it was accepted and how many errors it made over the year-long frame.",
@@ -846,9 +833,7 @@ body { background: var(--bg); }
       dayEmpty: "Noch nicht genug Stunden mit Kurs aufgezeichnet.",
       dayAria: "Bitcoin-Kurs der letzten 24 Stunden mit dem Tipp der Kolonie für jede Stunde",
       dayAhead: "kommende Tipps", dayCallLbl: "Tipp", dayRun: "Läuft", dayNext: "Als Nächstes",
-      dayTipCall: "Tipp {c}", dayTipNone: "noch kein Tipp",
-      dayNowWhen: "Stand {t} · stündlich vom Oracle gespeichert · nächster ≈ {n}", dayNowVs: "ggü. {t}",
-      dayLgLine: "Kurs zur vollen Stunde", dayLgSeg: "Abschnitt: Tipp getroffen / verfehlt / kein Tipp", dayLgCall: "Tipp der Kolonie ▲ / ▼",
+      dayTipCall: "Tipp {c}", dayTipNone: "noch kein Tipp",      dayLgLine: "Kurs zur vollen Stunde", dayLgSeg: "Abschnitt: Tipp getroffen / verfehlt / kein Tipp", dayLgCall: "Tipp der Kolonie ▲ / ▼",
       dayLgHit: "getroffen / verfehlt", dayLgAhead: "kommende Stunden, Tipp steht schon",
       pulseTitle: "Kolonie-Puls",
       pulseDesc: "Mining-Lösungen pro Tick, live aus dem Tick-Stream. Jede ist ein Netz, das seinen Elternknoten geschlagen hat; die Node protokolliert, ob es angenommen wurde und wie viele Fehler es über den Jahresrahmen gemacht hat.",
@@ -1305,19 +1290,6 @@ body { background: var(--bg); }
     chips.push('<span class="ov-chip">' + esc(t("daySumRate")) + " <b>" + (calls ? esc(pct1(hits / calls)) : "–") + "</b>" +
       (calls ? '<span class="day-n">' + esc(t("daySumN", { hits: fmtInt(hits), calls: fmtInt(calls) })) + "</span>" : "") + "</span>");
     $("day-sum").innerHTML = chips.join("");
-    // The newest price the oracle stored -- as current as an on-chain price gets
-    // (hourly). The move is against the hour before; the next one is due when
-    // the ring in the calls card runs out.
-    var now = $("day-now"), lp = pts.length ? pts[pts.length - 1] : null, pp = pts.length > 1 ? pts[pts.length - 2] : null;
-    if (!lp) { now.innerHTML = ""; return; }
-    var o = D.oracle || {}, h = '<span class="dn-price">' + esc(fmtNum(lp.price)) + "<small>USDT</small></span>";
-    if (pp && pp.hour === lp.hour - 1) {
-      var c = (lp.price / pp.price - 1) * 100;
-      h += '<span class="dn-chg ' + (c >= 0 ? "pos" : "neg") + '" title="' + esc(t("dayNowVs", { t: hm(pp.at) })) + '">' +
-        (c >= 0 ? "▲ " : "▼ ") + esc(fmtChg(c)) + "</span>";
-    }
-    h += '<span class="dn-when">' + esc(t("dayNowWhen", { t: hm(lp.at), n: o.next_due_at ? hm(o.next_due_at) : "–" })) + "</span>";
-    now.innerHTML = h;
   }
   function renderDay() {
     var box = $("day-chart");
