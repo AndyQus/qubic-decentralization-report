@@ -50,21 +50,22 @@
 <link rel="stylesheet" href="./theme.css?v=6388e666">
 
 <style>
-/* Up and down: the same pair as the mining page's target bars (1 = accent,
-   0 = violet), stepped for dark mode so both sit in the validated lightness
-   band. Every cell also carries ▲/▼ — direction is never colour alone. */
+/* Up and down: a calm green and a soft coral red. Light mode takes deep tones
+   that carry white glyphs; dark mode takes brighter ones that carry dark
+   glyphs (--cell-ink), so a cell's ▲/▼ stays readable in both. Every cell
+   also carries ▲/▼ — direction is never colour alone. */
 :root {
-  --up:    #0369a1;
-  --down:  #7e6fff;
+  --up:    #15803d;
+  --down:  #dc2626;
   --cell-ink: #ffffff;
   /* Bitcoin orange for the tiles' accent -- the same step burn takes with its
      ember: a deep amber in light mode (readable as text), the bright one in dark. */
   --btc:   #b45309;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --up: #1597b8; --down: #7e6fff; --btc: #f7931a; }
+  :root:not([data-theme="light"]) { --up: #34c178; --down: #f2686a; --cell-ink: #0b0f14; --btc: #f7931a; }
 }
-:root[data-theme="dark"] { --up: #1597b8; --down: #7e6fff; --btc: #f7931a; }
+:root[data-theme="dark"] { --up: #34c178; --down: #f2686a; --cell-ink: #0b0f14; --btc: #f7931a; }
 
 body { background: var(--bg); }
 /* [hidden] must win over the display: flex of .progress, .ov-day and the like. */
@@ -346,16 +347,18 @@ body { background: var(--bg); }
 .day-svg text.y-tick { fill: var(--text); font-family: var(--mono); }
 .day-svg .hcol { fill: transparent; cursor: default; }
 .day-svg .hcol:hover { fill: color-mix(in srgb, var(--text) 7%, transparent); }
-.day-svg .dc-line.draw { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: dcdraw 1.3s ease-out forwards; }
-.day-svg .dc-area.draw { animation: dcfade 1.3s ease-out both; }
+.day-svg .dc-line.draw { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: dcdraw .3s linear forwards; }
+.day-svg .dc-area.draw { animation: dcfade .5s ease-out both; }
 @keyframes dcdraw { to { stroke-dashoffset: 0; } }
 @keyframes dcfade { from { opacity: 0; } to { opacity: 1; } }
 .day-svg .dc-ahead { animation: dcpulse 2.4s ease-in-out infinite; }
 @keyframes dcpulse { 50% { opacity: .45; } }
 .day-legend { margin-top: 10px; }
-.day-legend i.ln { width: 16px; height: 3px; border-radius: 2px; vertical-align: 3px; background: linear-gradient(90deg, var(--up), var(--down)); }
-.day-legend i.dt { width: 8px; height: 8px; border-radius: 50%; margin-right: 2px; vertical-align: 0; }
-.day-legend i.dt.u { background: var(--up); } .day-legend i.dt.d { background: var(--down); margin-right: 5px; }
+.day-legend i.dt { width: 8px; height: 8px; border-radius: 50%; vertical-align: 0; background: var(--text); }
+.day-legend i.sg { width: 12px; height: 3px; border-radius: 2px; vertical-align: 3px; margin-right: 2px; }
+.day-legend i.sg.ok { background: var(--success); } .day-legend i.sg.bad { background: var(--danger); }
+.day-legend i.sg.none { background: var(--muted); opacity: .6; margin-right: 5px; }
+.day-desc { margin-top: 8px; }
 .day-legend i.u + i.d { margin-left: -3px; }
 .day-legend i.hz { border: 1px dashed var(--border-strong);
   background: repeating-linear-gradient(45deg, transparent 0 3px, color-mix(in srgb, var(--muted) 35%, transparent) 3px 4px); }
@@ -542,15 +545,15 @@ body { background: var(--bg); }
       <h2 data-i18n="dayTitle">Bitcoin, last 24 hours</h2>
       <div class="ov-sum day-sum" id="day-sum"></div>
     </div>
-    <p class="desc" data-i18n="dayDesc">BTC/USDT at each full hour, as Qubic's Price oracle stored it on-chain.</p>
     <div class="day-chart" id="day-chart"><div class="skel day-skel"></div></div>
     <div class="tape-legend day-legend">
-      <span><i class="ln"></i><span data-i18n="dayLgLine">price at the full hour</span></span>
-      <span><i class="dt u"></i><i class="dt d"></i><span data-i18n="dayLgDot">hour closed ▲ / ▼</span></span>
-      <span><i class="u"></i><i class="d"></i><span data-i18n="dayLgCall">colony's call</span></span>
+      <span><i class="dt"></i><span data-i18n="dayLgLine">price at the full hour</span></span>
+      <span><i class="sg ok"></i><i class="sg bad"></i><i class="sg none"></i><span data-i18n="dayLgSeg">stretch: call hit / missed / no call</span></span>
+      <span><i class="u"></i><i class="d"></i><span data-i18n="dayLgCall">colony's call ▲ / ▼</span></span>
       <span><b class="ok">✓</b><b class="bad">✗</b><span data-i18n="dayLgHit">hit / missed</span></span>
       <span><i class="hz"></i><span data-i18n="dayLgAhead">hours ahead, call already fixed</span></span>
     </div>
+    <p class="note day-desc" data-i18n="dayDesc">BTC/USDT at each full hour, as Qubic's Price oracle stored it on-chain.</p>
   </section>
 
   <!-- ── Colony pulse ─────────────────────────────────────────────────── -->
@@ -730,13 +733,13 @@ body { background: var(--bg); }
       cellTip: "{from} – {to} · {dir}", cellLive: "stored live in tick {tick}", cellFrame: "part of the frame", cellFilled: "oracle failed for 24 h, previous price reused (counts as ▲)",
       dirUp: "▲ Up or level", dirDown: "▼ Down", pendTip: "{from} – {to} · not on the network yet",
       dayTitle: "Bitcoin, last 24 hours",
-      dayDesc: "BTC/USDT at each full hour, as Qubic's Price oracle stored it on-chain. Under each hour the colony's call, fixed before the hour began — ✓ hit, ✗ missed. Hatched on the right: the hour under way and the one after, with the call that already stands for each. The arrows show a direction, never a price target.",
+      dayDesc: "BTC/USDT at each full hour, as Qubic's Price oracle stored it on-chain. Each stretch of the line is one hour: green where the colony's call for it hit, red where it missed, grey without a call. Under each hour the call itself, fixed before the hour began. Hatched on the right: the hour under way and the one after, with the call that already stands for each. The arrows show a direction, never a price target.",
       daySumMove: "BTC {h} h", daySumRate: "Colony", daySumN: "{hits} of {calls}",
       dayEmpty: "Not enough hours with a price recorded yet.",
       dayAria: "Bitcoin price over the last 24 hours with the colony's call for each hour",
       dayAhead: "calls ahead", dayCallLbl: "Call", dayRun: "Running", dayNext: "Next",
       dayTipCall: "call {c}", dayTipNone: "no call yet",
-      dayLgLine: "price at the full hour", dayLgDot: "hour closed ▲ / ▼", dayLgCall: "colony's call",
+      dayLgLine: "price at the full hour", dayLgSeg: "stretch: call hit / missed / no call", dayLgCall: "colony's call ▲ / ▼",
       dayLgHit: "hit / missed", dayLgAhead: "hours ahead, call already fixed",
       pulseTitle: "Colony pulse",
       pulseDesc: "Mining solutions per tick, live from the tick stream. Each one is a network that beat its parent; the node logs whether it was accepted and how many errors it made over the year-long frame.",
@@ -825,13 +828,13 @@ body { background: var(--bg); }
       cellTip: "{from} – {to} · {dir}", cellLive: "live gespeichert in Tick {tick}", cellFrame: "Teil des Rahmens", cellFilled: "Oracle 24 h ausgefallen, Vorstundenkurs übernommen (zählt als ▲)",
       dirUp: "▲ Up oder gleich", dirDown: "▼ Down", pendTip: "{from} – {to} · noch nicht im Netz",
       dayTitle: "Bitcoin, letzte 24 Stunden",
-      dayDesc: "BTC/USDT zu jeder vollen Stunde, wie Qubics Preis-Oracle ihn on-chain gespeichert hat. Unter jeder Stunde der Tipp der Kolonie, festgelegt bevor die Stunde begann — ✓ getroffen, ✗ verfehlt. Rechts schraffiert: die laufende und die nächste Stunde mit dem Tipp, der für sie schon feststeht. Die Pfeile zeigen eine Richtung, nie ein Kursziel.",
+      dayDesc: "BTC/USDT zu jeder vollen Stunde, wie Qubics Preis-Oracle ihn on-chain gespeichert hat. Jeder Abschnitt der Linie ist eine Stunde: grün, wo der Tipp der Kolonie für sie traf, rot, wo er danebenlag, grau ohne Tipp. Unter jeder Stunde der Tipp selbst, festgelegt bevor die Stunde begann. Rechts schraffiert: die laufende und die nächste Stunde mit dem Tipp, der für sie schon feststeht. Die Pfeile zeigen eine Richtung, nie ein Kursziel.",
       daySumMove: "BTC {h} h", daySumRate: "Kolonie", daySumN: "{hits} von {calls}",
       dayEmpty: "Noch nicht genug Stunden mit Kurs aufgezeichnet.",
       dayAria: "Bitcoin-Kurs der letzten 24 Stunden mit dem Tipp der Kolonie für jede Stunde",
       dayAhead: "kommende Tipps", dayCallLbl: "Tipp", dayRun: "Läuft", dayNext: "Als Nächstes",
       dayTipCall: "Tipp {c}", dayTipNone: "noch kein Tipp",
-      dayLgLine: "Kurs zur vollen Stunde", dayLgDot: "Stunde schloss ▲ / ▼", dayLgCall: "Tipp der Kolonie",
+      dayLgLine: "Kurs zur vollen Stunde", dayLgSeg: "Abschnitt: Tipp getroffen / verfehlt / kein Tipp", dayLgCall: "Tipp der Kolonie ▲ / ▼",
       dayLgHit: "getroffen / verfehlt", dayLgAhead: "kommende Stunden, Tipp steht schon",
       pulseTitle: "Kolonie-Puls",
       pulseDesc: "Mining-Lösungen pro Tick, live aus dem Tick-Stream. Jede ist ein Netz, das seinen Elternknoten geschlagen hat; die Node protokolliert, ob es angenommen wurde und wie viele Fehler es über den Jahresrahmen gemacht hat.",
@@ -1261,16 +1264,18 @@ body { background: var(--bg); }
     var raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag;
     return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag;
   }
-  // Catmull-Rom through the hourly closes, as cubic Béziers.
-  function smoothPath(c) {
-    var d = "M" + c[0][0].toFixed(1) + " " + c[0][1].toFixed(1);
+  // Catmull-Rom through the hourly closes, one cubic Bézier per hour, so each
+  // hour's stretch can carry its own colour and still join the next smoothly.
+  function curvePieces(c) {
+    var out = [];
     for (var i = 0; i < c.length - 1; i++) {
       var p0 = c[i - 1] || c[i], p1 = c[i], p2 = c[i + 1], p3 = c[i + 2] || p2;
-      d += " C" + (p1[0] + (p2[0] - p0[0]) / 6).toFixed(1) + " " + (p1[1] + (p2[1] - p0[1]) / 6).toFixed(1) +
+      out.push("M" + p1[0].toFixed(1) + " " + p1[1].toFixed(1) +
+        " C" + (p1[0] + (p2[0] - p0[0]) / 6).toFixed(1) + " " + (p1[1] + (p2[1] - p0[1]) / 6).toFixed(1) +
         " " + (p2[0] - (p3[0] - p1[0]) / 6).toFixed(1) + " " + (p2[1] - (p3[1] - p1[1]) / 6).toFixed(1) +
-        " " + p2[0].toFixed(1) + " " + p2[1].toFixed(1);
+        " " + p2[0].toFixed(1) + " " + p2[1].toFixed(1));
     }
-    return d;
+    return out;
   }
   // The two chips beside the title: how BTC moved over the window, and how
   // many of the calls under the chart hit -- counted over exactly those hours.
@@ -1324,14 +1329,14 @@ body { background: var(--bg); }
 
     var svg = sv(null, "svg", { viewBox: "0 0 " + W + " " + H, class: "day-svg", role: "img", "aria-label": t("dayAria") });
     var defs = sv(svg, "defs");
-    var baseY = Y(first.price), frac = Math.max(0, Math.min(1, (baseY - padT) / plotH)) * 100;
-    function grad(id, a, b) {
+    var baseY = Y(first.price), inkC = cssVar("--cell-ink") || "#fff", textC = cssVar("--text") || "#e6edf3";
+    // One soft fill per verdict, under each hour's stretch of the line.
+    function vgrad(id, col) {
       var g = sv(defs, "linearGradient", { id: id, x1: 0, y1: padT, x2: 0, y2: bottom, gradientUnits: "userSpaceOnUse" });
-      [[0, upC, a], [frac, upC, b], [frac, dnC, b], [100, dnC, a]].forEach(function (st) {
-        sv(g, "stop", { offset: st[0].toFixed(2) + "%", "stop-color": st[1], "stop-opacity": st[2] });
-      });
+      sv(g, "stop", { offset: "0%", "stop-color": col, "stop-opacity": .30 });
+      sv(g, "stop", { offset: "100%", "stop-color": col, "stop-opacity": .02 });
     }
-    grad("dc-line", 1, 1); grad("dc-area", .34, .03);
+    vgrad("dc-a-ok", okC); vgrad("dc-a-bad", badC); vgrad("dc-a-none", mutedC);
     // userSpaceOnUse: a flat line has a zero-height box, and a box-relative filter would erase it.
     var glow = sv(defs, "filter", { id: "dc-glow", filterUnits: "userSpaceOnUse", x: 0, y: 0, width: W, height: H });
     sv(glow, "feGaussianBlur", { stdDeviation: 3.5, result: "b" });
@@ -1357,26 +1362,34 @@ body { background: var(--bg); }
       sv(svg, "text", { x: ax2, y: padT - 9, "text-anchor": "end", "font-size": 10, fill: mutedC }, t("dayAhead") + " →");
     }
 
-    // Area and line, broken where an hour is missing.
+    // Area and line, one stretch per hour, broken where an hour is missing.
+    // A stretch's colour is its verdict: the call for that hour hit, missed, or
+    // there was none. Direction needs no colour here -- the slope shows it.
     var segs = [], cur = [];
     pts.forEach(function (p, i) {
       if (i && p.hour !== pts[i - 1].hour + 1) { segs.push(cur); cur = []; }
-      cur.push([X(p.at), Y(p.price)]);
+      cur.push(p);
     });
     segs.push(cur);
-    var animate = !DayChart.drawn && !REDUCED, lines = [];
-    segs.forEach(function (c) {
-      if (c.length < 2) return;
-      var d = smoothPath(c);
-      sv(svg, "path", { d: d + " L" + c[c.length - 1][0].toFixed(1) + " " + bottom + " L" + c[0][0].toFixed(1) + " " + bottom + " Z",
-        fill: "url(#dc-area)", class: "dc-area" + (animate ? " draw" : "") });
-      lines.push(sv(svg, "path", { d: d, fill: "none", stroke: "url(#dc-line)", "stroke-width": 2.6, "stroke-linejoin": "round",
-        "stroke-linecap": "round", filter: REDUCED ? null : "url(#dc-glow)", class: "dc-line" }));
+    var animate = !DayChart.drawn && !REDUCED, lines = [], order = 0;
+    segs.forEach(function (seg) {
+      if (seg.length < 2) return;
+      var c = seg.map(function (p) { return [X(p.at), Y(p.price)]; });
+      curvePieces(c).forEach(function (d, i) {
+        var h = seg[i + 1], v = h.hit === true ? "ok" : h.hit === false ? "bad" : "none";
+        var col = v === "ok" ? okC : v === "bad" ? badC : mutedC, delay = (order++ * 45) + "ms";
+        var a = sv(svg, "path", { d: d + " L" + c[i + 1][0].toFixed(1) + " " + bottom + " L" + c[i][0].toFixed(1) + " " + bottom + " Z",
+          fill: "url(#dc-a-" + v + ")", class: "dc-area" + (animate ? " draw" : "") });
+        var l = sv(svg, "path", { d: d, fill: "none", stroke: col, "stroke-width": v === "none" ? 2 : 2.8, "stroke-linecap": "round",
+          "stroke-opacity": v === "none" ? .7 : 1, filter: REDUCED || v === "none" ? null : "url(#dc-glow)", class: "dc-line" });
+        if (animate) { a.style.animationDelay = delay; l.style.animationDelay = delay; }
+        lines.push(l);
+      });
     });
 
-    // One dot per hour: which way that hour closed -- what the call is judged on.
+    // One neutral dot per hour close; the colour belongs to the stretches.
     pts.forEach(function (p, i) {
-      sv(svg, "circle", { cx: X(p.at), cy: Y(p.price), r: i ? (narrow ? 2 : 2.7) : 2, fill: i ? (p.up ? upC : dnC) : mutedC,
+      sv(svg, "circle", { cx: X(p.at), cy: Y(p.price), r: i ? (narrow ? 2 : 2.6) : 2, fill: i ? textC : mutedC,
         stroke: halo, "stroke-width": 1 });
     });
 
@@ -1384,7 +1397,7 @@ body { background: var(--bg); }
     var lastCol = last.price >= first.price ? upC : dnC;
     sv(svg, "rect", { x: W - padR + 3, y: lastY - 9.5, width: padR - 5, height: 19, rx: 5, fill: lastCol });
     sv(svg, "text", { x: W - padR + 3 + (padR - 5) / 2, y: lastY + 4, "text-anchor": "middle", "font-size": narrow ? 10 : 11,
-      "font-weight": 700, fill: "#fff", style: "font-family:var(--mono)" }, fmtNum(last.price));
+      "font-weight": 700, fill: inkC, style: "font-family:var(--mono)" }, fmtNum(last.price));
     sv(svg, "circle", { cx: X(last.at), cy: lastY, r: 4.2, fill: lastCol, stroke: halo, "stroke-width": 1.6 });
 
     // High and low, labelled as on the price page -- drawn after the end dot,
@@ -1434,7 +1447,7 @@ body { background: var(--bg); }
         stroke: future ? (col || mutedC) : (c === 2 ? warnC : "none"), "stroke-width": future || c === 2 ? 1.4 : 0,
         "stroke-dasharray": future ? "3 2" : null, class: future ? "dc-ahead" : null });
       if (s >= 15) sv(svg, "text", { x: cx, y: stripY + s / 2 + 4, "text-anchor": "middle", "font-size": 11, "font-weight": 700,
-        fill: col ? (future ? col : "#fff") : (c === 2 ? warnC : mutedC) }, c == null ? "?" : GLYPH[c]);
+        fill: col ? (future ? col : inkC) : (c === 2 ? warnC : mutedC) }, c == null ? "?" : GLYPH[c]);
       if (hit === true || hit === false) sv(svg, "text", { x: cx, y: stripY + s + 12, "text-anchor": "middle",
         "font-size": s >= 15 ? 11 : 9, "font-weight": 700, fill: hit ? okC : badC }, hit ? "✓" : "✗");
     }
