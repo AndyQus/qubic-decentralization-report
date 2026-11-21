@@ -325,6 +325,43 @@ body { background: var(--bg); }
 .tape-legend i.f { background: var(--up); opacity: .38; }
 .tape-legend i.p { border: 2px dashed var(--border-strong); }
 
+/* ── The last 24 hours: drawn after the price page's flow chart ─────── */
+:root { --chart-halo: #ffffff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --chart-halo: #0b0f14; } }
+:root[data-theme="dark"] { --chart-halo: #0b0f14; }
+.day-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 4px; }
+.day-head h2 { margin: 0; }
+.day-sum { margin: 0; }
+.day-sum b.pos { color: var(--up); } .day-sum b.neg { color: var(--down); }
+.day-sum .day-n { color: var(--faint); font-size: 12px; margin-left: 4px; }
+@media (max-width: 600px) {
+  .day-sum { flex: 1 0 100%; gap: 6px; flex-wrap: nowrap; }
+  .day-sum .ov-chip { font-size: 12px; padding: 3px 9px; white-space: nowrap; }
+  .day-sum .day-n { font-size: 11px; }
+}
+.day-chart { min-height: 220px; }
+.day-skel { height: 240px; }
+.day-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.day-svg text { font-family: var(--sans); }
+.day-svg text.y-tick { fill: var(--text); font-family: var(--mono); }
+.day-svg .hcol { fill: transparent; cursor: default; }
+.day-svg .hcol:hover { fill: color-mix(in srgb, var(--text) 7%, transparent); }
+.day-svg .dc-line.draw { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: dcdraw 1.3s ease-out forwards; }
+.day-svg .dc-area.draw { animation: dcfade 1.3s ease-out both; }
+@keyframes dcdraw { to { stroke-dashoffset: 0; } }
+@keyframes dcfade { from { opacity: 0; } to { opacity: 1; } }
+.day-svg .dc-ahead { animation: dcpulse 2.4s ease-in-out infinite; }
+@keyframes dcpulse { 50% { opacity: .45; } }
+.day-legend { margin-top: 10px; }
+.day-legend i.ln { width: 16px; height: 3px; border-radius: 2px; vertical-align: 3px; background: linear-gradient(90deg, var(--up), var(--down)); }
+.day-legend i.dt { width: 8px; height: 8px; border-radius: 50%; margin-right: 2px; vertical-align: 0; }
+.day-legend i.dt.u { background: var(--up); } .day-legend i.dt.d { background: var(--down); margin-right: 5px; }
+.day-legend i.u + i.d { margin-left: -3px; }
+.day-legend i.hz { border: 1px dashed var(--border-strong);
+  background: repeating-linear-gradient(45deg, transparent 0 3px, color-mix(in srgb, var(--muted) 35%, transparent) 3px 4px); }
+.day-legend b { font-weight: 700; margin-right: 3px; } .day-legend b.ok { color: var(--success); } .day-legend b.bad { color: var(--danger); margin-right: 6px; }
+@media (prefers-reduced-motion: reduce) { .day-svg .dc-line.draw, .day-svg .dc-area.draw, .day-svg .dc-ahead { animation: none; stroke-dasharray: none; } }
+
 /* ── Colony pulse ──────────────────────────────────────────────────── */
 .pulse { display: flex; gap: 2px; align-items: flex-end; height: 60px; border-bottom: 1px solid var(--border-strong); overflow: hidden; }
 @media (max-width: 600px) { .pulse { gap: 1px; } .pulse i { min-width: 1px !important; } }
@@ -498,6 +535,23 @@ body { background: var(--bg); }
       <div class="s-sub" id="k-colony-s"></div>
     </div>
   </div>
+
+  <!-- ── The last 24 hours: price line, the colony's call under each hour ── -->
+  <section class="card" id="day-card">
+    <div class="day-head">
+      <h2 data-i18n="dayTitle">Bitcoin, last 24 hours</h2>
+      <div class="ov-sum day-sum" id="day-sum"></div>
+    </div>
+    <p class="desc" data-i18n="dayDesc">BTC/USDT at each full hour, as Qubic's Price oracle stored it on-chain.</p>
+    <div class="day-chart" id="day-chart"><div class="skel day-skel"></div></div>
+    <div class="tape-legend day-legend">
+      <span><i class="ln"></i><span data-i18n="dayLgLine">price at the full hour</span></span>
+      <span><i class="dt u"></i><i class="dt d"></i><span data-i18n="dayLgDot">hour closed ▲ / ▼</span></span>
+      <span><i class="u"></i><i class="d"></i><span data-i18n="dayLgCall">colony's call</span></span>
+      <span><b class="ok">✓</b><b class="bad">✗</b><span data-i18n="dayLgHit">hit / missed</span></span>
+      <span><i class="hz"></i><span data-i18n="dayLgAhead">hours ahead, call already fixed</span></span>
+    </div>
+  </section>
 
   <!-- ── Colony pulse ─────────────────────────────────────────────────── -->
   <section class="card">
@@ -675,6 +729,15 @@ body { background: var(--bg); }
       lgUp: "▲ Up or level", lgDown: "▼ Down", lgFrame: "frame (known at epoch start)", lgPending: "next hour",
       cellTip: "{from} – {to} · {dir}", cellLive: "stored live in tick {tick}", cellFrame: "part of the frame", cellFilled: "oracle failed for 24 h, previous price reused (counts as ▲)",
       dirUp: "▲ Up or level", dirDown: "▼ Down", pendTip: "{from} – {to} · not on the network yet",
+      dayTitle: "Bitcoin, last 24 hours",
+      dayDesc: "BTC/USDT at each full hour, as Qubic's Price oracle stored it on-chain. Under each hour the colony's call, fixed before the hour began — ✓ hit, ✗ missed. Hatched on the right: the hour under way and the one after, with the call that already stands for each. The arrows show a direction, never a price target.",
+      daySumMove: "BTC {h} h", daySumRate: "Colony", daySumN: "{hits} of {calls}",
+      dayEmpty: "Not enough hours with a price recorded yet.",
+      dayAria: "Bitcoin price over the last 24 hours with the colony's call for each hour",
+      dayAhead: "calls ahead", dayCallLbl: "Call", dayRun: "Running", dayNext: "Next",
+      dayTipCall: "call {c}", dayTipNone: "no call yet",
+      dayLgLine: "price at the full hour", dayLgDot: "hour closed ▲ / ▼", dayLgCall: "colony's call",
+      dayLgHit: "hit / missed", dayLgAhead: "hours ahead, call already fixed",
       pulseTitle: "Colony pulse",
       pulseDesc: "Mining solutions per tick, live from the tick stream. Each one is a network that beat its parent; the node logs whether it was accepted and how many errors it made over the year-long frame.",
       pulseWait: "Waiting for ticks …",
@@ -761,6 +824,15 @@ body { background: var(--bg); }
       lgUp: "▲ Up oder gleich", lgDown: "▼ Down", lgFrame: "Rahmen (bei Epochenstart bekannt)", lgPending: "nächste Stunde",
       cellTip: "{from} – {to} · {dir}", cellLive: "live gespeichert in Tick {tick}", cellFrame: "Teil des Rahmens", cellFilled: "Oracle 24 h ausgefallen, Vorstundenkurs übernommen (zählt als ▲)",
       dirUp: "▲ Up oder gleich", dirDown: "▼ Down", pendTip: "{from} – {to} · noch nicht im Netz",
+      dayTitle: "Bitcoin, letzte 24 Stunden",
+      dayDesc: "BTC/USDT zu jeder vollen Stunde, wie Qubics Preis-Oracle ihn on-chain gespeichert hat. Unter jeder Stunde der Tipp der Kolonie, festgelegt bevor die Stunde begann — ✓ getroffen, ✗ verfehlt. Rechts schraffiert: die laufende und die nächste Stunde mit dem Tipp, der für sie schon feststeht. Die Pfeile zeigen eine Richtung, nie ein Kursziel.",
+      daySumMove: "BTC {h} h", daySumRate: "Kolonie", daySumN: "{hits} von {calls}",
+      dayEmpty: "Noch nicht genug Stunden mit Kurs aufgezeichnet.",
+      dayAria: "Bitcoin-Kurs der letzten 24 Stunden mit dem Tipp der Kolonie für jede Stunde",
+      dayAhead: "kommende Tipps", dayCallLbl: "Tipp", dayRun: "Läuft", dayNext: "Als Nächstes",
+      dayTipCall: "Tipp {c}", dayTipNone: "noch kein Tipp",
+      dayLgLine: "Kurs zur vollen Stunde", dayLgDot: "Stunde schloss ▲ / ▼", dayLgCall: "Tipp der Kolonie",
+      dayLgHit: "getroffen / verfehlt", dayLgAhead: "kommende Stunden, Tipp steht schon",
       pulseTitle: "Kolonie-Puls",
       pulseDesc: "Mining-Lösungen pro Tick, live aus dem Tick-Stream. Jede ist ein Netz, das seinen Elternknoten geschlagen hat; die Node protokolliert, ob es angenommen wurde und wie viele Fehler es über den Jahresrahmen gemacht hat.",
       pulseWait: "Warte auf Ticks …",
@@ -1147,8 +1219,260 @@ body { background: var(--bg); }
     renderStatus();
     if (!D) return;
     setLoading(false);
-    renderKpis(); renderNext(); renderTape(); renderRecord(); renderHits();
+    renderKpis(); renderNext(); renderDay(); renderTape(); renderRecord(); renderHits();
   }
+
+  /* ── The last 24 hours ─────────────────────────────────────────────
+     BTC's hourly closes as one line, in the style of the price page's flow
+     chart (up colour above the window's opening price, down colour below).
+     Under each hour, on the same x as the hour, the colony's call and its
+     verdict. On the right, hatched, the hour under way and the one after,
+     with the call that already stands for each: a vertical arrow -- a
+     direction, never a price target. */
+  var DayChart = { drawn: false, w: 0 };
+  var SVGNS = "http://www.w3.org/2000/svg";
+  var REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  function cssVar(n) { return getComputedStyle(root).getPropertyValue(n).trim(); }
+  function sv(parent, tag, attrs, text) {
+    var e = document.createElementNS(SVGNS, tag);
+    Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] != null) e.setAttribute(k, attrs[k]); });
+    if (text != null) e.textContent = text;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function fmtNum(v) { return Number(v).toLocaleString(locale(), { maximumFractionDigits: 0 }); }
+  // Hours with a price: the stored record, overlaid with the node's live hours
+  // (the record can be a worker cycle behind). The newest 25 -- the first one
+  // is the opening price the 24 hours are measured against.
+  function dayPoints() {
+    var by = {};
+    function put(h, at) {
+      if (h.price == null) return;
+      by[h.hour] = { hour: h.hour, at: at, price: h.price, up: !!h.up, call: h.call, hit: h.hit };
+    }
+    ((D.record && D.record.hours) || []).forEach(function (h) { put(h, h.hour * 3600 + HOUR_ZERO); });
+    (D.hours || []).forEach(function (h) { if (h.live) put(h, h.at); });
+    var list = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return a.hour - b.hour; });
+    if (!list.length) return [];
+    var end = list[list.length - 1].hour;
+    return list.filter(function (p) { return p.hour >= end - 24; });
+  }
+  function niceStep(span, n) {
+    var raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag;
+    return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag;
+  }
+  // Catmull-Rom through the hourly closes, as cubic Béziers.
+  function smoothPath(c) {
+    var d = "M" + c[0][0].toFixed(1) + " " + c[0][1].toFixed(1);
+    for (var i = 0; i < c.length - 1; i++) {
+      var p0 = c[i - 1] || c[i], p1 = c[i], p2 = c[i + 1], p3 = c[i + 2] || p2;
+      d += " C" + (p1[0] + (p2[0] - p0[0]) / 6).toFixed(1) + " " + (p1[1] + (p2[1] - p0[1]) / 6).toFixed(1) +
+        " " + (p2[0] - (p3[0] - p1[0]) / 6).toFixed(1) + " " + (p2[1] - (p3[1] - p1[1]) / 6).toFixed(1) +
+        " " + p2[0].toFixed(1) + " " + p2[1].toFixed(1);
+    }
+    return d;
+  }
+  // The two chips beside the title: how BTC moved over the window, and how
+  // many of the calls under the chart hit -- counted over exactly those hours.
+  function renderDayHead(pts) {
+    var chips = [];
+    if (pts.length > 1) {
+      var a = pts[0], b = pts[pts.length - 1], mv = (b.price / a.price - 1) * 100;
+      chips.push('<span class="ov-chip">' + esc(t("daySumMove", { h: b.hour - a.hour })) + ' <b class="' + (mv >= 0 ? "pos" : "neg") + '">' +
+        (mv >= 0 ? "▲ " : "▼ ") + esc(fmtChg(mv)) + "</b></span>");
+    }
+    var calls = 0, hits = 0;
+    pts.slice(1).forEach(function (p) { if (p.hit === true || p.hit === false) { calls++; if (p.hit) hits++; } });
+    chips.push('<span class="ov-chip">' + esc(t("daySumRate")) + " <b>" + (calls ? esc(pct1(hits / calls)) : "–") + "</b>" +
+      (calls ? '<span class="day-n">' + esc(t("daySumN", { hits: fmtInt(hits), calls: fmtInt(calls) })) + "</span>" : "") + "</span>");
+    $("day-sum").innerHTML = chips.join("");
+  }
+  function renderDay() {
+    var box = $("day-chart");
+    if (!D || !box) return;
+    var pts = dayPoints();
+    renderDayHead(pts);
+    if (pts.length < 2) { box.innerHTML = '<div class="empty">' + esc(t("dayEmpty")) + "</div>"; return; }
+
+    var W = Math.max(300, Math.round(box.clientWidth || 640)), narrow = W < 560;
+    DayChart.w = W;
+    var upC = cssVar("--up") || "#1597b8", dnC = cssVar("--down") || "#7e6fff",
+        okC = cssVar("--success") || "#22c55e", badC = cssVar("--danger") || "#ef4444",
+        mutedC = cssVar("--muted") || "#9aa4b2", gridC = cssVar("--border") || "rgba(128,128,128,.2)",
+        warnC = cssVar("--warn") || "#f59e0b", halo = cssVar("--chart-halo") || "#0b0f14";
+    var o = D.oracle || {}, call = D.call || {}, verified = D.task && D.task.hash_verified === true;
+    var first = pts[0], last = pts[pts.length - 1];
+
+    var ahead = [];
+    if (verified && o.next_at && o.next_at > last.at) {
+      var run = call.running && call.running.hour === o.next_hour ? call.running : null;
+      ahead.push({ from: o.next_at - 3600, to: o.next_at, call: run ? run.call : null, key: "dayRun" });
+      ahead.push({ from: o.next_at, to: o.next_at + 3600, call: call.upcoming ? call.upcoming.call : null, key: "dayNext" });
+    }
+
+    var tMin = first.at, tMax = ahead.length ? ahead[ahead.length - 1].to : last.at;
+    var padL = 4, padR = narrow ? 58 : 68, padT = 26, plotH = narrow ? 160 : 210;
+    var plotW = W - padL - padR, bottom = padT + plotH;
+    var X = function (ts) { return padL + (ts - tMin) / (tMax - tMin) * plotW; };
+    var hourW = plotW * 3600 / (tMax - tMin);
+    var pMin = Infinity, pMax = -Infinity;
+    pts.forEach(function (p) { pMin = Math.min(pMin, p.price); pMax = Math.max(pMax, p.price); });
+    var pad = Math.max((pMax - pMin) * 0.16, pMax * 0.0015), lo = pMin - pad, hi = pMax + pad;
+    var Y = function (p) { return padT + (hi - p) / (hi - lo) * plotH; };
+    var axisY = bottom + 16, s = Math.max(6, Math.min(22, hourW - 3)), stripY = axisY + 10;
+    var H = stripY + s + 16;
+
+    var svg = sv(null, "svg", { viewBox: "0 0 " + W + " " + H, class: "day-svg", role: "img", "aria-label": t("dayAria") });
+    var defs = sv(svg, "defs");
+    var baseY = Y(first.price), frac = Math.max(0, Math.min(1, (baseY - padT) / plotH)) * 100;
+    function grad(id, a, b) {
+      var g = sv(defs, "linearGradient", { id: id, x1: 0, y1: padT, x2: 0, y2: bottom, gradientUnits: "userSpaceOnUse" });
+      [[0, upC, a], [frac, upC, b], [frac, dnC, b], [100, dnC, a]].forEach(function (st) {
+        sv(g, "stop", { offset: st[0].toFixed(2) + "%", "stop-color": st[1], "stop-opacity": st[2] });
+      });
+    }
+    grad("dc-line", 1, 1); grad("dc-area", .34, .03);
+    // userSpaceOnUse: a flat line has a zero-height box, and a box-relative filter would erase it.
+    var glow = sv(defs, "filter", { id: "dc-glow", filterUnits: "userSpaceOnUse", x: 0, y: 0, width: W, height: H });
+    sv(glow, "feGaussianBlur", { stdDeviation: 3.5, result: "b" });
+    var mg = sv(glow, "feMerge"); sv(mg, "feMergeNode", { in: "b" }); sv(mg, "feMergeNode", { in: "SourceGraphic" });
+    var hatch = sv(defs, "pattern", { id: "dc-hatch", width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" });
+    sv(hatch, "line", { x1: 0, y1: 0, x2: 0, y2: 6, stroke: mutedC, "stroke-width": 1.3, opacity: .28 });
+
+    // Grid and price axis (right, as on the price page); the newest price gets a tag instead.
+    var lastY = Y(last.price), step = niceStep(hi - lo, narrow ? 3 : 4);
+    for (var v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+      var gy = Y(v);
+      sv(svg, "line", { x1: padL, y1: gy, x2: W - padR, y2: gy, stroke: gridC, "stroke-width": 1 });
+      if (Math.abs(gy - lastY) > 14) sv(svg, "text", { x: W - padR + 8, y: gy + 4, class: "y-tick", "font-size": narrow ? 10 : 11 }, fmtNum(v));
+    }
+    // The window's opening price: the line the colours switch at.
+    sv(svg, "line", { x1: padL, y1: baseY, x2: W - padR, y2: baseY, stroke: mutedC, "stroke-width": 1, "stroke-dasharray": "2 5", opacity: .6 });
+
+    // The hours ahead: hatched, a dashed "now" edge, one label over both.
+    if (ahead.length) {
+      var ax1 = X(ahead[0].from), ax2 = X(ahead[ahead.length - 1].to);
+      sv(svg, "rect", { x: ax1, y: padT, width: ax2 - ax1, height: plotH, fill: "url(#dc-hatch)" });
+      sv(svg, "line", { x1: X(last.at), y1: padT - 4, x2: X(last.at), y2: bottom, stroke: mutedC, "stroke-width": 1, "stroke-dasharray": "3 4", opacity: .7 });
+      sv(svg, "text", { x: ax2, y: padT - 9, "text-anchor": "end", "font-size": 10, fill: mutedC }, t("dayAhead") + " →");
+    }
+
+    // Area and line, broken where an hour is missing.
+    var segs = [], cur = [];
+    pts.forEach(function (p, i) {
+      if (i && p.hour !== pts[i - 1].hour + 1) { segs.push(cur); cur = []; }
+      cur.push([X(p.at), Y(p.price)]);
+    });
+    segs.push(cur);
+    var animate = !DayChart.drawn && !REDUCED, lines = [];
+    segs.forEach(function (c) {
+      if (c.length < 2) return;
+      var d = smoothPath(c);
+      sv(svg, "path", { d: d + " L" + c[c.length - 1][0].toFixed(1) + " " + bottom + " L" + c[0][0].toFixed(1) + " " + bottom + " Z",
+        fill: "url(#dc-area)", class: "dc-area" + (animate ? " draw" : "") });
+      lines.push(sv(svg, "path", { d: d, fill: "none", stroke: "url(#dc-line)", "stroke-width": 2.6, "stroke-linejoin": "round",
+        "stroke-linecap": "round", filter: REDUCED ? null : "url(#dc-glow)", class: "dc-line" }));
+    });
+
+    // One dot per hour: which way that hour closed -- what the call is judged on.
+    pts.forEach(function (p, i) {
+      sv(svg, "circle", { cx: X(p.at), cy: Y(p.price), r: i ? (narrow ? 2 : 2.7) : 2, fill: i ? (p.up ? upC : dnC) : mutedC,
+        stroke: halo, "stroke-width": 1 });
+    });
+
+    // The newest price: a tag on the axis, and the end of the line.
+    var lastCol = last.price >= first.price ? upC : dnC;
+    sv(svg, "rect", { x: W - padR + 3, y: lastY - 9.5, width: padR - 5, height: 19, rx: 5, fill: lastCol });
+    sv(svg, "text", { x: W - padR + 3 + (padR - 5) / 2, y: lastY + 4, "text-anchor": "middle", "font-size": narrow ? 10 : 11,
+      "font-weight": 700, fill: "#fff", style: "font-family:var(--mono)" }, fmtNum(last.price));
+    sv(svg, "circle", { cx: X(last.at), cy: lastY, r: 4.2, fill: lastCol, stroke: halo, "stroke-width": 1.6 });
+
+    // High and low, labelled as on the price page -- drawn after the end dot,
+    // and kept left of it, so the newest point never covers a label.
+    var hiP = pts[0], loP = pts[0];
+    pts.forEach(function (p) { if (p.price > hiP.price) hiP = p; if (p.price < loP.price) loP = p; });
+    if (hiP.price !== loP.price) [[hiP, true], [loP, false]].forEach(function (e) {
+      var p = e[0], above = e[1], x = X(p.at), y = Y(p.price), col = above ? upC : dnC;
+      var label = (above ? "▲ " : "▼ ") + fmtNum(p.price);
+      var ty = above ? y - 10 : y + 19;
+      if (ty < padT + 10) ty = y + 19; if (ty > bottom - 3) ty = y - 10;
+      var half = label.length * (narrow ? 3.6 : 3.8) + 4;
+      sv(svg, "text", { x: Math.min(X(last.at) - half - 6, W - padR - half, Math.max(padL + half, x)), y: ty, "text-anchor": "middle",
+        "font-size": narrow ? 11 : 12, "font-weight": 700, fill: col, "paint-order": "stroke", stroke: halo,
+        "stroke-width": 3, "stroke-linejoin": "round" }, label);
+    });
+
+    // The calls ahead: a vertical arrow from the newest price, the next hour paler.
+    ahead.forEach(function (f, i) {
+      var cx = (X(f.from) + X(f.to)) / 2, g = sv(svg, "g", { class: i === 0 ? "dc-ahead" : null, opacity: i ? .5 : 1 });
+      if (f.call !== 0 && f.call !== 1) {
+        sv(g, "text", { x: cx, y: lastY + 4, "text-anchor": "middle", "font-size": 12, "font-weight": 700, fill: f.call === 2 ? warnC : mutedC }, "?");
+        return;
+      }
+      var dir = f.call === 1 ? -1 : 1, len = Math.min(36, plotH * 0.22), col = f.call === 1 ? upC : dnC;
+      var y0 = Math.max(padT + 2 + (dir < 0 ? len : 0), Math.min(bottom - 2 - (dir > 0 ? len : 0), lastY));
+      var tip = y0 + dir * len, hw = Math.max(3, Math.min(6, hourW / 2 - 1)), base = tip - dir * 8;
+      sv(g, "line", { x1: cx, y1: y0, x2: cx, y2: base, stroke: col, "stroke-width": 2.2, "stroke-dasharray": "3 3", "stroke-linecap": "round" });
+      sv(g, "polygon", { points: (cx - hw) + "," + base + " " + (cx + hw) + "," + base + " " + cx + "," + tip, fill: col });
+    });
+
+    // Time axis at full hours, as many as fit.
+    var k = [1, 2, 3, 4, 6, 12].filter(function (n) { return n * hourW >= (narrow ? 36 : 42); })[0] || 12;
+    for (var ts = Math.ceil(tMin / 3600) * 3600; ts <= tMax; ts += 3600) {
+      if (new Date(ts * 1000).getHours() % k) continue;
+      var tx = X(ts);
+      if (tx < padL + 14 || tx > W - padR - 14) continue;
+      sv(svg, "text", { x: tx, y: axisY, "text-anchor": "middle", "font-size": 10.5, fill: mutedC }, hm(ts));
+    }
+
+    // The call strip: one tile per hour, under the hour it called.
+    sv(svg, "text", { x: W - padR + 8, y: stripY + s / 2 + 4, "font-size": 11, fill: mutedC }, t("dayCallLbl"));
+    function tile(cx, c, future, hit) {
+      var col = c === 1 ? upC : c === 0 ? dnC : null;
+      sv(svg, "rect", { x: cx - s / 2, y: stripY, width: s, height: s, rx: Math.min(5, s / 4),
+        fill: col || "none", "fill-opacity": future ? .28 : 1,
+        stroke: future ? (col || mutedC) : (c === 2 ? warnC : "none"), "stroke-width": future || c === 2 ? 1.4 : 0,
+        "stroke-dasharray": future ? "3 2" : null, class: future ? "dc-ahead" : null });
+      if (s >= 15) sv(svg, "text", { x: cx, y: stripY + s / 2 + 4, "text-anchor": "middle", "font-size": 11, "font-weight": 700,
+        fill: col ? (future ? col : "#fff") : (c === 2 ? warnC : mutedC) }, c == null ? "?" : GLYPH[c]);
+      if (hit === true || hit === false) sv(svg, "text", { x: cx, y: stripY + s + 12, "text-anchor": "middle",
+        "font-size": s >= 15 ? 11 : 9, "font-weight": 700, fill: hit ? okC : badC }, hit ? "✓" : "✗");
+    }
+    pts.forEach(function (p) {
+      if (p.at - 3600 < tMin) return;
+      var cx = X(p.at - 1800);
+      if (p.call != null) tile(cx, p.call, false, p.hit);
+      else sv(svg, "circle", { cx: cx, cy: stripY + s / 2, r: 1.5, fill: mutedC, opacity: .5 });
+    });
+    ahead.forEach(function (f) { tile((X(f.from) + X(f.to)) / 2, f.call, true, null); });
+
+    // Hover columns on top: the whole hour in one tooltip.
+    function col(x1, w, tip) { var r = sv(svg, "rect", { x: x1, y: padT, width: w, height: H - padT, class: "hcol" }); sv(r, "title", null, tip); }
+    pts.forEach(function (p, i) {
+      if (p.at - 3600 < tMin) return;
+      var prev = pts[i - 1] && pts[i - 1].hour === p.hour - 1 ? pts[i - 1] : null;
+      col(X(p.at - 3600), hourW, dayHm(p.at - 3600) + "–" + hm(p.at) + " · " + fmtUsd(p.price) +
+        (prev ? " (" + fmtChg((p.price / prev.price - 1) * 100) + ")" : "") + " · " + t(p.up ? "dirUp" : "dirDown") +
+        (p.call != null ? " · " + t("dayTipCall", { c: word(p.call) }) + (p.hit === true ? " ✓" : p.hit === false ? " ✗" : "") : ""));
+    });
+    ahead.forEach(function (f) {
+      col(X(f.from), X(f.to) - X(f.from), t(f.key) + ": " + hm(f.from) + "–" + hm(f.to) + " · " +
+        (f.call != null ? t("dayTipCall", { c: word(f.call) }) : t("dayTipNone")));
+    });
+
+    box.innerHTML = "";
+    box.appendChild(svg);
+    lines.forEach(function (l) {
+      if (!animate) return;
+      var len = 0; try { len = l.getTotalLength(); } catch (e) {}
+      if (len) { l.style.setProperty("--len", len.toFixed(0)); l.classList.add("draw"); }
+    });
+    DayChart.drawn = true;
+  }
+  if (window.ResizeObserver) new ResizeObserver(function () {
+    var b = $("day-chart");
+    if (D && b && Math.abs(Math.round(b.clientWidth) - DayChart.w) > 4) renderDay();
+  }).observe($("day-chart"));
 
   function fmtUsd(v) { return v == null ? "–" : Number(v).toLocaleString(locale(), { maximumFractionDigits: 0 }) + " $"; }
   function fmtChg(v) {
@@ -1386,6 +1710,7 @@ body { background: var(--bg); }
   applyTheme(theme);
   $("theme-btn").addEventListener("click", function () {
     theme = theme === "dark" ? "light" : "dark"; safeSet(LS_THEME, theme); applyTheme(theme);
+    renderDay();
   });
 
   (function initNav() {
