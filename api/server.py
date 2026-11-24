@@ -610,6 +610,13 @@ def btc(compact: bool = Query(False, description="Only the epoch's live hours, t
     one it says why. `stats` are hit rates over the last 6 and 24 hours, per day
     and per epoch, each beside what "always up" and "same as the hour before"
     would have scored on the same hours. `record` is every live hour kept.
+
+    Since v0.17.0 two rules call every hour (docs/CONCEPT_BTC_RANKING.de.md):
+    "accuracy" -- the rebuilt network with the best record on the recent hours
+    it could not have known -- and "score" -- the best-score network. `call`,
+    the hours and the rates follow the accuracy rule where it has a call;
+    `call.rules` shows both, `call.selection` the ranking, `stats.rules` both
+    rates on the same hours. A "?" call is an abstention: `hit` stays null.
     """
     import time as _t
 
@@ -785,9 +792,17 @@ def _btc_calls_view(store, now: int) -> dict:
 
     # Only calls fixed before their hour began count: the hour's move was not
     # under way yet. (Calls recorded mid-hour by v0.16.0-v0.16.4 are left out.)
-    judged = colony.judge([c for c in store.btc_calls()
-                           if int(c["made_at"]) < antask.hour_at(int(c["hour"])) - antask.HOUR_S])
-    by_hour = {c["hour"]: c for c in judged}
+    def in_time(rows):
+        return [c for c in rows if int(c["made_at"]) < antask.hour_at(int(c["hour"])) - antask.HOUR_S]
+
+    # Two rules, two records (docs/CONCEPT_BTC_RANKING.de.md): "score" -- the
+    # best-score network, since v0.16.0 -- and "accuracy" -- the network that
+    # predicted best, since v0.17.0 (CFB). The page's call and rates are the
+    # accuracy rule's where it has a call, the score rule's before that.
+    by_score = {c["hour"]: dict(c, rule="score") for c in colony.judge(in_time(store.btc_calls()))}
+    by_acc = {c["hour"]: dict(c, rule="accuracy") for c in colony.judge(in_time(store.btc_calls_accuracy()))}
+    by_hour = {**by_score, **by_acc}
+    judged = [by_hour[h] for h in sorted(by_hour)]
     hours = store.btc_hours()
 
     def block(cs):
@@ -820,8 +835,29 @@ def _btc_calls_view(store, now: int) -> dict:
         "days": [dict(block(v), day=k) for k, v in sorted(days.items())][-14:],
         "epochs": [dict(block(v), epoch=k) for k, v in sorted(epochs.items())],
         "coin_toss": 0.5,
+        "rules": _rules_compared(by_score, by_acc),
     }
-    return {"by_hour": by_hour, "stats": stats}
+    return {"by_hour": by_hour, "by_score": by_score, "by_acc": by_acc, "stats": stats}
+
+
+def _rules_compared(by_score: dict, by_acc: dict) -> Optional[dict]:
+    """Score rule against accuracy rule, on exactly the same hours: those both
+    called, since the accuracy rule's first call. `measured` and `fallback`
+    split the accuracy rule's calls by whether a record chose the network."""
+    from qdr import colony
+
+    if not by_acc:
+        return None
+    both = sorted(h for h in by_acc if h in by_score)
+    acc = [by_acc[h] for h in sorted(by_acc)]
+    return {
+        "since_hour": min(by_acc),
+        "hours": len(both),
+        "score": colony.rate([by_score[h] for h in both]),
+        "accuracy": colony.rate([by_acc[h] for h in both]),
+        "measured": colony.rate([c for c in acc if not c.get("fallback")]),
+        "fallback": colony.rate([c for c in acc if c.get("fallback")]),
+    }
 
 
 def _t_day(ts: int) -> str:
@@ -840,9 +876,14 @@ def _with_calls(hours: list, view: dict) -> list:
         row = dict(h)
         if c is not None:
             row["call"] = int(c["call"])
+            row["rule"] = c.get("rule")
             # Stored record rows are live hours by definition and carry no flag.
+            # "?" is an abstention: no verdict (CFB, 2026-11-24).
             if row.get("live", True):
-                row["hit"] = int(c["call"]) == int(bool(h["up"]))
+                if int(c["call"]) == 2:
+                    row["hit"], row["abstained"] = None, True
+                else:
+                    row["hit"] = int(c["call"]) == int(bool(h["up"]))
         out.append(row)
     return out
 
@@ -850,9 +891,15 @@ def _with_calls(hours: list, view: dict) -> list:
 def _call_row(c: Optional[dict]) -> Optional[dict]:
     if c is None:
         return None
-    return {"hour": c["hour"], "call": int(c["call"]), "made_at": c["made_at"],
-            "network": {"tick": c["net_tick"], "index": c["net_index"], "identity_key": c["pubkey"],
-                        "error": c["net_error"], "shift": c["net_shift"]}}
+    out = {"hour": c["hour"], "call": int(c["call"]), "made_at": c["made_at"], "rule": c.get("rule"),
+           "network": {"tick": c["net_tick"], "index": c["net_index"], "identity_key": c["pubkey"],
+                       "error": c["net_error"], "shift": c["net_shift"]}}
+    if c.get("rule") == "accuracy":
+        out["fallback"] = bool(c.get("fallback"))
+        if not c.get("fallback"):
+            out["network"]["record"] = {"hits": c.get("net_hits"), "decided": c.get("net_decided"),
+                                        "abstained": c.get("net_abstained")}
+    return out
 
 
 def _current_call(store, view: dict, next_hour) -> dict:
@@ -869,6 +916,12 @@ def _current_call(store, view: dict, next_hour) -> dict:
         progress = {"done": status.get("depth"), "total": status["lineage"],
                     "eta_s": round(left * float(status.get("walk_s") or 15.0))}
     c = upcoming or running
+    # Both rules side by side, and how the accuracy rule chose (CFB, 2026-11-24).
+    rules = {name: {"running": _call_row(src.get(int(next_hour))) if next_hour else None,
+                    "upcoming": _call_row(src.get(int(next_hour) + 1)) if next_hour else None}
+             for name, src in (("score", view["by_score"]), ("accuracy", view["by_acc"]))}
+    selection = dict(status.get("selection") or {}, ranking=status.get("ranking") or [],
+                     lines=status.get("lines") or []) if status.get("selection") else None
     network = None
     if status.get("network"):
         n = status["network"]
@@ -876,12 +929,12 @@ def _current_call(store, view: dict, next_hour) -> dict:
                    "error": n.get("error"), "shift": n.get("shift")}
     if c is not None:
         return dict(c, available=True, running=running, upcoming=upcoming,
-                    tracker=status.get("state"), progress=progress)
+                    tracker=status.get("state"), progress=progress, rules=rules, selection=selection)
     state = status.get("state") or "no-tracker"
     return {"available": False, "reason": state,
             "detail": _COLONY_REASONS.get(state, "The ingest worker has not reported on the colony yet."),
             "network": network, "tracker_updated_at": status.get("updated_at"),
-            "running": None, "upcoming": None, "progress": progress,
+            "running": None, "upcoming": None, "progress": progress, "rules": rules, "selection": selection,
             "tracker_detail": {k: status.get(k) for k in ("detail", "replayer", "cpu_avx2", "memory_limit_mb")
                                if status.get(k) is not None} or None}
 

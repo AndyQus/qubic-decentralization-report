@@ -236,6 +236,11 @@ in die Live-Stunden vor.
 Grenze: Der Rang nach Logs berücksichtigt nur den Fehler. Den Shift kennt erst der
 Nachbau. Das Netz für den Tipp ist das beste geprüfte nach (Shift, Fehler).
 
+> **Seit v0.17.0 (2026-11-24) überholt:** Auf Hinweis von Come-from-Beyond wählt die Seite das
+> Netz nach seiner gemessenen Vorhersage, nicht mehr nach dem Score. Der Score-Tipp wird
+> parallel weiter gespeichert, und „?“ ist jetzt eine Enthaltung statt eines Fehlers. Das
+> Gespräch, die Gründe und die Regel stehen in `docs/CONCEPT_BTC_RANKING.de.md`.
+
 ### Stufe 3 – Archiv und Bewertung
 
 Trefferquote je Epoche mit Konfidenzintervall, „bestes Netz vs. Schwarm vs. Münzwurf vs.

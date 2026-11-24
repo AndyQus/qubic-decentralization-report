@@ -92,10 +92,12 @@ def test_shift_limit_counts_hours_stored_before_the_anchor():
 
 # -- verdicts ----------------------------------------------------------------------
 
-def test_unsure_is_a_miss_and_an_unknown_hour_no_verdict():
+def test_unsure_is_an_abstention_and_an_unknown_hour_no_verdict():
+    # CFB, 2026-11-24: "?" is an abstention -- neither a hit nor a miss.
     judged = colony.judge([{"hour": 1, "call": 1, "up": 1}, {"hour": 2, "call": 2, "up": 0},
-                           {"hour": 3, "call": 0, "up": None}])
-    assert [c["hit"] for c in judged] == [True, False, None]
+                           {"hour": 3, "call": 0, "up": None}, {"hour": 4, "call": 0, "up": 1}])
+    assert [c["hit"] for c in judged] == [True, None, None, False]
+    assert [c["abstained"] for c in judged] == [False, True, False, False]
     r = colony.rate(judged)
     assert r == {"calls": 2, "hits": 1, "unsure": 1, "rate": 0.5}
 
@@ -371,3 +373,131 @@ def test_an_old_store_gains_the_price_column(tmp_path):
     store = Store(str(path))
     store.put_btc_hours(240, [{"hour": 1, "up": True, "live": True, "price": 123.0}], seen_at=10)
     assert store.btc_hours()[0]["price"] == 123.0 and store.btc_hours()[0]["first_seen_at"] == 9
+
+
+# -- the accuracy rule (CFB, 2026-11-24; docs/CONCEPT_BTC_RANKING.de.md) -------------
+
+def _hours_pts(ups, first_tick=1000, step=10):
+    """Live hours BASE+1.. with targets `ups`, each stored `step` ticks after the last."""
+    return [{"hour": BASE + 1 + j, "j": j, "up": u, "append_tick": first_tick + j * step}
+            for j, u in enumerate(ups)]
+
+
+def test_hour_points_map_emits_targets_and_append_ticks():
+    targets = bytes([0] * W + [1, 0])
+    pts = colony.hour_points({"targets": targets, "shift_limit": 2, "base_hour": BASE},
+                             {"points": [{"hour": BASE + 1, "append_tick": 150}, {"hour": BASE + 2, "append_tick": 250}]})
+    assert pts == [{"hour": BASE + 1, "j": 0, "up": 1, "append_tick": 150},
+                   {"hour": BASE + 2, "j": 1, "up": 0, "append_tick": 250}]
+
+
+def test_a_network_is_judged_only_on_hours_it_could_not_have_known():
+    hours = _hours_pts([1, 1, 1, 1, 1, 1])           # stored in ticks 1000, 1010, ... 1050
+    # Born in tick 1015: after hour j=1 was stored (1010), before j=2 (1020).
+    # Hour h counts if h-2 was stored after its birth: h-2 = j=2 -> h = j=4, j=5.
+    rec = colony.net_record("111111", 1015, hours, window_h=48)
+    assert rec == {"hits": 2, "misses": 0, "abstained": 0, "decided": 2}
+    # A network born before every hour still never counts the first two live
+    # hours: the hour two before them is not a live hour.
+    assert colony.net_record("111111", 1, hours, window_h=48)["decided"] == 4
+
+
+def test_unsure_and_missing_outputs_are_abstentions_and_the_window_rolls():
+    hours = _hours_pts([1, 0, 1, 0, 1, 0])
+    rec = colony.net_record("1012", 1, hours, window_h=48)   # j2 "1" hit, j3 "2" unsure, j4/j5 missing
+    assert rec == {"hits": 1, "misses": 0, "abstained": 3, "decided": 1}
+    # Only the last 2 hours (j4, j5) are in a 2-hour window.
+    assert colony.net_record("101010", 1, hours, window_h=2) == {"hits": 2, "misses": 0, "abstained": 0,
+                                                                "decided": 2}
+
+
+def test_wilson_punishes_small_samples():
+    assert colony.wilson_low(0, 0) == 0.0
+    assert round(colony.wilson_low(5, 5), 2) == 0.57
+    assert colony.wilson_low(60, 100) > colony.wilson_low(5, 5) - 0.1
+    assert colony.wilson_low(30, 40) > colony.wilson_low(6, 7)
+
+
+def _cand(tick, hits, decided, error=4000, shift=0):
+    return {"tick": tick, "tx_index": 0, "hits": hits, "decided": decided, "error": error, "shift": shift,
+            "wilson": colony.wilson_low(hits, decided)}
+
+
+def test_selection_needs_enough_hours_then_takes_the_best_lower_bound():
+    few = [_cand(1, 5, 5), _cand(2, 3, 4)]
+    assert colony.select_network(few, min_decided=12) is None        # fallback to the score
+    cands = [_cand(1, 12, 12, error=3400), _cand(2, 30, 40, error=4300), _cand(3, 20, 40, error=3300)]
+    assert colony.select_network(cands, min_decided=12)["tick"] == 1
+    # Fewer errors (the score) does not buy a place: 20/40 loses to 30/40.
+    assert colony.select_network(cands[1:], min_decided=12)["tick"] == 2
+
+
+def test_without_records_the_accuracy_rule_falls_back_to_the_score_network(live):
+    rep = FakeReplayer({"200:0": 4300, "300:1": 4200}, trits="0001")
+    st = colony.Tracker(live, rep).step(object(), ["x"])
+    assert st["selection"]["rule"] == "score-fallback"
+    acc = live.btc_calls_accuracy()
+    assert len(acc) == 1 and acc[0]["fallback"] == 1 and acc[0]["call"] == 1
+    assert acc[0]["net_tick"] == live.btc_calls()[0]["net_tick"] == 300
+    # Every rebuilt network keeps its outputs.
+    assert {(r["tick"], r["depth"]) for r in live.colony_outputs(240)} == {(200, 1), (300, 2)}
+
+
+def test_a_second_identity_is_rebuilt_and_the_best_record_calls(live, monkeypatch):
+    # A second tree with a worse score: its lineage is rebuilt beside the best one.
+    live.put_ant_solutions(240, [colony.parse_solution(entry(210, 4, anchor=120, score=4340, pk=b"\x03" * 32))])
+    monkeypatch.setattr(colony, "RECORD_MIN_DECIDED", 0)
+
+    class Rep(FakeReplayer):
+        def calls(self, ref, n):
+            return ("0000" if ref == "210:4" else "0001")[:n]
+
+    rep = Rep({"200:0": 4300, "300:1": 4200, "210:4": 4340})
+    st = colony.Tracker(live, rep).step(object(), ["x"])
+    assert "210:4" in rep.known
+    assert [l["pubkey"][:2] for l in st["lines"]] == ["01", "03"]
+    assert st["selection"]["rule"] == "accuracy" and st["ranking"]
+    acc = live.btc_calls_accuracy()
+    assert acc[0]["fallback"] == 0 and acc[0]["net_decided"] is not None
+    assert live.btc_calls()[0]["net_tick"] == 300           # the score rule is untouched
+
+
+def test_a_side_line_that_misses_its_error_is_set_aside_not_the_best_one(live):
+    live.put_ant_solutions(240, [colony.parse_solution(entry(210, 4, anchor=120, score=4340, pk=b"\x03" * 32))])
+    rep = FakeReplayer({"200:0": 4300, "300:1": 4200, "210:4": 4999}, trits="0001")
+    tracker = colony.Tracker(live, rep)
+    st = tracker.step(object(), ["x"])
+    assert st["state"] == "tracking" and st["lines"][1]["state"] == "mismatch"
+    assert "210:4" in tracker.bad and not live.has_colony_output(210, 4)
+    assert len(live.btc_calls()) == 1
+
+
+def test_the_api_shows_the_accuracy_call_and_both_rules(client):
+    from tests.test_btc import _hours
+    client.store.put_btc_hours(240, _hours(), seen_at=1)        # BASE+1 down, BASE+2 up
+    client.store.put_btc_call(_call(BASE + 1, 1))              # score: miss
+    client.store.put_btc_call(_call(BASE + 2, 0))              # score: miss
+    acc = dict(_call(BASE + 2, 1), net_hits=9, net_decided=12, net_abstained=1, fallback=0)
+    client.store.put_btc_call_accuracy(acc)                    # accuracy: hit
+    client.store.put_btc_call_accuracy(dict(_call(BASE + 3, 2), net_hits=None, net_decided=None,
+                                            net_abstained=None, fallback=1))
+    body = client.get("/v1/btc").json()
+    live = {h["hour"]: h for h in body["hours"] if h["live"]}
+    assert live[BASE + 1]["rule"] == "score" and live[BASE + 1]["hit"] is False
+    assert live[BASE + 2]["rule"] == "accuracy" and live[BASE + 2]["hit"] is True
+    rules = body["stats"]["rules"]
+    assert rules["hours"] == 1 and rules["score"]["hits"] == 0 and rules["accuracy"]["hits"] == 1
+    assert rules["measured"]["calls"] == 1
+    call = body["call"]
+    assert call["hour"] == BASE + 3 and call["call"] == 2 and call["rule"] == "accuracy" and call["fallback"]
+    assert call["rules"]["score"]["upcoming"] is None
+
+
+def test_an_unsure_call_is_shown_as_an_abstention(client):
+    from tests.test_btc import _hours
+    client.store.put_btc_hours(240, _hours(), seen_at=1)
+    client.store.put_btc_call(_call(BASE + 2, 2))
+    body = client.get("/v1/btc").json()
+    h = [h for h in body["hours"] if h["hour"] == BASE + 2][0]
+    assert h["hit"] is None and h["abstained"] is True
+    assert body["stats"]["epoch"]["calls"] == 0 and body["stats"]["epoch"]["unsure"] == 1

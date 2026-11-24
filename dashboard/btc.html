@@ -164,6 +164,8 @@ body { background: var(--bg); }
 .hits td { padding: 7px 8px; border-bottom: 1px solid var(--border); font-family: var(--mono); }
 .hits td:first-child { font-family: var(--sans); }
 .hits tr.sub td:first-child { padding-left: 22px; color: var(--muted); }
+.hits tr.me td { color: var(--accent); font-weight: 700; }
+#rank-box { margin: 10px 0 4px; }
 .hits tr.group td { font-family: var(--sans); color: var(--muted); font-size: 12px; text-transform: uppercase;
   letter-spacing: .05em; padding-top: 14px; border-bottom: 0; }
 .rate { display: flex; align-items: center; gap: 8px; min-width: 150px; }
@@ -623,7 +625,9 @@ body { background: var(--bg); }
     <p class="hero-sub" data-i18n="callText">The output of the colony's best network for that hour.</p>
     <p class="hero-sub" data-i18n="callWhen">Each call is fixed as soon as the hour before it is on-chain.</p>
     <p class="hero-sub" id="call-meta"></p>
-    <p class="note"><a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_PREDICTION.de.md" target="_blank" rel="noreferrer" data-i18n="callConcept">How the call is made (concept, German) →</a></p>
+    <div id="rank-box"></div>
+    <p class="note"><a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_PREDICTION.de.md" target="_blank" rel="noreferrer" data-i18n="callConcept">How the call is made (concept, German) →</a>
+      · <a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_RANKING.de.md" target="_blank" rel="noreferrer" data-i18n="rankConcept">How the network is chosen (concept, German) →</a></p>
   </section>
 </main>
 
@@ -694,7 +698,14 @@ body { background: var(--bg); }
       callTitle: "The colony's calls",
       callConcept: "How the call is made (concept, German) →", callHow: "How the calls are made",
       callUp: "▲ Up or level", callDown: "▼ Down", callUnsure: "? unsure",
-      callText: "Each call is the output of the colony's best network for its hour. The network was rebuilt from public data with qubic/core's own reference scorer and reproduces the error the node logged; the call was fixed before the hour existed on-chain.",
+      callText: "Each call is the output of one network of the colony for its hour, rebuilt from public data with qubic/core's own reference scorer; every rebuilt network reproduces the error the node logged. Which network speaks is decided by how well it predicts, not by its score: the score only measures how well a network fits hours it already knew. So every rebuilt network is judged on the recent hours it could not have known when it was made, and the one whose hit rate is highest even allowing for luck makes the call. Until a network has enough judged hours, the best-score network calls. The call is fixed before the hour exists on-chain.",
+      rankConcept: "How the network is chosen (concept, German) →",
+      netPicked: "Right now the network from tick {tick} calls: {hits} of {dec} right on the last {w} hours it could not have known ({ab} abstained) — at least {lo} % allowing for luck. Over the year frame it has {err} errors, shift {shift}.",
+      netFallback: "No network has {m} judged hours yet, so the best-score network calls: {err} errors over the year frame ({pct} % right on the hours it was mined against — a fit, not a forecast), shift {shift}.",
+      rankTitle: "Rebuilt networks by record · last {w} hours", rankNet: "Network (tick)", rankRight: "Right",
+      rankRate: "Rate", rankLow: "At least", rankErr: "Errors", rankNote: "\"At least\" is the lower end of the 95 % range of the hit rate: a network with 5 of 5 right is not yet better than one with 60 of 100. Only networks with {m} judged hours can be chosen; ? is an abstention. {n} lineages are rebuilt.",
+      rulesTitle: "Chosen by record vs. by score", rulesRec: "by record", rulesScore: "by score",
+      rulesNote: "Both rules call every hour; compared on the same {n} hours since {t}. Of the record rule's calls, {m} were made by a network chosen on its record and {f} fell back to the score while no network had enough judged hours.",
       callMeta: "fixed {t} · network in tick {tick} · {err} errors over the year frame · shift {shift}",
       callNone: "No call yet",
       slotRun: "Running", slotNext: "Next",
@@ -755,7 +766,7 @@ body { background: var(--bg); }
       hPeriod: "Period", hCalls: "Calls", hHits: "Hits", hRate: "Hit rate", hAlways: "always ▲", hNever: "always ▼", hRepeat: "as hour before",
       hH6: "last 6 hours", hH24: "last 24 hours", hToday: "today (UTC)", hEpoch: "this epoch",
       hDays: "per day (UTC)", hEpochs: "per epoch", hEpochN: "epoch {ep}",
-      hNote: "The bar's line marks 50 % — a coin toss. \"always ▲\", \"always ▼\" and \"as hour before\" are what three naive rules scored on the same hours. \"?\" calls count as misses, as in the scorer.",
+      hNote: "The bar's line marks 50 % — a coin toss. \"always ▲\", \"always ▼\" and \"as hour before\" are what three naive rules scored on the same hours. A \"?\" call is an abstention: neither hit nor miss.",
       hVerdict: "This epoch: colony {rate} % on {n} calls · always ▲ {up} % · always ▼ {down} %. With {n} calls a pure coin toss lands between {lo} % and {hi} % 19 times out of 20",
       hVerdictIn: " — so the record is still too short to tell skill from luck.",
       hVerdictOut: " — the colony is outside that range; whether it beats always ▼ / ▲ is the harder test.",
@@ -788,7 +799,14 @@ body { background: var(--bg); }
       callTitle: "Die Tipps der Kolonie",
       callConcept: "Wie der Tipp entsteht (Konzept) →", callHow: "Wie die Tipps entstehen",
       callUp: "▲ Up oder gleich", callDown: "▼ Down", callUnsure: "? unsicher",
-      callText: "Jeder Tipp ist die Ausgabe des besten Netzes der Kolonie für seine Stunde. Das Netz wurde aus öffentlichen Daten mit dem Referenz-Scorer von qubic/core nachgebaut und trifft den Fehler, den die Node protokolliert hat; der Tipp stand fest, bevor die Stunde on-chain existierte.",
+      callText: "Jeder Tipp ist die Ausgabe eines Netzes der Kolonie für seine Stunde, nachgebaut aus öffentlichen Daten mit dem Referenz-Scorer von qubic/core; jedes nachgebaute Netz trifft den Fehler, den die Node protokolliert hat. Welches Netz spricht, entscheidet seine Vorhersage, nicht sein Score: Der Score misst nur, wie gut ein Netz Stunden nachbildet, die es schon kannte. Deshalb wird jedes nachgebaute Netz an den letzten Stunden gemessen, die es bei seiner Entstehung nicht kennen konnte, und das Netz mit der höchsten Trefferquote, auch nach Abzug von Glück, gibt den Tipp. Solange kein Netz genug ausgewertete Stunden hat, tippt das Netz mit dem besten Score. Der Tipp steht fest, bevor die Stunde on-chain existiert.",
+      rankConcept: "Wie das Netz gewählt wird (Konzept) →",
+      netPicked: "Gerade tippt das Netz aus Tick {tick}: {hits} von {dec} richtig auf den letzten {w} Stunden, die es nicht kennen konnte ({ab} Enthaltungen) — nach Abzug von Glück mindestens {lo} %. Über den Jahresrahmen hat es {err} Fehler, Shift {shift}.",
+      netFallback: "Noch hat kein Netz {m} ausgewertete Stunden, deshalb tippt das Netz mit dem besten Score: {err} Fehler über den Jahresrahmen ({pct} % richtig auf den Stunden, gegen die es gemined wurde — eine Anpassung, keine Prognose), Shift {shift}.",
+      rankTitle: "Nachgebaute Netze nach Bilanz · letzte {w} Stunden", rankNet: "Netz (Tick)", rankRight: "Richtig",
+      rankRate: "Quote", rankLow: "Mindestens", rankErr: "Fehler", rankNote: "„Mindestens“ ist das untere Ende des 95-%-Bereichs der Trefferquote: 5 von 5 richtig ist noch nicht besser als 60 von 100. Gewählt werden kann nur ein Netz mit {m} ausgewerteten Stunden; ? ist eine Enthaltung. {n} Linien werden nachgebaut.",
+      rulesTitle: "Gewählt nach Bilanz gegen nach Score", rulesRec: "nach Bilanz", rulesScore: "nach Score",
+      rulesNote: "Beide Regeln tippen jede Stunde; verglichen auf denselben {n} Stunden seit {t}. Von den Tipps der Bilanz-Regel kamen {m} von einem Netz, das nach seiner Bilanz gewählt wurde, und {f} vom Score-Netz, solange noch kein Netz genug ausgewertete Stunden hatte.",
       callMeta: "festgelegt {t} · Netz aus Tick {tick} · {err} Fehler über den Jahresrahmen · Shift {shift}",
       callNone: "Noch kein Tipp",
       slotRun: "Läuft", slotNext: "Als Nächstes",
@@ -849,7 +867,7 @@ body { background: var(--bg); }
       hPeriod: "Zeitraum", hCalls: "Tipps", hHits: "Treffer", hRate: "Quote", hAlways: "immer ▲", hNever: "immer ▼", hRepeat: "wie Vorstunde",
       hH6: "letzte 6 Stunden", hH24: "letzte 24 Stunden", hToday: "heute (UTC)", hEpoch: "diese Epoche",
       hDays: "pro Tag (UTC)", hEpochs: "pro Epoche", hEpochN: "Epoche {ep}",
-      hNote: "Der Strich im Balken markiert 50 % — einen Münzwurf. „immer ▲“, „immer ▼“ und „wie Vorstunde“ zeigen, was drei einfache Regeln auf denselben Stunden erreicht hätten. „?“-Tipps zählen wie im Scorer als Fehler.",
+      hNote: "Der Strich im Balken markiert 50 % — einen Münzwurf. „immer ▲“, „immer ▼“ und „wie Vorstunde“ zeigen, was drei einfache Regeln auf denselben Stunden erreicht hätten. Ein „?“-Tipp ist eine Enthaltung: weder Treffer noch Fehler.",
       hVerdict: "Diese Epoche: Kolonie {rate} % bei {n} Tipps · immer ▲ {up} % · immer ▼ {down} %. Bei {n} Tipps landet ein reiner Münzwurf in 19 von 20 Fällen zwischen {lo} % und {hi} %",
       hVerdictIn: " — die Reihe ist also noch zu kurz, um Können von Glück zu unterscheiden.",
       hVerdictOut: " — die Kolonie liegt außerhalb; ob sie auch immer ▼ / ▲ schlägt, ist der härtere Test.",
@@ -1044,11 +1062,55 @@ body { background: var(--bg); }
     } else {
       prog.hidden = true;
     }
-    var n = (up || run || {}).network || c.network;
-    $("call-meta").textContent = n && n.error != null && task.window_width
-      ? t("netMeta", { err: fmtInt(n.error), shift: fmtInt(n.shift),
-          pct: (Math.round((1 - n.error / task.window_width) * 1000) / 10).toLocaleString(locale()) })
-      : "";
+    // Which network speaks, and why: its record (accuracy rule) or, while no
+    // network has enough judged hours, its score (fallback).
+    var cur = up || run || {}, n = cur.network || c.network, sel = c.selection || {};
+    var rec = n && n.record, pct1v = function (v) { return (Math.round(v * 1000) / 10).toLocaleString(locale()); };
+    var chosen = sel.chosen;
+    if (rec && rec.decided) {
+      $("call-meta").textContent = t("netPicked", { tick: fmtInt(n.tick), hits: fmtInt(rec.hits), dec: fmtInt(rec.decided),
+        ab: fmtInt(rec.abstained || 0), w: fmtInt(sel.window_h || 48),
+        lo: chosen && chosen.tick === n.tick ? pct1v(chosen.wilson) : "–", err: fmtInt(n.error), shift: fmtInt(n.shift) });
+    } else if (n && n.error != null && task.window_width) {
+      $("call-meta").textContent = t("netFallback", { m: fmtInt(sel.min_decided || 12), err: fmtInt(n.error), shift: fmtInt(n.shift),
+        pct: pct1v(1 - n.error / task.window_width) });
+    } else {
+      $("call-meta").textContent = "";
+    }
+    renderRanking(sel);
+  }
+
+  // The rebuilt networks by their record over the window, best first; the one
+  // that calls is marked. Hidden until the tracker has ranked anything.
+  function renderRanking(sel) {
+    var box = $("rank-box"), rows = (sel && sel.ranking) || [];
+    if (!rows.length) { box.innerHTML = ""; return; }
+    var chosen = sel.chosen || {}, p = function (v) { return v == null ? "–" : (Math.round(v * 1000) / 10).toLocaleString(locale()) + " %"; };
+    var h = '<div class="dr-title">' + esc(t("rankTitle", { w: fmtInt(sel.window_h) })) + '</div><div class="hits-wrap"><table class="hits"><thead><tr><th>' +
+      esc(t("rankNet")) + "</th><th>" + esc(t("rankRight")) + "</th><th>" + esc(t("rankRate")) + "</th><th>" + esc(t("rankLow")) +
+      "</th><th>" + esc(t("rankErr")) + "</th></tr></thead><tbody>";
+    rows.forEach(function (r) {
+      var me = r.tick === chosen.tick && r.tx_index === chosen.tx_index;
+      h += "<tr" + (me ? ' class="me"' : "") + "><td>" + (me ? "◉ " : "") + fmtInt(r.tick) + "</td><td>" + fmtInt(r.hits) + "/" + fmtInt(r.decided) +
+        (r.abstained ? " · " + fmtInt(r.abstained) + "?" : "") + "</td><td>" + p(r.rate) + "</td><td>" + p(r.decided ? r.wilson : null) +
+        "</td><td>" + fmtInt(r.error) + "</td></tr>";
+    });
+    box.innerHTML = h + '</tbody></table></div><p class="note">' + esc(t("rankNote", { m: fmtInt(sel.min_decided), n: fmtInt(sel.line_count) })) + "</p>";
+  }
+
+  // Record rule against score rule on the same hours (since the record rule began).
+  function rulesBox(r) {
+    if (!r || !r.hours) return "";
+    var row = function (label, x) {
+      return "<tr><td>" + esc(label) + "</td><td>" + fmtInt(x.calls) + "</td><td>" + fmtInt(x.hits) + "</td>" + rateCell(x) + "</tr>";
+    };
+    var first = ((D && D.hours) || []).filter(function (h) { return h.hour === r.since_hour; })[0];
+    var since = first && first.at ? dayHm(first.at - 3600) : null;
+    return '<div class="dr-title">' + esc(t("rulesTitle")) + '</div><div class="hits-wrap"><table class="hits"><thead><tr><th></th><th>' +
+      esc(t("hCalls")) + "</th><th>" + esc(t("hHits")) + "</th><th>" + esc(t("hRate")) + "</th></tr></thead><tbody>" +
+      row(t("rulesRec"), r.accuracy) + row(t("rulesScore"), r.score) + '</tbody></table></div><p class="note">' +
+      esc(t("rulesNote", { n: fmtInt(r.hours), t: since || "v0.17", m: fmtInt((r.measured || {}).calls || 0),
+        f: fmtInt((r.fallback || {}).calls || 0) })) + "</p>";
   }
 
   function rateCell(r) {
@@ -1120,7 +1182,7 @@ body { background: var(--bg); }
       h += '<tr class="group"><td colspan="7">' + esc(t("hEpochs")) + "</td></tr>";
       st.epochs.slice().reverse().forEach(function (e) { h += hitRow(t("hEpochN", { ep: e.epoch }), e, "sub"); });
     }
-    h += "</tbody></table></div>" + verdict(st.epoch) + streakLine(st.epoch) + '<p class="note">' + esc(t("hNote")) + "</p>";
+    h += "</tbody></table></div>" + verdict(st.epoch) + streakLine(st.epoch) + '<p class="note">' + esc(t("hNote")) + "</p>" + rulesBox(st.rules);
     box.innerHTML = h;
   }
 

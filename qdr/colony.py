@@ -15,10 +15,18 @@ only to its operator. So this module rebuilds them:
               with qubic/core's own reference scorer (tools/replayer), one walk
               per solution, in a long-running subprocess that keeps the 512 MB
               pool and the rebuilt networks in memory. Every walk must reproduce
-              the error the node logged, or nothing it produced is used.
-  3. call  -- for the hour the oracle will store next, the newest verified
-              network's output at that hour's position is recorded once, before
-              the hour exists on-chain, and judged when it arrives.
+              the error the node logged, or nothing it produced is used. Since
+              v0.17.0 the best lineages of the next identities are rebuilt too,
+              and every verified network's outputs are kept (colony_outputs).
+  3. rank  -- each rebuilt network is judged on the recent hours it could not
+              have known when it was made (net_record); the best lower bound of
+              the hit rate wins (select_network). CFB, 2026-11-24: the score is
+              a stopgap, the network that predicts best should call.
+  4. call  -- for the coming hour, two calls are recorded once, before the hour
+              exists on-chain, and judged when it arrives: rule "score" (the
+              complete best-score network, btc_calls) and rule "accuracy" (the
+              best-ranked network, or the score network while none has enough
+              judged hours, btc_calls_accuracy).
 
 A walk needs, besides the solution itself: the epoch's spectrum digest (seeds the
 pool and the control/output neurons), K12(anchorTick || K12(TickData)) of its
@@ -89,6 +97,20 @@ SCAN_MAX_CALLS = int(os.environ.get("QDR_COLONY_SCAN_CALLS", "40"))
 # call for the next hour is never stuck behind a long catch-up.
 WALKS_PER_STEP = int(os.environ.get("QDR_COLONY_WALKS", "25"))
 SHIFT_CAP = 168
+
+# Which network makes the call (docs/CONCEPT_BTC_RANKING.de.md). CFB, 2026-11-24:
+# the score -- the error over the known hours -- is a stopgap; use the network
+# that predicts best. So besides the best-score lineage, the best lineages of the
+# next identities are rebuilt too (LINES in all, SIDE_WALKS_PER_STEP walks per
+# step between them), every rebuilt network's outputs are kept, and each one is
+# judged on the hours it could not have known. Over a rolling window: CFB, "we
+# cannot use the whole epoch because models are retrained, pick some number from
+# practice". "?" is an abstention (CFB), never a hit or a miss.
+LINES = int(os.environ.get("QDR_COLONY_LINES", "4"))
+SIDE_WALKS_PER_STEP = int(os.environ.get("QDR_COLONY_SIDE_WALKS", "10"))
+RECORD_WINDOW_H = int(os.environ.get("QDR_COLONY_WINDOW_H", "48"))
+RECORD_MIN_DECIDED = int(os.environ.get("QDR_COLONY_MIN_DECIDED", "12"))
+RANKING_SHOWN = 10
 
 
 # -- logs ------------------------------------------------------------------------
@@ -240,6 +262,79 @@ def ref_id(row: dict) -> str:
     return f"{row['tick']}:{row['tx_index']}"
 
 
+# -- which network predicts best ----------------------------------------------------
+
+def hour_points(task: dict, series: dict) -> list[dict]:
+    """The epoch's live hours, oldest first: hour, emit index `j` (the network's
+    output for it is trits[j]), target bit, and the tick it was stored in."""
+    targets = task["targets"]
+    limit = int(task["shift_limit"])
+    window = len(targets) - limit
+    base = int(task["base_hour"])
+    ticks = {int(p["hour"]): int(p.get("append_tick") or 0) for p in (series or {}).get("points") or []}
+    return [{"hour": base + 1 + j, "j": j, "up": int(targets[window + j]),
+             "append_tick": ticks.get(base + 1 + j, 0)} for j in range(limit)]
+
+
+def net_record(trits: str, born_tick: int, hours: list[dict], window_h: int = RECORD_WINDOW_H) -> dict:
+    """How a network did on the hours it could not have known, within the last
+    `window_h` live hours.
+
+    An hour h counts only if the hour two before it was stored in a tick after
+    the network was published. That hour is stored a few minutes after h-1
+    begins, so the network existed before h began -- and h was never part of
+    what it was graded on (only hours stored before its anchor are, and the
+    anchor is never after the network's own tick). A "?" or a missing output
+    is an abstention: neither a hit nor a miss (CFB, 2026-11-24).
+    """
+    hits = misses = abstained = 0
+    if hours:
+        last = hours[-1]["hour"]
+        stored = {h["hour"]: h["append_tick"] for h in hours}
+        for h in hours:
+            if h["hour"] <= last - window_h:
+                continue
+            prior = stored.get(h["hour"] - 2)
+            if not prior or int(born_tick) >= prior:
+                continue
+            c = trits[h["j"]] if h["j"] < len(trits) else "2"
+            if c not in "01":
+                abstained += 1
+            elif int(c) == h["up"]:
+                hits += 1
+            else:
+                misses += 1
+    return {"hits": hits, "misses": misses, "abstained": abstained, "decided": hits + misses}
+
+
+def wilson_low(k: int, n: int, z: float = 1.96) -> float:
+    """Lower bound of the 95 % Wilson interval for k hits in n: what the hit
+    rate is at least, allowing for luck. 5 of 5 gives 0.57, 60 of 100 gives 0.50."""
+    if n <= 0:
+        return 0.0
+    p = k / n
+    d = 1 + z * z / n
+    centre = p + z * z / (2 * n)
+    margin = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5)
+    return (centre - margin) / d
+
+
+def rank_key(c: dict, min_decided: Optional[int] = None) -> tuple:
+    need = RECORD_MIN_DECIDED if min_decided is None else min_decided
+    return (c["decided"] < need, -c["wilson"], -c["decided"], -int(c.get("shift") or 0),
+            int(c.get("error") or 0), -int(c["tick"]))
+
+
+def select_network(cands: list[dict], min_decided: Optional[int] = None) -> Optional[dict]:
+    """The network with the best measured hit rate, or None while no network has
+    `min_decided` judged hours in the window (the score then decides).
+    Ranked by the Wilson lower bound; ties by more hours, higher shift, fewer
+    errors, newer."""
+    need = RECORD_MIN_DECIDED if min_decided is None else min_decided
+    eligible = [c for c in cands if c["decided"] >= need]
+    return min(eligible, key=lambda c: rank_key(c, need)) if eligible else None
+
+
 # -- the replayer process ------------------------------------------------------------
 
 class ReplayerError(RuntimeError):
@@ -357,13 +452,17 @@ class Replayer:
 # -- the tracker -----------------------------------------------------------------
 
 class Tracker:
-    """Follows the best network of the running epoch and records its calls."""
+    """Follows the colony's best networks of the running epoch and records two
+    calls per hour: the best-score network's (rule "score", as since v0.16.0)
+    and the best-predicting network's (rule "accuracy", since v0.17.0)."""
 
     def __init__(self, store, replayer: Optional[Replayer] = None):
         self.store = store
         self.rep = replayer or Replayer()
         self.epoch: Optional[int] = None
-        self.verified: Optional[dict] = None     # newest verified node of the tracked lineage
+        self.verified: Optional[dict] = None     # newest verified node of the best-score lineage
+        self.bad: set[str] = set()               # side-line nodes that did not reproduce their error
+        self.side_turn = 0
         self.lock = threading.Lock()
 
     def status(self, **state) -> dict:
@@ -411,17 +510,19 @@ class Tracker:
         if epoch != self.epoch:
             self.rep.close()
             self.epoch, self.verified = epoch, None
+            self.bad = set()
             self.store.prune_ant_solutions(keep_from_epoch=epoch - 1)
 
         scanned = scan(self.store, bob, epoch, info.initial_tick, indexed_head(bob, info.tick))
 
-        best = self.store.best_ant_solutions(epoch, 1)
-        if not best:
+        tips = self.store.best_ant_solutions_per_identity(epoch, max(1, LINES))
+        if not tips:
             return self.status(state="no-solutions", scanned=scanned)
-        chain = lineage(self.store, best[0]["tick"], best[0]["tx_index"])
+        best = tips[0]
+        chain = lineage(self.store, best["tick"], best["tx_index"])
         if chain is None:
-            healed = heal(self.store, bob, epoch, best[0]["tick"], best[0]["tx_index"])
-            chain = lineage(self.store, best[0]["tick"], best[0]["tx_index"])
+            healed = heal(self.store, bob, epoch, best["tick"], best["tx_index"])
+            chain = lineage(self.store, best["tick"], best["tx_index"])
             if chain is None:
                 return self.status(state="lineage-incomplete", scanned=scanned, healed=healed)
 
@@ -429,7 +530,65 @@ class Tracker:
             self.rep.start(ctx.spectrum_digest)
         self.rep.targets("".join("1" if b else "0" for b in targets))
 
-        # Resume from the deepest node already rebuilt: in this process, or saved.
+        live_ticks = [p["append_tick"] for p in series["points"]]
+        adv = self._advance(epoch, chain, peers, live_ticks, WALKS_PER_STEP)
+        if adv["state"] == "anchor-unavailable":
+            return self.status(state="anchor-unavailable", tick=adv["tick"], scanned=scanned)
+        if adv["state"] == "mismatch":
+            # A rebuilt network that does not reproduce the node's own score is
+            # not the network the colony holds; nothing downstream may use it.
+            self.rep.close()
+            self.verified = None
+            n = adv["node"]
+            return self.status(state="mismatch", tick=n["tick"], tx_index=n["tx_index"],
+                               logged=n["score"], rebuilt=adv["error"])
+        last, walked, walk_time = adv["last"], adv["walked"], adv["walk_time"]
+        if last is None:
+            return self.status(state="catching-up", scanned=scanned)
+
+        # The score rule's call comes only from a network whose whole lineage has
+        # been rebuilt: the newest node of the best lineage. While a lineage is
+        # still being caught up, its partial prefix is an older, weaker network
+        # (measured 2026-11-18: depth 50 of 142 had 3778 errors where the leaf
+        # has 3434 and called the opposite direction), so it never speaks for the
+        # rule. A complete network verified earlier keeps calling until the new
+        # one is caught up.
+        i, node, err, shift = last
+        complete = i + 1 == len(chain)
+        mine = dict(node, error=err, shift=shift, depth=i + 1, lineage=len(chain), complete=complete)
+        prev = self.verified
+        if complete or prev is None or not prev.get("complete") or ref_id(prev) not in self.rep.known:
+            self.verified = mine
+        v = self.verified
+        score_net = v if v.get("complete") and ref_id(v) in self.rep.known else None
+
+        # The next identities' best lineages, a few walks each step, in turn.
+        lines = [{"pubkey": best["pubkey"], "depth": i + 1, "lineage": len(chain), "score": best["score"],
+                  "state": "tracking" if complete else "catching-up"}]
+        lines += self._side_lines(epoch, tips[1:], bob, peers, live_ticks)
+
+        hours = hour_points(task, series)
+        ranking, chosen = self._rank(epoch, hours)
+        call = self._call(epoch, task, series, score_net, chosen)
+        if walked:
+            self.walk_s = walk_time / walked
+        sel = {"rule": "accuracy" if chosen else "score-fallback", "window_h": RECORD_WINDOW_H,
+               "min_decided": RECORD_MIN_DECIDED, "line_count": LINES,
+               "chosen": _public_net(chosen) if chosen else None}
+        return self.status(state="tracking" if complete else "catching-up",
+                           depth=i + 1, lineage=len(chain), walked=walked, scanned=scanned,
+                           call=call.get("score"), call_accuracy=call.get("accuracy"),
+                           selection=sel, ranking=ranking, lines=lines,
+                           walk_s=round(getattr(self, "walk_s", 15.0), 1))
+
+    # -- rebuilding --------------------------------------------------------------
+
+    def _advance(self, epoch: int, chain: list[dict], peers: list[str], live_ticks: list[int],
+                 budget: int) -> dict:
+        """Rebuild up to `budget` more nodes of one lineage, from the deepest one
+        already rebuilt (in this process, or saved). Every node rebuilt has its
+        outputs kept. `last` is (index, node, error, shift) of the deepest
+        verified node, None if there is none yet."""
         start = 0
         for i in range(len(chain) - 1, -1, -1):
             if ref_id(chain[i]) in self.rep.known:
@@ -441,19 +600,20 @@ class Tracker:
                 n = saved.get((chain[i]["tick"], chain[i]["tx_index"]))
                 if n and n["error"] == chain[i]["score"]:
                     self.rep.load(ref_id(chain[i]), n["shift"], n["ann"], n["error"])
+                    if not self.store.has_colony_output(chain[i]["tick"], chain[i]["tx_index"]):
+                        self._keep_outputs(epoch, chain[i], n["error"], n["shift"], i + 1)
                     start = i + 1
                     break
 
-        live_ticks = [p["append_tick"] for p in series["points"]]
         cap = SHIFT_CAP
         walked = 0
         walk_time = 0.0
         last = None
-        for i in range(start, min(len(chain), start + WALKS_PER_STEP)):
+        for i in range(start, min(len(chain), start + max(0, budget))):
             node = chain[i]
             anchor = anchor_digest(self.store, node["anchor_tick"], peers)
             if anchor is None:
-                return self.status(state="anchor-unavailable", tick=node["anchor_tick"], scanned=scanned)
+                return {"state": "anchor-unavailable", "tick": node["anchor_tick"], "walked": walked}
             parent = "root" if i == 0 else ref_id(chain[i - 1])
             limit = shift_limit_at(node["anchor_tick"], live_ticks, cap)
             t0 = time.time()
@@ -461,68 +621,112 @@ class Tracker:
             walk_time += time.time() - t0
             walked += 1
             if err != node["score"]:
-                # A rebuilt network that does not reproduce the node's own score is
-                # not the network the colony holds; nothing downstream may use it.
-                self.rep.close()
-                self.verified = None
-                return self.status(state="mismatch", tick=node["tick"], tx_index=node["tx_index"],
-                                   logged=node["score"], rebuilt=err)
+                self.rep.known.pop(ref_id(node), None)
+                return {"state": "mismatch", "node": node, "error": err, "walked": walked}
+            self._keep_outputs(epoch, node, err, shift, i + 1)
             last = (i, node, err, shift)
 
         if last is None and start > 0:
             node = chain[start - 1]
             err, shift = self.rep.known[ref_id(node)]
             last = (start - 1, node, err, shift)
-        if last is None:
-            return self.status(state="catching-up", scanned=scanned)
-
-        i, node, err, shift = last
-        if walked:
+        if walked and last is not None:
+            node = last[1]
             ann_shift, ann = self.rep.dump(ref_id(node))
             self.store.put_colony_net({"tick": node["tick"], "tx_index": node["tx_index"], "epoch": epoch,
-                                       "pubkey": node["pubkey"], "shift": ann_shift, "error": err,
+                                       "pubkey": node["pubkey"], "shift": ann_shift, "error": last[2],
                                        "ann": ann, "saved_at": int(time.time())})
+        return {"state": "ok", "last": last, "walked": walked, "walk_time": walk_time}
 
-        # A call comes only from a network whose whole lineage has been rebuilt:
-        # the newest node of the best lineage. While a lineage is still being
-        # caught up, its partial prefix is an older, weaker network (measured
-        # 2026-11-18: depth 50 of 142 had 3778 errors where the leaf has 3434 and
-        # called the opposite direction), so it never speaks for the colony. A
-        # complete network verified earlier keeps calling until the new one is
-        # caught up.
-        complete = i + 1 == len(chain)
-        mine = dict(node, error=err, shift=shift, depth=i + 1, lineage=len(chain), complete=complete)
-        prev = self.verified
-        if complete or prev is None or not prev.get("complete") or ref_id(prev) not in self.rep.known:
-            self.verified = mine
-        v = self.verified
-        call = (self._call(epoch, task, series, v, v["error"], v["shift"])
-                if v.get("complete") and ref_id(v) in self.rep.known else None)
-        if walked:
-            self.walk_s = walk_time / walked
-        return self.status(state="tracking" if i + 1 == len(chain) else "catching-up",
-                           depth=i + 1, lineage=len(chain), walked=walked, scanned=scanned, call=call,
-                           walk_s=round(getattr(self, "walk_s", 15.0), 1))
+    def _keep_outputs(self, epoch: int, node: dict, err: int, shift: int, depth: int) -> None:
+        """A verified network's outputs for every live hour of the epoch. They
+        are fixed the moment it exists (no inputs), so one rollout now is its
+        whole record to come."""
+        trits = self.rep.calls(ref_id(node), SHIFT_CAP)
+        self.store.put_colony_output({
+            "tick": node["tick"], "tx_index": node["tx_index"], "epoch": epoch, "pubkey": node["pubkey"],
+            "anchor_tick": node["anchor_tick"], "error": err, "shift": shift, "depth": depth,
+            "trits": trits, "saved_at": int(time.time())})
 
-    def _call(self, epoch: int, task: dict, series: dict, node: dict, err: int, shift: int) -> Optional[dict]:
-        """Record the network's output for the COMING hour, once, before it begins.
+    def _side_lines(self, epoch: int, tips: list[dict], bob, peers: list[str], live_ticks: list[int]) -> list[dict]:
+        """The best lineages of the next identities, SIDE_WALKS_PER_STEP walks in
+        all per step, a different one first each time. A node that does not
+        reproduce its logged error is set aside with everything after it; it
+        never stops the best-score lineage."""
+        out: list[dict] = []
+        if not tips:
+            return out
+        budget = SIDE_WALKS_PER_STEP
+        k = self.side_turn % len(tips)
+        self.side_turn += 1
+        for tip in tips[k:] + tips[:k]:
+            row = {"pubkey": tip["pubkey"], "score": tip["score"]}
+            chain = lineage(self.store, tip["tick"], tip["tx_index"])
+            if chain is None:
+                heal(self.store, bob, epoch, tip["tick"], tip["tx_index"], max_ticks=10)
+                chain = lineage(self.store, tip["tick"], tip["tx_index"])
+            if chain is None:
+                out.append(dict(row, state="lineage-incomplete"))
+                continue
+            row["lineage"] = len(chain)
+            if any(ref_id(n) in self.bad for n in chain):
+                out.append(dict(row, state="mismatch"))
+                continue
+            if budget <= 0:
+                depth = max((i + 1 for i, n in enumerate(chain) if ref_id(n) in self.rep.known), default=0)
+                out.append(dict(row, depth=depth, state="waiting"))
+                continue
+            adv = self._advance(epoch, chain, peers, live_ticks, budget)
+            budget -= adv["walked"]
+            if adv["state"] == "mismatch":
+                self.bad.add(ref_id(adv["node"]))
+                out.append(dict(row, state="mismatch"))
+                continue
+            if adv["state"] != "ok":
+                out.append(dict(row, state=adv["state"]))
+                continue
+            depth = adv["last"][0] + 1 if adv["last"] else 0
+            out.append(dict(row, depth=depth, state="tracking" if depth == len(chain) else "catching-up"))
+        return out
+
+    # -- choosing ----------------------------------------------------------------
+
+    def _rank(self, epoch: int, hours: list[dict]) -> tuple[list[dict], Optional[dict]]:
+        """Every rebuilt network of the epoch with its record in the window; the
+        top of the list, and the one the accuracy rule picks (None: fallback)."""
+        cands = []
+        for r in self.store.colony_outputs(epoch):
+            if f"{r['tick']}:{r['tx_index']}" in self.bad:
+                continue
+            rec = net_record(r["trits"], r["tick"], hours)
+            cands.append(dict(r, **rec, wilson=round(wilson_low(rec["hits"], rec["decided"]), 4)))
+        cands.sort(key=rank_key)
+        return [_public_net(c) for c in cands[:RANKING_SHOWN]], select_network(cands)
+
+    def _call(self, epoch: int, task: dict, series: dict, score_net: Optional[dict],
+              chosen: Optional[dict]) -> dict:
+        """Record both rules' outputs for the COMING hour, once, before it begins.
 
         The hour the oracle stores next is already running (its move from the
         last full hour is under way), so a call for it would be made mid-hour.
         The call is for the hour after it instead: made up to an hour before
         that hour starts, judged when the oracle stores it (~5 min after it
         ends). A network emits every position, so this costs nothing extra.
+
+        Rule "score": the complete best-score network. Rule "accuracy": the
+        network with the best record in the window; while no network has
+        enough judged hours, the best-score network again (`fallback`).
         """
+        out: dict = {}
+        if score_net is None and chosen is None:
+            return out
         hour = int(series["next_hour"]) + 1
         if time.time() >= antask.hour_at(hour) - antask.HOUR_S:
-            return None                          # it has begun: too late to call it
+            return out                           # it has begun: too late to call it
         base = int(task["base_hour"])
         j = hour - base - 1                      # emit WINDOW_WIDTH + j is this hour
-        if j < 0 or j >= 168:
-            return None
-        trits = self.rep.calls(ref_id(node), j + 1)
-        if len(trits) <= j:
-            return None
+        if j < 0 or j >= SHIFT_CAP:
+            return out
         # The hour must still be unknown when the call is written down.
         from qdr import antnode
         fresh = None
@@ -531,12 +735,42 @@ class Tracker:
             if fresh:
                 break
         if not fresh or int(fresh["next_hour"]) != hour - 1:
-            return None
-        row = {"hour": hour, "epoch": epoch, "call": int(trits[j]), "net_tick": node["tick"],
-               "net_index": node["tx_index"], "pubkey": node["pubkey"], "net_error": err,
-               "net_shift": shift, "made_at": int(time.time())}
-        recorded = self.store.put_btc_call(row)
-        return {"hour": hour, "call": row["call"], "new": recorded}
+            return out
+        now = int(time.time())
+        score_trit = None
+        if score_net is not None:
+            trits = self.rep.calls(ref_id(score_net), j + 1)
+            if len(trits) > j:
+                score_trit = int(trits[j])
+                row = {"hour": hour, "epoch": epoch, "call": score_trit, "net_tick": score_net["tick"],
+                       "net_index": score_net["tx_index"], "pubkey": score_net["pubkey"],
+                       "net_error": score_net["error"], "net_shift": score_net["shift"], "made_at": now}
+                out["score"] = {"hour": hour, "call": score_trit, "new": self.store.put_btc_call(row)}
+        if chosen is not None:
+            t = chosen["trits"][j] if j < len(chosen["trits"]) else "2"
+            row = {"hour": hour, "epoch": epoch, "call": int(t) if t in "012" else 2,
+                   "net_tick": chosen["tick"], "net_index": chosen["tx_index"], "pubkey": chosen["pubkey"],
+                   "net_error": chosen["error"], "net_shift": chosen["shift"],
+                   "net_hits": chosen["hits"], "net_decided": chosen["decided"],
+                   "net_abstained": chosen["abstained"], "fallback": 0, "made_at": now}
+        elif score_trit is not None:
+            row = {"hour": hour, "epoch": epoch, "call": score_trit, "net_tick": score_net["tick"],
+                   "net_index": score_net["tx_index"], "pubkey": score_net["pubkey"],
+                   "net_error": score_net["error"], "net_shift": score_net["shift"],
+                   "net_hits": None, "net_decided": None, "net_abstained": None, "fallback": 1, "made_at": now}
+        else:
+            return out
+        out["accuracy"] = {"hour": hour, "call": row["call"], "fallback": bool(row["fallback"]),
+                           "new": self.store.put_btc_call_accuracy(row)}
+        return out
+
+
+def _public_net(c: dict) -> dict:
+    """A ranked network as the API shows it: no outputs, no network bytes."""
+    rate = round(c["hits"] / c["decided"], 4) if c.get("decided") else None
+    return {"tick": c["tick"], "tx_index": c["tx_index"], "pubkey": c["pubkey"], "error": c["error"],
+            "shift": c["shift"], "depth": c.get("depth"), "hits": c["hits"], "misses": c["misses"],
+            "abstained": c["abstained"], "decided": c["decided"], "rate": rate, "wilson": c["wilson"]}
 
 
 # -- judging -----------------------------------------------------------------------
@@ -544,21 +778,26 @@ class Tracker:
 def judge(calls: list[dict]) -> list[dict]:
     """Each call with `hit`: True/False once its hour is known, None before.
 
-    An "unsure" call (2) is never a hit, the same way the scorer counts it.
+    An "unsure" call (2) is an abstention (CFB, 2026-11-24): `hit` stays None
+    and `abstained` is True once its hour is known. It is neither a hit nor a
+    miss. (Until v0.17.0 it counted as a miss, the way the scorer counts it.)
     """
     out = []
     for c in calls:
         up = c.get("up")
-        hit = None if up is None else (int(c["call"]) == int(up))
-        out.append(dict(c, hit=hit))
+        unsure = int(c["call"]) == 2
+        hit = None if up is None or unsure else (int(c["call"]) == int(up))
+        out.append(dict(c, hit=hit, abstained=up is not None and unsure))
     return out
 
 
 def rate(judged: list[dict]) -> dict:
+    """`calls` are the decided ones (hit or miss); `unsure` the abstentions
+    beside them, which the rate leaves out."""
     done = [c for c in judged if c["hit"] is not None]
     hits = sum(1 for c in done if c["hit"])
     return {"calls": len(done), "hits": hits,
-            "unsure": sum(1 for c in done if int(c["call"]) == 2),
+            "unsure": sum(1 for c in judged if c.get("abstained")),
             "rate": round(hits / len(done), 4) if done else None}
 
 

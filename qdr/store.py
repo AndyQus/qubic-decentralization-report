@@ -342,6 +342,46 @@ CREATE TABLE IF NOT EXISTS btc_calls (
     made_at    INTEGER NOT NULL
 );
 
+-- Every rebuilt and verified network's outputs for the epoch's live hours
+-- (`trits`, one per hour from baseHour+1; 0 down, 1 up, 2 unsure). A network
+-- has no inputs, so these are fixed the moment it exists, and its record on the
+-- hours it could not have known follows from them (docs/CONCEPT_BTC_RANKING.de.md).
+CREATE TABLE IF NOT EXISTS colony_outputs (
+    tick         INTEGER NOT NULL,
+    tx_index     INTEGER NOT NULL,
+    epoch        INTEGER NOT NULL,
+    pubkey       TEXT NOT NULL,
+    anchor_tick  INTEGER NOT NULL,
+    error        INTEGER NOT NULL,
+    shift        INTEGER NOT NULL,
+    depth        INTEGER NOT NULL,
+    trits        TEXT NOT NULL,
+    saved_at     INTEGER NOT NULL,
+    PRIMARY KEY (tick, tx_index)
+);
+CREATE INDEX IF NOT EXISTS ix_colony_outputs_epoch ON colony_outputs(epoch);
+
+-- The call of the accuracy rule (since v0.17.0, CFB 2026-11-24): the output of
+-- the network with the best record over the last hours it could not have known,
+-- or -- while no network has enough judged hours -- the best-score network's
+-- (`fallback` = 1). Written once, before the hour, never rewritten, beside
+-- btc_calls (the score rule). Permanent.
+CREATE TABLE IF NOT EXISTS btc_calls_accuracy (
+    hour           INTEGER PRIMARY KEY,
+    epoch          INTEGER NOT NULL,
+    call           INTEGER NOT NULL,
+    net_tick       INTEGER NOT NULL,
+    net_index      INTEGER NOT NULL,
+    pubkey         TEXT NOT NULL,
+    net_error      INTEGER NOT NULL,
+    net_shift      INTEGER NOT NULL,
+    net_hits       INTEGER,
+    net_decided    INTEGER,
+    net_abstained  INTEGER,
+    fallback       INTEGER NOT NULL,
+    made_at        INTEGER NOT NULL
+);
+
 -- What the colony tracker is doing, for the API to report (one row).
 CREATE TABLE IF NOT EXISTS colony_status (
     id          INTEGER PRIMARY KEY CHECK (id = 1),
@@ -1373,6 +1413,17 @@ class Store:
                 (int(epoch), int(limit))).fetchall()
         return [dict(r) for r in rows]
 
+    def best_ant_solutions_per_identity(self, epoch: int, limit: int) -> list[dict]:
+        """The best solution of each identity (lowest error; among equals the
+        newest), best identities first -- one tip per tree."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY pubkey "
+                "ORDER BY score ASC, tick DESC) AS rn FROM ant_solutions WHERE epoch=?) "
+                "WHERE rn = 1 ORDER BY score ASC, tick DESC LIMIT ?",
+                (int(epoch), int(limit))).fetchall()
+        return [{k: r[k] for k in r.keys() if k != "rn"} for r in rows]
+
     def ant_solution_count(self, epoch: int) -> int:
         with self._lock:
             r = self._conn.execute("SELECT COUNT(*) FROM ant_solutions WHERE epoch=?", (int(epoch),)).fetchone()
@@ -1382,6 +1433,7 @@ class Store:
         with self._tx() as c:
             n = c.execute("DELETE FROM ant_solutions WHERE epoch < ?", (int(keep_from_epoch),)).rowcount or 0
             c.execute("DELETE FROM colony_nets WHERE epoch < ?", (int(keep_from_epoch),))
+            c.execute("DELETE FROM colony_outputs WHERE epoch < ?", (int(keep_from_epoch),))
             c.execute("DELETE FROM colony_scan WHERE epoch < ?", (int(keep_from_epoch),))
         return n
 
@@ -1419,6 +1471,48 @@ class Store:
         with self._lock:
             rows = self._conn.execute("SELECT * FROM colony_nets WHERE epoch=? ORDER BY tick DESC",
                                       (int(epoch),)).fetchall()
+        return [dict(r) for r in rows]
+
+    def put_colony_output(self, row: dict) -> None:
+        with self._tx() as c:
+            c.execute("INSERT OR REPLACE INTO colony_outputs (tick,tx_index,epoch,pubkey,anchor_tick,error,"
+                      "shift,depth,trits,saved_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                      (int(row["tick"]), int(row["tx_index"]), int(row["epoch"]), row["pubkey"],
+                       int(row["anchor_tick"]), int(row["error"]), int(row["shift"]), int(row["depth"]),
+                       row["trits"], int(row["saved_at"])))
+
+    def has_colony_output(self, tick: int, tx_index: int) -> bool:
+        with self._lock:
+            r = self._conn.execute("SELECT 1 FROM colony_outputs WHERE tick=? AND tx_index=?",
+                                   (int(tick), int(tx_index))).fetchone()
+        return r is not None
+
+    def colony_outputs(self, epoch: int) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM colony_outputs WHERE epoch=?", (int(epoch),)).fetchall()
+        return [dict(r) for r in rows]
+
+    def put_btc_call_accuracy(self, row: dict) -> bool:
+        """Record the accuracy rule's call once; False if the hour had one."""
+        def opt(v):
+            return None if v is None else int(v)
+        with self._tx() as c:
+            cur = c.execute(
+                "INSERT OR IGNORE INTO btc_calls_accuracy (hour,epoch,call,net_tick,net_index,pubkey,"
+                "net_error,net_shift,net_hits,net_decided,net_abstained,fallback,made_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (int(row["hour"]), int(row["epoch"]), int(row["call"]), int(row["net_tick"]),
+                 int(row["net_index"]), row["pubkey"], int(row["net_error"]), int(row["net_shift"]),
+                 opt(row.get("net_hits")), opt(row.get("net_decided")), opt(row.get("net_abstained")),
+                 int(row["fallback"]), int(row["made_at"])))
+            return bool(cur.rowcount)
+
+    def btc_calls_accuracy(self) -> list[dict]:
+        """The accuracy rule's calls joined with their hour (oldest first)."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT c.*, h.up AS up, h.first_seen_at AS hour_seen_at FROM btc_calls_accuracy c "
+                "LEFT JOIN btc_hours h ON h.hour = c.hour ORDER BY c.hour").fetchall()
         return [dict(r) for r in rows]
 
     def put_btc_call(self, row: dict) -> bool:
