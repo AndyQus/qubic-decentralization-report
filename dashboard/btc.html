@@ -39,7 +39,7 @@
   speichern. Diese Seite zeigt jede Stunde, sobald sie im Netz ist.
 
   Datenquellen: GET /v1/btc (Stunden, Oracle, Kolonie, Aufzeichnung),
-  GET /v1/ticks/recent (Kolonie-Puls). Konzept: docs/CONCEPT_BTC_PREDICTION.de.md.
+  GET /v1/ticks/recent (Kolonie-Puls). Konzept: docs/CONCEPT_BTC_PREDICTION.md (en) / .de.md (de).
 
   Nur Richtungen, keine Kurse: Die Kurse stammen von Binance, und dieses Projekt
   verbreitet keine Börsendaten weiter. Der Tipp der Kolonie für die nächste
@@ -626,8 +626,8 @@ body { background: var(--bg); }
     <p class="hero-sub" data-i18n="callWhen">Each call is fixed as soon as the hour before it is on-chain.</p>
     <p class="hero-sub" id="call-meta"></p>
     <div id="rank-box"></div>
-    <p class="note"><a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_PREDICTION.de.md" target="_blank" rel="noreferrer" data-i18n="callConcept">How the call is made (concept, German) →</a>
-      · <a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_RANKING.de.md" target="_blank" rel="noreferrer" data-i18n="rankConcept">How the network is chosen (concept, German) →</a></p>
+    <p class="note"><a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_PREDICTION.md" target="_blank" rel="noreferrer" data-doc="CONCEPT_BTC_PREDICTION" data-i18n="callConcept">How the call is made (concept) →</a>
+      · <a href="https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/CONCEPT_BTC_RANKING.md" target="_blank" rel="noreferrer" data-doc="CONCEPT_BTC_RANKING" data-i18n="rankConcept">How the network is chosen (concept) →</a></p>
   </section>
 </main>
 
@@ -696,10 +696,10 @@ body { background: var(--bg); }
       nextHour: "{from} – {to}",
       ringDue: "earliest on the network", ringWait: "due — the oracle is being asked", ringLate: "overdue · {n} failed attempts",
       callTitle: "The colony's calls",
-      callConcept: "How the call is made (concept, German) →", callHow: "How the calls are made",
+      callConcept: "How the call is made (concept) →", callHow: "How the calls are made",
       callUp: "▲ Up or level", callDown: "▼ Down", callUnsure: "? unsure",
       callText: "Each call is the output of one network of the colony for its hour, rebuilt from public data with qubic/core's own reference scorer; every rebuilt network reproduces the error the node logged. Which network speaks is decided by how well it predicts, not by its score: the score only measures how well a network fits hours it already knew. So every rebuilt network is judged on the recent hours it could not have known when it was made, and the one whose hit rate is highest even allowing for luck makes the call. Until a network has enough judged hours, the best-score network calls. The call is fixed before the hour exists on-chain.",
-      rankConcept: "How the network is chosen (concept, German) →",
+      rankConcept: "How the network is chosen (concept) →",
       netPicked: "Right now the network from tick {tick} calls: {hits} of {dec} right on the last {w} hours it could not have known ({ab} abstained) — at least {lo} % allowing for luck. Over the year frame it has {err} errors, shift {shift}.",
       netFallback: "No network has {m} judged hours yet, so the best-score network calls: {err} errors over the year frame ({pct} % right on the hours it was mined against — a fit, not a forecast), shift {shift}.",
       rankTitle: "Rebuilt networks by record · last {w} hours", rankNet: "Network (tick)", rankRight: "Right",
@@ -1817,6 +1817,12 @@ body { background: var(--bg); }
   function applyLang() {
     root.setAttribute("lang", lang);
     document.querySelectorAll("[data-i18n]").forEach(function (el) { el.textContent = t(el.getAttribute("data-i18n")); });
+    // Concept links follow the page language: docs/<NAME>.de.md in German,
+    // docs/<NAME>.md in English. Both versions are kept saying the same.
+    document.querySelectorAll("a[data-doc]").forEach(function (a) {
+      a.href = "https://github.com/AndyQus/qubic-decentralization-report/blob/main/docs/" +
+        a.getAttribute("data-doc") + (lang === "de" ? ".de.md" : ".md");
+    });
     document.querySelectorAll("#lang-seg button").forEach(function (b) { b.classList.toggle("active", b.dataset.lang === lang); });
     document.title = t("pageTitle") + " — Qubic Report";
     renderAll(); Pulse.render(); renderOverview();

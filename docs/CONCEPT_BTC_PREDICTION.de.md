@@ -1,11 +1,17 @@
 # Konzept: BTC-Vorhersage der Ameisenkolonie (BPP-9000, ab Epoch 240)
 
+**English version:** [CONCEPT_BTC_PREDICTION.md](CONCEPT_BTC_PREDICTION.md). Beide Fassungen
+sagen dasselbe; eine Änderung an der einen wird auch in der anderen gemacht.
+
 > **Status (2026-11-18): Stufen 0, 1 und 2 umgesetzt.** Stufe 2 ist in §5a beschrieben. Die Mining-Seite liest die
 > Aufgabe live (Nachricht 80, K12-geprüft). Die Seite `dashboard/btc.html` ist verlinkt und zeigt
 > nur Richtungen, keine Kurse (Entscheidung §7.1). Die Anfrage an die Core-Entwickler steht in
 > [`BTC_CALL_REQUEST.md`](BTC_CALL_REQUEST.md) (Entscheidung §7.2: beides). Löst die
 > Schlussfolgerung „keine Prognose“ aus [`CONCEPT_BTC_ORACLE.de.md`](CONCEPT_BTC_ORACLE.de.md)
 > ab.
+>
+> **Seit v0.17.0 (2026-11-24):** Das Netz für den Tipp wird nach seiner Vorhersage gewählt, nicht
+> mehr nach dem Score — siehe [`CONCEPT_BTC_RANKING.de.md`](CONCEPT_BTC_RANKING.de.md).
 
 Erstellt: 2026-11-18 · Geprüft gegen: `qubic/core` @ `2fee231` (Release v1.313.0), Live-Node
 Epoch 240, Tick 91 910 766
@@ -46,7 +52,7 @@ Quelle: `doc/ant_colony_mining.md`, `src/mining/price_feed.h`, `src/mining/score
                                               ▲
    Netz: 1024 ternäre Neuronen, je 3 Nachbarn + LUT, **keine Eingänge**.
    Es läuft aus einem festen Startzustand und gibt pro Schritt ein Trit aus:
-   0 = runter · 1 = rauf · 2 = „weiß nicht“ (zählt als Fehler)
+   0 = runter · 1 = rauf · 2 = „weiß nicht“ (zählt im Scorer als Fehler)
 ```
 
 - **Fehler** = Anzahl falscher Trits im Rahmen von 8760 Stunden. Weniger ist besser.
@@ -62,6 +68,9 @@ Quelle: `doc/ant_colony_mining.md`, `src/mining/price_feed.h`, `src/mining/score
 - **Neue Stunden**: Der Leader jedes 5. Ticks darf das Oracle für die nächste fehlende Stunde
   fragen, frühestens 300 s nach der vollen Stunde. Nach 24 h Ausfall wird die Stunde mit dem
   Vorstundenkurs aufgefüllt (Flag-Bit 0) und als „rauf“ gewertet.
+
+(Seit v0.17.0 zählt unsere Seite ein „weiß nicht“ als Enthaltung, auf CFBs Wort — siehe
+`CONCEPT_BTC_RANKING.de.md`.)
 
 ### Was daran Vorhersage ist und was nicht
 
