@@ -217,10 +217,11 @@ soon as the previous step is done):
 1. Read the task and price series from the node, check `dataHash`.
 2. Read new solutions from the Bob logs (`scan`).
 3. Score line: up to 25 walks. Every verified network gets its 168 trits in `colony_outputs`.
-4. Side lines: up to 10 walks together, a different one first each time.
-5. Ranking from every stored network of the epoch (`_rank`).
-6. Write both calls for the coming hour, provided it has not begun and the oracle does not know
+4. Ranking from every stored network of the epoch (`_rank`).
+5. Write both calls for the coming hour, provided it has not begun and the oracle does not know
    it yet.
+6. Side lines: up to 10 walks together, a different one first each time. Their new networks join
+   the ranking on the next step (since v0.17.2; before, the side lines came before the call).
 
 **On deploy (restart):** the replayer starts afresh and loads, per lineage, the network saved last
 (`colony_nets`). The score call therefore continues without a gap. Networks from before v0.17.0
@@ -246,6 +247,18 @@ hours no network has 12 judged hours. The accuracy rule then falls back to the s
 **Settings** (environment variables; changed only through a new image, because we have no server
 access): `QDR_COLONY_LINES`, `QDR_COLONY_SIDE_WALKS`, `QDR_COLONY_WINDOW_H`,
 `QDR_COLONY_MIN_DECIDED`, see the README.
+
+**Incident on the first deploy (v0.17.0, 2026-11-24):** on report.qubic.tools the new tracker
+completed no step for over 30 minutes. There was no ranking and no call for the next hour. The
+cause was the query "best tip per identity" (`best_ant_solutions_per_identity`): as a window
+function it sorted every accepted solution of the epoch on every step, and an epoch holds millions
+of them. Measured at 3 M rows: 54 s on a desktop, against 0.04 s for the old query. The live test
+before had read only the first 6,000 ticks and could not show it. **Fixed in v0.17.2:** the query
+reads the (epoch, score) index in score order and stops at the fourth identity (0.055 s, same
+result). In addition the tracker now writes the calls **before** the side lines, so they can never
+hold up the call. Side lines ask at most 5 nodes for tick data and read missing ancestors again
+only once per line. **Lesson:** run live tests with the data volume of a full epoch, not only its
+beginning.
 
 **Way back:** push image v0.16.14 again. The new tables do not disturb the old version. The calls
 of both rules stay stored.

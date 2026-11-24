@@ -221,10 +221,11 @@ oder sobald der vorige Schritt fertig ist):
 2. Neue Lösungen aus den Bob-Logs lesen (`scan`).
 3. Score-Linie: bis zu 25 Walks. Jedes geprüfte Netz bekommt seine 168 Trits in
    `colony_outputs`.
-4. Nebenlinien: zusammen bis zu 10 Walks, jedes Mal eine andere zuerst.
-5. Rangliste aus allen gespeicherten Netzen der Epoche (`_rank`).
-6. Für die kommende Stunde beide Tipps schreiben, sofern sie noch nicht begonnen hat und das
+4. Rangliste aus allen gespeicherten Netzen der Epoche (`_rank`).
+5. Für die kommende Stunde beide Tipps schreiben, sofern sie noch nicht begonnen hat und das
    Oracle sie noch nicht kennt.
+6. Nebenlinien: zusammen bis zu 10 Walks, jedes Mal eine andere zuerst. Ihre neuen Netze kommen
+   im nächsten Schritt in die Rangliste (seit v0.17.2; vorher standen die Nebenlinien vor dem Tipp).
 
 **Beim Deploy (Neustart):** Der Replayer startet neu und lädt pro Linie das zuletzt gespeicherte
 Netz (`colony_nets`). Der Score-Tipp läuft deshalb ohne Lücke weiter. Netze aus der Zeit vor
@@ -251,6 +252,18 @@ auf den Score zurück (`fallback` = 1), und die Seite sagt das.
 **Stellschrauben** (Umgebungsvariablen, ändern nur per neuem Image, weil wir keinen Serverzugang
 haben): `QDR_COLONY_LINES`, `QDR_COLONY_SIDE_WALKS`, `QDR_COLONY_WINDOW_H`,
 `QDR_COLONY_MIN_DECIDED`, siehe README.
+
+**Vorfall beim ersten Deploy (v0.17.0, 2026-11-24):** Der neue Tracker schloss auf
+report.qubic.tools über 30 Minuten keinen Schritt ab. Es gab keine Rangliste und keinen Tipp für
+die nächste Stunde. Ursache war die Abfrage „bester Tipp je Identität“ (`best_ant_solutions_per_identity`):
+Als Fensterfunktion sortierte sie in jedem Schritt alle angenommenen Lösungen der Epoche, und eine
+Epoche hat Millionen davon. Gemessen bei 3 Mio. Zeilen: 54 s auf einem Desktop, gegenüber 0,04 s
+für die alte Abfrage. Der Live-Test vorher hatte nur die ersten 6.000 Ticks gelesen und konnte das
+nicht zeigen. **Behoben in v0.17.2:** Die Abfrage liest den Index (epoch, score) in Score-Reihenfolge
+und hört bei der vierten Identität auf (0,055 s, gleiches Ergebnis). Außerdem schreibt der Tracker
+die Tipps jetzt **vor** den Nebenlinien, damit diese den Tipp nie aufhalten. Nebenlinien fragen
+höchstens 5 Nodes nach Tick-Daten und laden fehlende Vorfahren je Linie nur einmal nach.
+**Lehre:** Live-Tests mit der Datenmenge einer vollen Epoche machen, nicht nur mit dem Anfang.
 
 **Rückweg:** Image v0.16.14 erneut pushen. Die neuen Tabellen stören die alte Version nicht.
 Die Tipps beider Regeln bleiben gespeichert.

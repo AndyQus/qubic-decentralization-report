@@ -111,6 +111,7 @@ SIDE_WALKS_PER_STEP = int(os.environ.get("QDR_COLONY_SIDE_WALKS", "10"))
 RECORD_WINDOW_H = int(os.environ.get("QDR_COLONY_WINDOW_H", "48"))
 RECORD_MIN_DECIDED = int(os.environ.get("QDR_COLONY_MIN_DECIDED", "12"))
 RANKING_SHOWN = 10
+SIDE_PEERS = 5
 
 
 # -- logs ------------------------------------------------------------------------
@@ -462,6 +463,7 @@ class Tracker:
         self.epoch: Optional[int] = None
         self.verified: Optional[dict] = None     # newest verified node of the best-score lineage
         self.bad: set[str] = set()               # side-line nodes that did not reproduce their error
+        self.heal_tried: set[str] = set()        # side-line tips whose gaps were read again once
         self.side_turn = 0
         self.lock = threading.Lock()
 
@@ -511,6 +513,7 @@ class Tracker:
             self.rep.close()
             self.epoch, self.verified = epoch, None
             self.bad = set()
+            self.heal_tried = set()
             self.store.prune_ant_solutions(keep_from_epoch=epoch - 1)
 
         scanned = scan(self.store, bob, epoch, info.initial_tick, indexed_head(bob, info.tick))
@@ -562,14 +565,19 @@ class Tracker:
         v = self.verified
         score_net = v if v.get("complete") and ref_id(v) in self.rep.known else None
 
-        # The next identities' best lineages, a few walks each step, in turn.
-        lines = [{"pubkey": best["pubkey"], "depth": i + 1, "lineage": len(chain), "score": best["score"],
-                  "state": "tracking" if complete else "catching-up"}]
-        lines += self._side_lines(epoch, tips[1:], bob, peers, live_ticks)
-
+        # The calls first, from what is rebuilt so far: the side lines below
+        # can take minutes (tick data from nodes, walks), and the coming hour's
+        # call must never wait on them.
         hours = hour_points(task, series)
         ranking, chosen = self._rank(epoch, hours)
         call = self._call(epoch, task, series, score_net, chosen)
+
+        # The next identities' best lineages, a few walks each step, in turn.
+        lines = [{"pubkey": best["pubkey"], "depth": i + 1, "lineage": len(chain), "score": best["score"],
+                  "state": "tracking" if complete else "catching-up"}]
+        # (The ranking shown is the one the call was made from; networks rebuilt
+        # below join it on the next step.)
+        lines += self._side_lines(epoch, tips[1:], bob, peers, live_ticks)
         if walked:
             self.walk_s = walk_time / walked
         sel = {"rule": "accuracy" if chosen else "score-fallback", "window_h": RECORD_WINDOW_H,
@@ -659,10 +667,17 @@ class Tracker:
         budget = SIDE_WALKS_PER_STEP
         k = self.side_turn % len(tips)
         self.side_turn += 1
+        # Tick data for a side line's anchors from the first few nodes only:
+        # each node that lacks a tick costs its 15 s timeout, and the best-score
+        # line already asks them all.
+        near = peers[:SIDE_PEERS]
         for tip in tips[k:] + tips[:k]:
             row = {"pubkey": tip["pubkey"], "score": tip["score"]}
             chain = lineage(self.store, tip["tick"], tip["tx_index"])
-            if chain is None:
+            if chain is None and ref_id(tip) not in self.heal_tried:
+                # One attempt per tip: a gap the node cannot fill stays a gap,
+                # and retrying it every step would cost Bob calls for nothing.
+                self.heal_tried.add(ref_id(tip))
                 heal(self.store, bob, epoch, tip["tick"], tip["tx_index"], max_ticks=10)
                 chain = lineage(self.store, tip["tick"], tip["tx_index"])
             if chain is None:
@@ -676,7 +691,7 @@ class Tracker:
                 depth = max((i + 1 for i, n in enumerate(chain) if ref_id(n) in self.rep.known), default=0)
                 out.append(dict(row, depth=depth, state="waiting"))
                 continue
-            adv = self._advance(epoch, chain, peers, live_ticks, budget)
+            adv = self._advance(epoch, chain, near, live_ticks, budget)
             budget -= adv["walked"]
             if adv["state"] == "mismatch":
                 self.bad.add(ref_id(adv["node"]))

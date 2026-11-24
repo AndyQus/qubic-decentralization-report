@@ -501,3 +501,21 @@ def test_an_unsure_call_is_shown_as_an_abstention(client):
     h = [h for h in body["hours"] if h["hour"] == BASE + 2][0]
     assert h["hit"] is None and h["abstained"] is True
     assert body["stats"]["epoch"]["calls"] == 0 and body["stats"]["epoch"]["unsure"] == 1
+
+
+def test_a_side_line_without_tick_data_never_holds_up_the_call(live):
+    # The second tree's anchor tick is served by no node.
+    live.put_ant_solutions(240, [colony.parse_solution(entry(210, 4, anchor=777, score=4340, pk=b"\x03" * 32))])
+    st = colony.Tracker(live, FakeReplayer({"200:0": 4300, "300:1": 4200}, trits="0001")).step(object(), ["x"])
+    assert st["lines"][1]["state"] == "anchor-unavailable"
+    assert len(live.btc_calls()) == 1 and len(live.btc_calls_accuracy()) == 1
+
+
+def test_the_best_tip_per_identity_comes_from_the_score_index(tmp_path):
+    store = Store(str(tmp_path / "q.db"))
+    store.put_ant_solutions(240, [colony.parse_solution(e) for e in (
+        entry(100, 0, score=4000, pk=b"\x01" * 32), entry(101, 0, score=3900, pk=b"\x01" * 32),
+        entry(102, 0, score=3950, pk=b"\x02" * 32), entry(103, 0, score=3950, pk=b"\x03" * 32),
+        entry(104, 0, score=3800, pk=b"\x01" * 32))])
+    tips = store.best_ant_solutions_per_identity(240, 2)
+    assert [(t["tick"], t["pubkey"][:2]) for t in tips] == [(104, "01"), (103, "03")]   # tie: newer first

@@ -1413,16 +1413,30 @@ class Store:
                 (int(epoch), int(limit))).fetchall()
         return [dict(r) for r in rows]
 
-    def best_ant_solutions_per_identity(self, epoch: int, limit: int) -> list[dict]:
+    def best_ant_solutions_per_identity(self, epoch: int, limit: int, scan_cap: int = 200_000) -> list[dict]:
         """The best solution of each identity (lowest error; among equals the
-        newest), best identities first -- one tip per tree."""
+        newest), best identities first -- one tip per tree.
+
+        Walks the (epoch, score) index in score order and stops at `limit`
+        identities. A window function over the epoch sorted every row: 54 s for
+        3 M solutions on a desktop (2026-11-24), and an epoch holds millions,
+        which stalled the v0.17.0 tracker on report.qubic.tools.
+        """
+        out: list[dict] = []
+        seen: set = set()
         with self._lock:
-            rows = self._conn.execute(
-                "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY pubkey "
-                "ORDER BY score ASC, tick DESC) AS rn FROM ant_solutions WHERE epoch=?) "
-                "WHERE rn = 1 ORDER BY score ASC, tick DESC LIMIT ?",
-                (int(epoch), int(limit))).fetchall()
-        return [{k: r[k] for k in r.keys() if k != "rn"} for r in rows]
+            cur = self._conn.execute(
+                "SELECT * FROM ant_solutions WHERE epoch=? ORDER BY score ASC, tick DESC", (int(epoch),))
+            for n, r in enumerate(cur):
+                if r["pubkey"] not in seen:
+                    seen.add(r["pubkey"])
+                    out.append(dict(r))
+                    if len(out) >= int(limit):
+                        break
+                if n >= scan_cap:
+                    break
+            cur.close()
+        return out
 
     def ant_solution_count(self, epoch: int) -> int:
         with self._lock:
