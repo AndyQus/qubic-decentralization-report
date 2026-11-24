@@ -3,6 +3,9 @@
 Stand: 2026-11-24 · umgesetzt in **v0.17.0**, live ab Epoche 241 (Wechsel am 2026-11-25; Epoche 240 war die Testepoche)
 Baut auf `docs/CONCEPT_BTC_PREDICTION.de.md` auf (Nachbau der Netze, Stufe 2).
 
+**English version:** [CONCEPT_BTC_RANKING.md](CONCEPT_BTC_RANKING.md). Beide Fassungen sagen
+dasselbe; eine Änderung an der einen wird auch in der anderen gemacht.
+
 Dieses Dokument hält fest, **warum** die BTC-Seite ihr Netz so wählt, wie sie es tut. Grundlage
 ist der Austausch mit Come-from-Beyond (CFB) vom 2026-11-24. Wer später etwas ändert, findet
 hier, was CFB gesagt hat, was wir daraus gemacht haben und welche Werte noch offen sind.
