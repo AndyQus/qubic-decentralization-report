@@ -46,6 +46,17 @@ REQUEST_PRICE_SERIES = 78
 RESPOND_PRICE_SERIES = 79
 REQUEST_BPP9000_TASK_DATA = 80
 RESPOND_BPP9000_TASK_DATA = 81
+# Since v1.314.0 (epoch 241): the prediction phase (core doc 2.4a, 2.7f-g).
+REQUEST_PREDICTION_PHASE = 82
+RESPOND_PREDICTION_PHASE = 83
+REQUEST_PREDICTION_IDENTITY = 84
+RESPOND_PREDICTION_IDENTITY = 85
+PREDICTION_PHASE_SIZE = 24
+PREDICTION_IDENTITY_SIZE = 24 + 168
+# The core's switch rule (public_settings.h); the reply does not carry it.
+PREDICTION_SWITCH_COMPUTORS = 226
+PREDICTION_MIN_CORRECT = 12
+PREDICTION_FIRST_EPOCH = 241
 
 # Fixed packed struct sizes, asserted in the core's own headers.
 EPOCH_CONTEXT_SIZE = 120
@@ -295,6 +306,62 @@ def query_price_series(ip: str, from_hour: int, count: int,
         return None
 
 
+def parse_prediction_phase(p: bytes) -> dict:
+    """RespondPredictionPhase (24 bytes): switchTick (0 = training), switchFirstHour,
+    computorsQualified, threshold, deadlineSeconds, foldedDigest."""
+    if len(p) < PREDICTION_PHASE_SIZE:
+        raise ValueError("short prediction phase reply")
+    switch_tick, first_hour, qualified, threshold, deadline, digest = struct.unpack_from("<6I", p, 0)
+    return {"phase": "prediction" if switch_tick else "training",
+            "switch_tick": switch_tick or None, "first_hour": first_hour or None,
+            "computors_qualified": qualified, "computors_needed": PREDICTION_SWITCH_COMPUTORS,
+            "threshold": threshold, "deadline_s": deadline, "min_correct": PREDICTION_MIN_CORRECT,
+            "folded_digest": digest}
+
+
+def query_prediction_phase(ip: str, timeout: float = DEFAULT_TIMEOUT_S) -> dict | None:
+    """Training or prediction, and how many computors have qualified (message 82).
+    Nodes before v1.314.0 do not answer it."""
+    got = _ask(ip, REQUEST_PREDICTION_PHASE, RESPOND_PREDICTION_PHASE, PREDICTION_PHASE_SIZE, timeout)
+    if got is None:
+        return None
+    try:
+        out = parse_prediction_phase(got[0])
+    except ValueError:
+        return None
+    out["source_ip"] = ip
+    return out
+
+
+def parse_prediction_identity(p: bytes) -> dict:
+    """RespondPredictionIdentity (192 bytes): firstHour (0 = not qualified), hours,
+    correct, solutionTick, solutionIndexInTick, baseHour, answers[168]
+    (answers[i] is for hour baseHour + 1 + i; 0 down, 1 up, 2 none)."""
+    if len(p) < PREDICTION_IDENTITY_SIZE:
+        raise ValueError("short prediction identity reply")
+    first_hour, hours, correct, sol_tick, sol_index, base_hour = struct.unpack_from("<6I", p, 0)
+    return {"qualified": bool(first_hour), "first_hour": first_hour or None,
+            "hours": hours, "correct": correct,
+            "accuracy": round(correct / hours, 4) if hours else None,
+            "ranked_by_accuracy": correct >= PREDICTION_MIN_CORRECT,
+            "solution": {"tick": sol_tick, "index": sol_index} if sol_tick else None,
+            "base_hour": base_hour, "answers": bytes(p[24:24 + 168]).hex()}
+
+
+def query_prediction_identity(ip: str, pubkey_hex: str, timeout: float = DEFAULT_TIMEOUT_S) -> dict | None:
+    """One identity's official counters and answers (message 84)."""
+    got = _ask(ip, REQUEST_PREDICTION_IDENTITY, RESPOND_PREDICTION_IDENTITY, PREDICTION_IDENTITY_SIZE,
+               timeout, bytes.fromhex(pubkey_hex))
+    if got is None:
+        return None
+    try:
+        out = parse_prediction_identity(got[0])
+    except ValueError:
+        return None
+    out["source_ip"] = ip
+    return out
+
+
 REQUEST_TICK_DATA = 16
 BROADCAST_FUTURE_TICK_DATA = 8
 # TickData: 16 header bytes, timelock, 4096 transaction digests, 1024 contract fees,
@@ -422,6 +489,16 @@ def collect(peers: list[str] | None = None, attempts: int = 5) -> dict:
 
     task, series = read_feed(probed, info)
 
+    # The core's own prediction phase, from v1.314.0 (epoch 241) on. Older nodes
+    # never answer message 82, so it is not asked before: each silent node would
+    # cost the full timeout on every refresh.
+    prediction = None
+    if info is not None and info.epoch >= PREDICTION_FIRST_EPOCH:
+        for ip in probed[:3]:
+            prediction = query_prediction_phase(ip, timeout=3.0)
+            if prediction is not None:
+                break
+
     bundle: dict = {
         "status": "live",
         "fetched_at": int(time.time()),
@@ -447,6 +524,8 @@ def collect(peers: list[str] | None = None, attempts: int = 5) -> dict:
     # apart from "task" so /v1/mining, which every live page polls, stays small.
     bundle["btc"] = {"hours": antask.hours_block(task, series),
                      "epoch": task["epoch"] if task else None}
+    # None: not asked (before epoch 241) or no node answered.
+    bundle["prediction"] = prediction
 
     if info is not None:
         bundle["epoch"] = {

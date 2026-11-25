@@ -131,6 +131,8 @@ body { background: var(--bg); }
 .slot .g.down { background: var(--down); color: var(--cell-ink); border-color: transparent; }
 .slot .g.unsure { color: var(--warn); border-color: var(--warn); }
 .slot .txt { font-size: 14px; color: var(--muted); line-height: 1.4; }
+.status.phase { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; margin-top: 2px; }
+.slot .txt.cap { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; }
 .slot .txt b { color: var(--text); }
 .progress { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--muted); }
 .progress .bar { flex: 0 0 140px; margin-top: 0; }
@@ -475,6 +477,7 @@ body { background: var(--bg); }
     <div class="hero-left">
       <h2 class="hero-title" data-i18n="heroTitle">Colony vs Bitcoin</h2>
       <p class="status" id="status" data-i18n="loading">Reading from a Qubic node …</p>
+      <p class="status phase" id="phase" hidden></p>
     </div>
   <!-- ── The next hour, and the colony's call for it ─────────────────── -->
     <section class="card now-card" id="now-card">
@@ -712,6 +715,12 @@ body { background: var(--bg); }
       slotRun: "Running", slotNext: "Next",
       sRun: "call <b>{c}</b> · fixed {f} · result from {t}", sUp: "call <b>{c}</b> · fixed {t}",
       sRunNone: "no call for this hour", sUpNone: "call follows before {t}",
+      sCapNone: "no call: the epoch's {n} hours are used up ⓘ",
+      phTrain: "Network in training: {q} of {n} computors qualified for the prediction ⓘ",
+      phTrainTip: "Since v1.314.0 (epoch 241) the core counts predictions itself. An epoch starts in training. An identity qualifies with a solution at shift 1 or more, or at shift 0 with at most {th} errors. Once {n} computors have qualified, the epoch switches to prediction (not when 24 hours or less are left): from then on the core counts each identity's correct hours, ranks by accuracy from {mc} correct hours, and gives the computor seats from that ranking. Until then this page's own count is the only one.",
+      phPred: "Network in prediction since {t}: the core counts every identity's hits itself ⓘ",
+      phPredTip: "The epoch switched in tick {tick}, when {q} computors had qualified. Each qualified identity's network answers up or down for every coming hour; an answer is final {d} minutes before the hour ends. The core counts correct and counted hours per identity, ranks by accuracy from {mc} correct hours (a missing answer counts as wrong) and gives the computor seats from that ranking. This page's calls are still made by its own rule; the official ranking will be shown next to it.",
+      capTip: "Each epoch has room for {n} hourly calls: the networks are mined on {n} hours, from {from} to {to}. The hours after that until the epoch changes ({end}) get no call — not on this page, and not in the network itself (qubic/core predicts the same {n} hours). Calls resume in the new epoch once its networks are rebuilt.",
       progTxt: "rebuilding the best-score network's lineage: {d} of {n} checked · about {m} min left",
       callWhen: "Each call is fixed as soon as the hour before it is on-chain — about 55 min before its own hour begins, so it sees none of the move it calls.",
       callCfb: "Why it is done this way: on 24 November 2026 Come-from-Beyond, Qubic's founder, pointed out that choosing the network by its score is a stopgap — the network that predicts best should make the call. Since v0.17.0 this page does exactly that, and counts a \"?\" as an abstention, as he said. The best-score network still calls every hour alongside, and the two rules are compared under the hit rate. The whole exchange and the reasoning are in the concept linked below.",
@@ -813,6 +822,12 @@ body { background: var(--bg); }
       slotRun: "Läuft", slotNext: "Als Nächstes",
       sRun: "Tipp <b>{c}</b> · festgelegt {f} · Ergebnis ab {t}", sUp: "Tipp <b>{c}</b> · festgelegt {t}",
       sRunNone: "kein Tipp für diese Stunde", sUpNone: "Tipp folgt vor {t}",
+      sCapNone: "kein Tipp: die {n} Stunden der Epoche sind ausgeschöpft ⓘ",
+      phTrain: "Netzwerk in der Trainingsphase: {q} von {n} Computoren für die Vorhersage qualifiziert ⓘ",
+      phTrainTip: "Seit v1.314.0 (Epoche 241) zählt der Core Vorhersagen selbst. Eine Epoche beginnt im Training. Eine Identität qualifiziert sich mit einer Lösung mit Shift 1 oder mehr oder mit Shift 0 und höchstens {th} Fehlern. Sobald sich {n} Computoren qualifiziert haben, schaltet die Epoche in die Vorhersage um (nicht mehr, wenn höchstens 24 Stunden übrig sind): Ab dann zählt der Core die getroffenen Stunden jeder Identität, rankt ab {mc} Treffern nach Trefferquote und vergibt die Computor-Plätze nach dieser Rangliste. Bis dahin ist die Zählung dieser Seite die einzige.",
+      phPred: "Netzwerk in der Vorhersagephase seit {t}: der Core zählt die Treffer jeder Identität selbst ⓘ",
+      phPredTip: "Die Epoche hat in Tick {tick} umgeschaltet, als sich {q} Computoren qualifiziert hatten. Das Netz jeder qualifizierten Identität antwortet für jede kommende Stunde mit Up oder Down; eine Antwort steht {d} Minuten vor dem Ende der Stunde fest. Der Core zählt getroffene und gezählte Stunden je Identität, rankt ab {mc} Treffern nach Trefferquote (keine Antwort zählt als falsch) und vergibt die Computor-Plätze nach dieser Rangliste. Die Tipps dieser Seite macht weiter ihre eigene Regel; die offizielle Rangliste wird daneben gezeigt.",
+      capTip: "Jede Epoche hat Platz für {n} Stunden-Tipps: Die Netze werden auf {n} Stunden gemined, von {from} bis {to}. Die Stunden danach bis zum Epochenwechsel ({end}) bekommen keinen Tipp — weder auf dieser Seite noch im Netzwerk selbst (qubic/core sagt dieselben {n} Stunden voraus). In der neuen Epoche geht es weiter, sobald ihre Netze nachgebaut sind.",
       progTxt: "Nachbau der Linie des Score-besten Netzes: {d} von {n} geprüft · noch ca. {m} Min.",
       callWhen: "Jeder Tipp wird festgelegt, sobald die Stunde davor on-chain ist — rund 55 Min. bevor seine eigene Stunde beginnt; von ihrer Bewegung sieht er nichts.",
       callCfb: "Warum es so gemacht wird: Am 24. November 2026 hat Come-from-Beyond, der Gründer von Qubic, darauf hingewiesen, dass die Wahl des Netzes nach dem Score nur eine Übergangslösung ist — den Tipp soll das Netz geben, das am besten vorhersagt. Seit v0.17.0 macht diese Seite genau das und zählt ein „?“, wie er sagte, als Enthaltung. Das Netz mit dem besten Score tippt weiter jede Stunde mit, und beide Regeln werden unter der Trefferquote verglichen. Das ganze Gespräch und die Begründung stehen im unten verlinkten Konzept.",
@@ -920,6 +935,23 @@ body { background: var(--bg); }
     if (D.stale) s += " " + t("stale");
     el.textContent = s;
     el.className = "status" + (ok && !D.stale ? "" : " bad");
+    renderPhase();
+  }
+  // The core's own prediction phase (v1.314.0+); hidden while the API has none.
+  function renderPhase() {
+    var el = $("phase"), p = D && D.prediction, task = (D && D.task) || {};
+    if (!p || !p.phase) { el.hidden = true; el.removeAttribute("title"); return; }
+    var a = { q: p.computors_qualified, n: p.computors_needed, th: p.threshold, mc: p.min_correct,
+              d: Math.round((p.deadline_s || 0) / 60), tick: p.switch_tick };
+    if (p.phase === "prediction") {
+      // first_hour is counted from base_hour like every hour: it ends at base_at + (h - base) h.
+      a.t = p.first_hour && task.base_at && task.base_hour != null
+        ? dayHm(task.base_at + (p.first_hour - task.base_hour - 1) * 3600) : "–";
+      el.textContent = t("phPred", a); el.title = t("phPredTip", a);
+    } else {
+      el.textContent = t("phTrain", a); el.title = t("phTrainTip", a);
+    }
+    el.hidden = false;
   }
 
   function liveHours() { return ((D && D.hours) || []).filter(function (h) { return h.live; }); }
@@ -1035,6 +1067,22 @@ body { background: var(--bg); }
     el.className = "g" + (c === 1 ? " up" : c === 0 ? " down" : c === 2 ? " unsure" : "");
   }
   function word(c) { return t(c === 1 ? "callUp" : c === 0 ? "callDown" : "callUnsure"); }
+  // The epoch's networks are mined on SHIFT_CAP hours after base_hour; an hour
+  // past them gets no call from anyone (core doc 2.4a), so it is not "pending".
+  // Null when the hour is inside the epoch's hours or the task is unknown.
+  function capInfo(h) {
+    var task = (D && D.task) || {}, base = task.base_hour, cap = task.shift_cap;
+    if (h == null || base == null || !cap || !task.base_at || h - base <= cap) return null;
+    var ends = D.epoch && D.epoch.ends_at;
+    return { text: t("sCapNone", { n: cap }),
+             tip: t("capTip", { n: cap, from: dayHm(task.base_at), to: dayHm(task.base_at + cap * 3600),
+                                end: ends ? dayHm(ends) : "–" }) };
+  }
+  function setSlotTxt(el, cap) {
+    el.classList.toggle("cap", !!cap);
+    if (cap) { el.textContent = cap.text; el.title = cap.tip; } else el.removeAttribute("title");
+    return !!cap;
+  }
   // The card: the hour under way (judged when the oracle stores it) and the
   // hour after it (called before it begins). While the best network is still
   // being rebuilt, a bar says how far and roughly how long.
@@ -1046,8 +1094,12 @@ body { background: var(--bg); }
     $("up-when").textContent = ok ? hm(o.next_at) + "–" + hm(o.next_at + 3600) : "–";
     glyph($("run-g"), run ? run.call : null);
     glyph($("up-g"), up ? up.call : null);
-    $("run-txt").innerHTML = run ? t("sRun", { c: esc(word(run.call)), f: esc(hm(run.made_at)), t: esc(hm(o.next_due_at)) }) : esc(t("sRunNone"));
-    if (up) {
+    var runCap = !run && ok ? capInfo(o.next_hour) : null, upCap = !up && ok ? capInfo(o.next_hour + 1) : null;
+    if (!setSlotTxt($("run-txt"), runCap))
+      $("run-txt").innerHTML = run ? t("sRun", { c: esc(word(run.call)), f: esc(hm(run.made_at)), t: esc(hm(o.next_due_at)) }) : esc(t("sRunNone"));
+    if (setSlotTxt($("up-txt"), upCap)) {
+      // past the epoch's hours: the title says why
+    } else if (up) {
       $("up-txt").innerHTML = t("sUp", { c: esc(word(up.call)), t: esc(hm(up.made_at)) });
     } else if (c.reason && c.reason !== "catching-up" && c.reason !== "tracking" && REASON[c.reason]) {
       $("up-txt").textContent = t(REASON[c.reason]);
@@ -1373,8 +1425,10 @@ body { background: var(--bg); }
     var ahead = [];
     if (verified && o.next_at && o.next_at > last.at) {
       var run = call.running && call.running.hour === o.next_hour ? call.running : null;
-      ahead.push({ from: o.next_at - 3600, to: o.next_at, call: run ? run.call : null, key: "dayRun" });
-      ahead.push({ from: o.next_at, to: o.next_at + 3600, call: call.upcoming ? call.upcoming.call : null, key: "dayNext" });
+      ahead.push({ from: o.next_at - 3600, to: o.next_at, call: run ? run.call : null, key: "dayRun",
+                   cap: run ? null : capInfo(o.next_hour) });
+      ahead.push({ from: o.next_at, to: o.next_at + 3600, call: call.upcoming ? call.upcoming.call : null, key: "dayNext",
+                   cap: call.upcoming ? null : capInfo(o.next_hour + 1) });
     }
 
     var tMin = first.at, tMax = ahead.length ? ahead[ahead.length - 1].to : last.at;
@@ -1578,7 +1632,7 @@ body { background: var(--bg); }
     svg.addEventListener("mouseleave", function () { DayChart.sel = null; showFocus(null); });
     ahead.forEach(function (f) {
       col(X(f.from), X(f.to) - X(f.from), t(f.key) + ": " + hm(f.from) + "–" + hm(f.to) + " · " +
-        (f.call != null ? t("dayTipCall", { c: word(f.call) }) : t("dayTipNone")));
+        (f.call != null ? t("dayTipCall", { c: word(f.call) }) : f.cap ? f.cap.text.replace(" ⓘ", "") + "\n\n" + f.cap.tip : t("dayTipNone")));
     });
 
     svg.appendChild(focus);   // last, above the hover columns; it takes no pointer events

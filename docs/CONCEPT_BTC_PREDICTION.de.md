@@ -279,6 +279,31 @@ Die ursprünglichen Fragen:
    Offline-Beweis machen und die Anfrage schreiben.
 3. **Seite verlinkt oder zunächst unverlinkt?**
 
+## 8. Epochenende: die letzten Stunden ohne Tipp (2026-11-25)
+
+**Beobachtung:** Am Morgen des 25.11. zeigte die Seite für die laufende und die nächste Stunde
+nur „?“, dazu „Tipp folgt vor 10:00“. Der Tracker lief (Zustand `tracking`, alle 231 Netze der
+Linie geprüft), schrieb aber keinen Tipp mehr.
+
+**Ursache, kein Fehler:** Ein Netz hat genau `SHIFT_CAP` = 168 Ausgaben nach dem ersten Rahmen,
+eine je Stunde `base_hour + 1 … base_hour + 168`. In Epoche 240 war `base_hour` = 40316
+(18.11., 08:00 UTC), die letzte Stunde mit Tipp endete also am 25.11. um 08:00 UTC. Die Epoche
+endet aber erst um 12:00 UTC. Für die Stunden dazwischen gibt `_call` nichts zurück
+(`j >= SHIFT_CAP`). Auch der Core sagt nur diese 168 Stunden voraus
+(`doc/ant_colony_mining.md` §2.4a: `H = baseHour + 1 .. baseHour + SHIFT_CAP`). Für diese
+Stunden gibt es also nirgends eine Vorhersage, auch nicht im Netzwerk selbst. Weil Epoche 240
+die erste mit Live-Feed ist, fiel das erst jetzt auf.
+
+**Wie lang die Lücke ist:** Sie hängt davon ab, wie weit `base_hour` vor dem Epochenstart liegt.
+In Epoche 240 waren es 4 Stunden. Nach dem Wechsel kommt die Zeit hinzu, bis die neuen Netze
+nachgebaut sind.
+
+**Auf der Seite (v0.17.3):** Liegt die laufende oder die nächste Stunde hinter den 168 Stunden
+der Epoche, steht dort „kein Tipp: die 168 Stunden der Epoche sind ausgeschöpft ⓘ“. Ein Tooltip
+erklärt es, auf Deutsch und Englisch, auch im Tagesdiagramm. Vorher stand dort fälschlich
+„Tipp folgt vor …“. Der Hinweis erscheint nur in diesem Zeitraum (`capInfo` in `btc.html`
+rechnet aus `task.base_hour`, `task.shift_cap` und `oracle.next_hour`).
+
 ## Quellen
 
 - `qubic/core` @ `2fee231`: `doc/ant_colony_mining.md` §2.3a, §2.7d–e; `src/mining/price_feed.h`;

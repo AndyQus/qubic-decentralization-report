@@ -270,6 +270,29 @@ The original questions:
    write the request.
 3. **Page linked or unlinked at first?**
 
+## 8. End of the epoch: the last hours without a call (2026-11-25)
+
+**Observation:** on the morning of 25 Nov the page showed only "?" for the running and the next
+hour, with "call follows before 10:00". The tracker was running (state `tracking`, all 231
+networks of the lineage checked) but wrote no more calls.
+
+**Cause, not a bug:** a network has exactly `SHIFT_CAP` = 168 outputs after the first frame, one
+per hour `base_hour + 1 … base_hour + 168`. In epoch 240 `base_hour` was 40316 (18 Nov, 08:00
+UTC), so the last hour with a call ended on 25 Nov at 08:00 UTC. The epoch only ends at 12:00
+UTC. For the hours in between `_call` returns nothing (`j >= SHIFT_CAP`). The core, too, predicts
+only these 168 hours (`doc/ant_colony_mining.md` §2.4a: `H = baseHour + 1 .. baseHour +
+SHIFT_CAP`). So these hours have no prediction anywhere, not even in the network itself. Epoch 240
+is the first with the live feed, which is why this showed only now.
+
+**How long the gap is:** it depends on how far `base_hour` lies before the epoch start; 4 hours
+in epoch 240. After the change, the time until the new networks are rebuilt comes on top.
+
+**On the page (v0.17.3):** when the running or the next hour lies past the epoch's 168 hours, it
+says "no call: the epoch's 168 hours are used up ⓘ", explained by a tooltip in German and English,
+also in the day chart. Before, it wrongly said "call follows before …". The note appears only in
+that stretch (`capInfo` in `btc.html` works it out from `task.base_hour`, `task.shift_cap` and
+`oracle.next_hour`).
+
 ## Sources
 
 - `qubic/core` @ `2fee231`: `doc/ant_colony_mining.md` §2.3a, §2.7d–e; `src/mining/price_feed.h`;

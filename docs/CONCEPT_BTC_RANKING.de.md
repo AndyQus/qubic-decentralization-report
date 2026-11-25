@@ -169,7 +169,8 @@ etwa eine halbe Stunde Rechenzeit eines Kerns pro Stunde.
 - **Anzahl der Linien (4):** Mehr Linien bedeuten mehr Kandidaten, aber auch mehr Rechenzeit.
   Prüfen, ob die Nebenlinien mithalten (`call.selection.lines`, Zustand `waiting`).
 - **Core-Ranking:** Sobald der Core die Vorhersagegüte selbst veröffentlicht (CFB, Antwort 3),
-  dessen Daten übernehmen und unser Ranking als Gegenprobe zeigen.
+  dessen Daten übernehmen und unser Ranking als Gegenprobe zeigen. Das kommt mit v1.314.0, siehe
+  Abschnitt 9.
 - **Rückmeldung an CFB:** Nach der ersten vollen Epoche die Zahlen „nach Bilanz gegen nach
   Score“ schicken.
 
@@ -267,3 +268,69 @@ höchstens 5 Nodes nach Tick-Daten und laden fehlende Vorfahren je Linie nur ein
 
 **Rückweg:** Image v0.16.14 erneut pushen. Die neuen Tabellen stören die alte Version nicht.
 Die Tipps beider Regeln bleiben gespeichert.
+
+---
+
+## 9. Offizielle Zählung im Core ab v1.314.0 (Stand 2026-11-25)
+
+**Anlass:** Am 25.11. fragte QubicChurch auf Discord, ob wir das v1.314.0-Update gesehen haben:
+Der Core zähle jetzt selbst getroffene und gezählte Stunden je ID und ranke ab 12 Treffern nach
+Trefferquote, also gebe es einen offiziellen Weg zu zählen.
+
+**Stand im Code:** Ein Release v1.314.0 gibt es noch nicht, aber `develop` enthält PR #1077
+„Bpp9000: live feed with prediction“ (gemergt am 23.11.) und die Parameter für Epoche 241
+(Tick 92260000). Regeln laut `doc/ant_colony_mining.md` §2.4a:
+
+- **Qualifikation:** eine Identität mit einer angenommenen Lösung mit Shift ≥ 1 oder mit Shift 0
+  und höchstens 3504 Fehlern.
+- **Umschalten:** Die Epoche wechselt von Training zu Vorhersage, sobald sich 226 Computoren
+  qualifiziert haben, aber nicht mehr, wenn höchstens 24 Stunden übrig sind. Ein Wechsel je Epoche.
+- **Antwort:** Je Stunde H die Ausgabe des Netzes an der Position für H (dieselben 168 Stunden
+  wie bei uns). Nach dem Umschalten ersetzt jede angenommene Lösung der Identität ihre Antworten
+  für die offenen Stunden, auch eine schwächere. Frist: 30 Minuten vor dem **Ende** von H.
+- **Zählung:** je Identität, über die ganze Vorhersagephase. Keine Antwort (?) zählt als gezählt,
+  aber nicht getroffen. Gerankt nach Quote ab 12 Treffern. Gleichstand: mehr gezählte Stunden,
+  dann Shift, Fehler, Tick.
+- **Die Sitze werden nach dieser Rangliste vergeben** (451 Computoren bleiben, 225 Plätze für die
+  Besten aus restlichen Computoren und Kandidaten). Damit hängt die Wahl der Computoren ab
+  v1.314.0 an der Vorhersagegüte; das betrifft das Hauptthema dieses Berichts.
+- **Lesbar:** Nachrichten 82/83 (Phase) und 84/85 (Stand einer Identität: `hours`, `correct`),
+  Operator-Befehl 21 (ganze Rangliste, nicht öffentlich), Event-Logs `PRED_SWI`, `PRED_ANS`
+  (Antwort je Identität und Stunde, mit der antwortenden Lösung), `PRED_RES` (Ergebnis je Stunde).
+
+**Unterschiede zu unserer Regel (v0.17):**
+
+| | Core v1.314.0 | wir v0.17 |
+|---|---|---|
+| Einheit | Identität, Zähler laufen über Netzwechsel weiter | einzelnes Netz |
+| Zeitraum | ganze Vorhersagephase | letzte 48 Stunden |
+| Schwelle | 12 Treffer | 12 gewertete Stunden |
+| „?“ | zählt als falsch | Enthaltung (so hatte CFB es am 24.11. gesagt) |
+| Frist | 30 min vor dem Ende der Stunde, also mitten in der Bewegung | vor dem Beginn der Stunde |
+| Wer tippt | jede qualifizierte Identität | ein Netz, nach Bilanz gewählt |
+
+**Offene Frage an die Core-Devs:** Die Frist liegt in der Mitte der Stunde, deren Bewegung
+vorhergesagt wird. Weil jede neue angenommene Lösung die offenen Antworten ersetzt, könnte ein
+Miner um :29 ein Netz veröffentlichen, dessen Antwort zur ersten halben Stunde passt. Ist das
+gewollt? (Im Discord-Antwortvorschlag vom 25.11. gestellt.)
+
+**Wann wir umstellen (Empfehlung):**
+
+1. **Jetzt nichts.** Bis zum Umschalten in Epoche 241 gibt es keine offiziellen Zahlen; unser
+   Tracker läuft weiter. Nach dem Epochenwechsel prüfen, ob er mit v1.314.0 sauber anläuft.
+2. **Sobald Epoche 241 umgeschaltet hat** (Nachricht 82/83 live auf einem Node prüfen, dann
+   gibt es echte Daten zum Testen): die offiziellen Zähler lesen und auf der Seite **neben**
+   unserer Rangliste zeigen, als Gegenprobe. Dazu die Sitz-Frage für den Bericht.
+   **Vorbereitet in v0.17.3:** `antnode` liest Nachricht 82/83 (Phase) und 84/85 (Stand einer
+   Identität), aber erst ab Epoche 241, weil ältere Nodes nicht antworten und jede stumme Node
+   den vollen Timeout kosten würde. `/v1/btc` liefert `prediction`, die Seite zeigt unter der
+   Statuszeile „Trainingsphase: x von 226 Computoren qualifiziert“ bzw. „Vorhersagephase seit …“
+   mit Tooltip (de + en). Vor dem Wechsel (25.11., 09:50 UTC) antwortete noch keine Node (alle
+   v1.313); das Wire-Format ist also erst nach 12:00 UTC live geprüft.
+3. **Ab Beginn von Epoche 242:** der offizielle Erstplatzierte gibt den Tipp der Seite, unsere
+   Regel läuft als Gegenprobe mit. Der Wechsel an einer Epochengrenze hält jede Epoche in sich
+   einheitlich. Dabei bleibt unsere Frist: gezählt wird die Antwort, die vor Beginn der Stunde
+   feststand, nicht die bis :30 nachgereichte.
+4. **„?“ angleichen:** In unserer Quote „?“ wie der Core als falsch zählen oder beide Zahlen
+   zeigen. Das widerspricht CFBs Aussage vom 24.11.; sie war vor dem Core-Code. Mit Schritt 3
+   entscheiden.

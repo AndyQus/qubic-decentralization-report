@@ -617,6 +617,10 @@ def btc(compact: bool = Query(False, description="Only the epoch's live hours, t
     the hours and the rates follow the accuracy rule where it has a call;
     `call.rules` shows both, `call.selection` the ranking, `stats.rules` both
     rates on the same hours. A "?" call is an abstention: `hit` stays null.
+
+    `prediction` is the network's own phase since v1.314.0 (epoch 241): in
+    `training` until 226 computors have qualified, then `prediction`, when the
+    core counts each identity's hits itself (core doc 2.4a).
     """
     import time as _t
 
@@ -648,6 +652,10 @@ def btc(compact: bool = Query(False, description="Only the epoch's live hours, t
             "shift_cap", "advance_threshold", "base_hour", "base_at", "anchor_tick")},
         "oracle": task.get("oracle"),
         "colony": data.get("colony"),
+        # The core's own prediction phase (v1.314.0+, message 82): training or
+        # prediction, and how many computors have qualified. None before epoch
+        # 241 or when no node answered.
+        "prediction": data.get("prediction"),
         "hours": _with_calls(hours, view),
         "call": _current_call(store, view, (task.get("oracle") or {}).get("next_hour")),
         "stats": _headline(view["stats"]) if compact else view["stats"],

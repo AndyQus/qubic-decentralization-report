@@ -166,7 +166,7 @@ In all, that is up to about half an hour of one core per hour.
 - **Number of lineages (4):** more lineages mean more candidates, but also more compute. Check
   that the side lines keep up (`call.selection.lines`, state `waiting`).
 - **Core ranking:** as soon as the core publishes prediction quality itself (CFB, answer 3), take
-  its data and show our ranking as a cross-check.
+  its data and show our ranking as a cross-check. It is coming with v1.314.0, see section 9.
 - **Report back to CFB:** after the first full epoch, send the numbers "by record vs. by score".
 
 ---
@@ -262,3 +262,68 @@ beginning.
 
 **Way back:** push image v0.16.14 again. The new tables do not disturb the old version. The calls
 of both rules stay stored.
+
+---
+
+## 9. Official count in the core from v1.314.0 (as of 2026-11-25)
+
+**Occasion:** on 25 Nov QubicChurch asked on Discord whether we had seen the v1.314.0 update: the
+core now keeps correct and counted hours per ID itself and ranks by accuracy from 12 correct, so
+there is one official way to count.
+
+**State of the code:** there is no v1.314.0 release yet, but `develop` holds PR #1077 "Bpp9000:
+live feed with prediction" (merged 23 Nov) and the parameters for epoch 241 (tick 92260000).
+Rules per `doc/ant_colony_mining.md` §2.4a:
+
+- **Qualifying:** an identity with an accepted solution at shift ≥ 1, or at shift 0 with at most
+  3504 errors.
+- **Switch:** the epoch switches from training to prediction once 226 computors have qualified,
+  but not when 24 hours or less are left. One switch per epoch.
+- **Answer:** for each hour H the network's output at the position for H (the same 168 hours as
+  ours). After the switch every accepted solution of the identity replaces its answers for the
+  open hours, also a weaker one. Deadline: 30 minutes before the **end** of H.
+- **Counting:** per identity, over the whole prediction phase. No answer (?) is counted but not
+  correct. Ranked by accuracy from 12 correct hours. Ties: more counted hours, then shift, error,
+  tick.
+- **Seats are given from this ranking** (451 computors stay, 225 seats for the best of the
+  remaining computors and candidates). From v1.314.0 on, who becomes a computor depends on
+  prediction quality; that touches the main subject of this report.
+- **Readable:** messages 82/83 (phase) and 84/85 (state of one identity: `hours`, `correct`),
+  operator command 21 (whole ranking, not public), event logs `PRED_SWI`, `PRED_ANS` (answer per
+  identity and hour, with the answering solution), `PRED_RES` (result per hour).
+
+**Differences to our rule (v0.17):**
+
+| | core v1.314.0 | ours v0.17 |
+|---|---|---|
+| Unit | identity, counters carry over network changes | single network |
+| Period | whole prediction phase | last 48 hours |
+| Threshold | 12 correct | 12 judged hours |
+| "?" | counts as wrong | abstention (as CFB said on 24 Nov) |
+| Deadline | 30 min before the hour ends, i.e. mid-move | before the hour begins |
+| Who calls | every qualified identity | one network, chosen by record |
+
+**Open question to the core devs:** the deadline lies in the middle of the hour whose move is
+predicted. Since every new accepted solution replaces the open answers, a miner could publish at
+:29 a network whose answer matches the first half hour. Is that intended? (Asked in the Discord
+reply drafted on 25 Nov.)
+
+**When we switch (recommendation):**
+
+1. **Nothing now.** Until epoch 241 switches there are no official numbers; our tracker keeps
+   running. After the epoch change, check that it starts cleanly under v1.314.0.
+2. **Once epoch 241 has switched** (check message 82/83 live on a node; then there is real data
+   to test against): read the official counters and show them on the page **next to** our
+   ranking, as a cross-check. Add the seat question to the report.
+   **Prepared in v0.17.3:** `antnode` reads message 82/83 (phase) and 84/85 (state of one
+   identity), but only from epoch 241 on, because older nodes do not answer and every silent node
+   would cost the full timeout. `/v1/btc` carries `prediction`; the page shows below the status
+   line "in training: x of 226 computors qualified" or "in prediction since …", with a tooltip
+   (de + en). Before the change (25 Nov, 09:50 UTC) no node answered yet (all v1.313), so the wire
+   format is only checked live after 12:00 UTC.
+3. **From the start of epoch 242:** the official top identity gives the page's call, our rule
+   runs alongside as a cross-check. Switching at an epoch boundary keeps every epoch consistent in
+   itself. Our deadline stays: what counts is the answer fixed before the hour began, not one
+   handed in up to :30.
+4. **Align "?":** count "?" as wrong in our rate like the core, or show both numbers. That goes
+   against CFB's word of 24 Nov, which came before the core code. Decide with step 3.
