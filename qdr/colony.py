@@ -242,6 +242,18 @@ def shift_limit_at(anchor_tick: int, live_append_ticks: list[int], cap: int) -> 
     return min(cap, sum(1 for t in live_append_ticks if t and t < anchor_tick))
 
 
+def live_append_ticks(task: dict, series: dict) -> list[int]:
+    """The append ticks of the hours AFTER base_hour -- the only ones a shift
+    limit counts (doc 2.3a). The series is read from base_hour itself, whose
+    price the first live hour moved from: in epoch 240 it came from the
+    bootstrap file (append tick 0), but from epoch 241 on it was stored live in
+    the epoch before, with a real tick below every anchor. Counted, it raised
+    every shift limit by one and rebuilt networks stopped matching the node
+    (2026-11-25, v0.17.4)."""
+    base = int(task["base_hour"])
+    return [int(p["append_tick"]) for p in (series or {}).get("points") or [] if int(p["hour"]) > base]
+
+
 def anchor_digest(store, tick: int, peers: list[str]) -> Optional[str]:
     """K12(tick || K12(TickData)), cached; None if no peer serves the tick data."""
     cached = store.colony_anchor(tick)
@@ -533,7 +545,7 @@ class Tracker:
             self.rep.start(ctx.spectrum_digest)
         self.rep.targets("".join("1" if b else "0" for b in targets))
 
-        live_ticks = [p["append_tick"] for p in series["points"]]
+        live_ticks = live_append_ticks(task, series)
         adv = self._advance(epoch, chain, peers, live_ticks, WALKS_PER_STEP)
         if adv["state"] == "anchor-unavailable":
             return self.status(state="anchor-unavailable", tick=adv["tick"], scanned=scanned)

@@ -519,3 +519,23 @@ def test_the_best_tip_per_identity_comes_from_the_score_index(tmp_path):
         entry(104, 0, score=3800, pk=b"\x01" * 32))])
     tips = store.best_ant_solutions_per_identity(240, 2)
     assert [(t["tick"], t["pubkey"][:2]) for t in tips] == [(104, "01"), (103, "03")]   # tie: newer first
+
+
+def test_shift_limit_skips_base_hour_stored_last_epoch():
+    """Epoch 241: base_hour 40487 was stored live in epoch 240 (tick 92239961).
+    It is the frame's end, not a live hour, and must not raise the shift limit."""
+    from qdr import colony
+    task = {"base_hour": 40487}
+    series = {"points": [
+        {"hour": 40487, "append_tick": 92239961},
+        {"hour": 40488, "append_tick": 92260016},
+        {"hour": 40489, "append_tick": 92261271},
+        {"hour": 40490, "append_tick": 92262876},
+    ]}
+    ticks = colony.live_append_ticks(task, series)
+    assert ticks == [92260016, 92261271, 92262876]
+    assert colony.shift_limit_at(92264013, ticks, 168) == 3     # the node's own task.shift_limit
+    assert colony.shift_limit_at(92261000, ticks, 168) == 1
+    # Epoch 240's shape: base hour from the bootstrap file, append tick 0.
+    assert colony.live_append_ticks({"base_hour": 1}, {"points": [{"hour": 1, "append_tick": 0},
+                                                                   {"hour": 2, "append_tick": 5}]}) == [5]

@@ -260,6 +260,17 @@ hold up the call. Side lines ask at most 5 nodes for tick data and read missing 
 only once per line. **Lesson:** run live tests with the data volume of a full epoch, not only its
 beginning.
 
+**Incident at the epoch change (240 → 241, 2026-11-25):** from about 14:30 UTC the tracker
+reported `mismatch`: a rebuilt network no longer hit its logged error. Calls came only from the last
+verified, weak network (`fallback`). Cause: we read the price series from `base_hour` inclusive,
+and `shift_limit_at` counted every point with an append tick before the anchor. In epoch 240 the
+base hour came from the bootstrap file (append tick 0, skipped). In epoch 241 it had been stored
+live in epoch 240 (tick 92239961) and was counted, so every shift limit was one too high. It only
+showed once the first networks could have slid past the real limit. **Fixed in v0.17.4:**
+`live_append_ticks` counts only hours after `base_hour` (doc §2.3a). Checked against the node
+itself (message 80) at 8 anchors: new always equal, old always +1. **Lesson:** check assumptions
+about the price series at the epoch edge against the node, not only against the first epoch.
+
 **Way back:** push image v0.16.14 again. The new tables do not disturb the old version. The calls
 of both rules stay stored.
 

@@ -492,10 +492,15 @@ def collect(peers: list[str] | None = None, attempts: int = 5) -> dict:
     # The core's own prediction phase, from v1.314.0 (epoch 241) on. Older nodes
     # never answer message 82, so it is not asked before: each silent node would
     # cost the full timeout on every refresh.
+    # The epoch comes from the system info, else from the epoch context, which
+    # answers more reliably while a node is busy (seen at the start of epoch 241).
     prediction = None
-    if info is not None and info.epoch >= PREDICTION_FIRST_EPOCH:
-        for ip in probed[:3]:
-            prediction = query_prediction_phase(ip, timeout=3.0)
+    epoch_now = info.epoch if info is not None else ctx.epoch
+    if epoch_now >= PREDICTION_FIRST_EPOCH:
+        # The colony node first: it has just answered.
+        order = [ctx.source_ip] + [ip for ip in probed if ip != ctx.source_ip]
+        for ip in order[:3]:
+            prediction = query_prediction_phase(ip, timeout=5.0)
             if prediction is not None:
                 break
 

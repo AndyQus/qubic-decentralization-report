@@ -266,6 +266,18 @@ die Tipps jetzt **vor** den Nebenlinien, damit diese den Tipp nie aufhalten. Neb
 höchstens 5 Nodes nach Tick-Daten und laden fehlende Vorfahren je Linie nur einmal nach.
 **Lehre:** Live-Tests mit der Datenmenge einer vollen Epoche machen, nicht nur mit dem Anfang.
 
+**Vorfall beim Epochenwechsel (240 → 241, 2026-11-25):** Ab etwa 14:30 UTC meldete der Tracker
+`mismatch`: Ein nachgebautes Netz traf den protokollierten Fehler nicht mehr. Die Tipps kamen nur
+noch vom zuletzt geprüften, schwachen Netz (`fallback`). Ursache: Wir lesen die Preisreihe ab
+`base_hour` einschließlich, und `shift_limit_at` zählte jeden Punkt mit Append-Tick vor dem Anker.
+In Epoche 240 kam die Basisstunde aus der Bootstrap-Datei (Append-Tick 0, übersprungen). In Epoche
+241 wurde sie in Epoche 240 live gespeichert (Tick 92239961) und zählte mit. Jedes Shift-Limit lag
+damit um eins zu hoch. Das fiel erst auf, als die ersten Netze am echten Limit hätten weiterrutschen
+können. **Behoben in v0.17.4:** `live_append_ticks` zählt nur Stunden nach `base_hour`
+(doc §2.3a). Geprüft gegen die Node selbst (Nachricht 80) an 8 Ankern: neu immer gleich, alt
+immer +1. **Lehre:** Annahmen über die Preisreihe am Epochenrand gegen die Node prüfen, nicht nur
+gegen die erste Epoche.
+
 **Rückweg:** Image v0.16.14 erneut pushen. Die neuen Tabellen stören die alte Version nicht.
 Die Tipps beider Regeln bleiben gespeichert.
 
