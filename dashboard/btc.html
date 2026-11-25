@@ -50,22 +50,37 @@
 <link rel="stylesheet" href="./theme.css?v=6388e666">
 
 <style>
-/* Up and down: a calm green and a soft coral red. Light mode takes deep tones
-   that carry white glyphs; dark mode takes brighter ones that carry dark
-   glyphs (--cell-ink), so a cell's ▲/▼ stays readable in both. Every cell
-   also carries ▲/▼ — direction is never colour alone. */
+/* Green and red mean one thing on this page: whether the colony's call hit.
+   A call is one icon -- the arrow is the direction it called, always white;
+   the fill is the verdict: --hit, --miss, or --open while the hour is not
+   judged yet. A miss also carries a white inner ring, so the verdict is never
+   colour alone (red-green colour blindness). Bitcoin's own move -- which no
+   one can get right or wrong -- is drawn in --move, a calm slate blue.
+   All four fills are deep enough to carry a white glyph in both themes. */
 :root {
-  --up:    #15803d;
-  --down:  #dc2626;
+  --hit:   #15803d;
+  --miss:  #dc2626;
+  --open:  #6b7280;
+  --move:  #4b6584;
   --cell-ink: #ffffff;
   /* Bitcoin orange for the tiles' accent -- the same step burn takes with its
      ember: a deep amber in light mode (readable as text), the bright one in dark. */
   --btc:   #b45309;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --up: #34c178; --down: #f2686a; --cell-ink: #0b0f14; --btc: #f7931a; }
+  :root:not([data-theme="light"]) { --hit: #1f9a57; --miss: #d64545; --open: #5b6474; --move: #4a6a8f; --btc: #f7931a; }
 }
-:root[data-theme="dark"] { --up: #34c178; --down: #f2686a; --cell-ink: #0b0f14; --btc: #f7931a; }
+:root[data-theme="dark"] { --hit: #1f9a57; --miss: #d64545; --open: #5b6474; --move: #4a6a8f; --btc: #f7931a; }
+
+/* The call icon, used wherever a call is shown: in the tape, the record, the
+   overview table, the legends. .ahead: an hour still to come, call fixed. */
+.cg { display: inline-grid; place-items: center; width: 17px; height: 17px; border-radius: 5px; vertical-align: middle;
+  background: var(--open); color: #fff; font-size: 10px; font-weight: 700; line-height: 1; font-family: var(--sans); }
+.cg.hit  { background: var(--hit); }
+.cg.miss { background: var(--miss); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .65); }
+.cg.unsure { background: transparent; color: var(--warn); box-shadow: inset 0 0 0 1.5px var(--warn); }
+.cg.ahead { background: color-mix(in srgb, var(--open) 30%, transparent); color: var(--text); outline: 1.5px dashed var(--open); outline-offset: -1.5px; }
+.cg + .cg { margin-left: 3px; }
 
 body { background: var(--bg); }
 /* [hidden] must win over the display: flex of .progress, .ov-day and the like. */
@@ -127,8 +142,7 @@ body { background: var(--bg); }
 .slot .lbl b { display: block; font-family: var(--display); font-size: 15px; color: var(--text); text-transform: none; letter-spacing: 0; }
 .slot .g { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; font-size: 18px; font-weight: 700;
   color: var(--faint); border: 2px solid var(--border-strong); }
-.slot .g.up   { background: var(--up);   color: var(--cell-ink); border-color: transparent; }
-.slot .g.down { background: var(--down); color: var(--cell-ink); border-color: transparent; }
+.slot .g.up, .slot .g.down { background: var(--open); color: #fff; border-color: transparent; }
 .slot .g.unsure { color: var(--warn); border-color: var(--warn); }
 .slot .txt { font-size: 14px; color: var(--muted); line-height: 1.4; }
 .status.phase { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; margin-top: 2px; }
@@ -153,8 +167,7 @@ body { background: var(--bg); }
 .call b { display: block; margin-bottom: 2px; }
 .call p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
 .call a { color: var(--accent); }
-.call .q.up   { background: var(--up);   color: var(--cell-ink); border-color: transparent; }
-.call .q.down { background: var(--down); color: var(--cell-ink); border-color: transparent; }
+.call .q.up, .call .q.down { background: var(--open); color: #fff; border-color: transparent; }
 .call .q.unsure { color: var(--warn); border-color: var(--warn); }
 .call .verdict { font-family: var(--display); font-size: 20px; margin: 2px 0 6px; }
 .call .meta { font-size: 12px; color: var(--faint); margin-top: 6px; }
@@ -191,13 +204,12 @@ body { background: var(--bg); }
 .chg { display: flex; align-items: center; gap: 8px; min-width: 150px; }
 .chg .cb { position: relative; flex: 0 0 90px; height: 8px; border-radius: 4px; background: var(--border); }
 .chg .cb i { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
-.chg .cb i.up { left: 50%; background: var(--up); }
-.chg .cb i.down { right: 50%; background: var(--down); }
+.chg .cb i.up { left: 50%; background: var(--move); }
+.chg .cb i.down { right: 50%; background: var(--move); }
 .chg .cb b { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--text); opacity: .5; }
 .chg span { min-width: 64px; text-align: right; }
-.vd.hit { color: var(--success); font-weight: 700; } .vd.miss { color: var(--danger); font-weight: 700; }
 .dirg { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; color: var(--cell-ink); font-size: 11px; }
-.dirg.up { background: var(--up); } .dirg.down { background: var(--down); }
+.dirg.up { background: var(--move); } .dirg.down { background: var(--move); }
 .hits.ov td.pr { white-space: nowrap; }
 .hits.ov td.pr.prev { color: var(--muted); }
 .dirw { margin-left: 6px; font-family: var(--sans); }
@@ -235,7 +247,7 @@ body { background: var(--bg); }
 .kpis .s-val { font-family: var(--mono); }
 .kpis .s-val .dir { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px;
   color: var(--cell-ink); font-size: 13px; vertical-align: -3px; margin-right: 6px; }
-.kpis .s-val .dir.up { background: var(--up); } .kpis .s-val .dir.down { background: var(--down); }
+.kpis .s-val .dir.up { background: var(--move); } .kpis .s-val .dir.down { background: var(--move); }
 
 /* ── Hit rate per day: one bar per UTC day, the dashed line is a coin toss ── */
 .dr-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 8px; }
@@ -263,8 +275,8 @@ body { background: var(--bg); }
   flex: 0 0 auto; width: 22px; height: 38px; border-radius: 4px; display: grid; place-items: center;
   font-size: 11px; color: var(--cell-ink); position: relative; cursor: default;
 }
-.cell.up   { background: var(--up); }
-.cell.down { background: var(--down); }
+.cell.up   { background: var(--move); }
+.cell.down { background: var(--move); }
 .cell.frame { opacity: .38; height: 30px; }
 .cell.live { height: 46px; box-shadow: 0 0 0 2px var(--bg); }
 .cell.filled::after { content: ""; position: absolute; inset: 0; border-radius: 4px;
@@ -290,8 +302,8 @@ body { background: var(--bg); }
 .shard:hover { transform: translateY(-5px) scale(1.06); border-color: var(--accent); z-index: 2; }
 .shard .fill { width: 100%; height: 100%; position: relative; overflow: hidden; border-radius: 5px 5px 0 0;
   transition: height .8s cubic-bezier(.2, .8, .2, 1); }
-.shard.up .fill   { background: linear-gradient(180deg, var(--up), color-mix(in srgb, var(--up) 35%, transparent)); }
-.shard.down .fill { background: linear-gradient(0deg, var(--down), color-mix(in srgb, var(--down) 35%, transparent)); }
+.shard.up .fill   { background: linear-gradient(180deg, var(--move), color-mix(in srgb, var(--move) 35%, transparent)); }
+.shard.down .fill { background: linear-gradient(0deg, var(--move), color-mix(in srgb, var(--move) 35%, transparent)); }
 .shard.acc .fill  { background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 25%, transparent)); }
 .shard .fill::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
   background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, .35) 50%, transparent 70%); }
@@ -320,14 +332,14 @@ body { background: var(--bg); }
 }
 @media (prefers-reduced-motion: reduce) { .shard, .shard .fill, .shard .fill::after { animation: none !important; } }
 .ep-shards { margin-bottom: 14px; }
-.mark { height: 14px; font-size: 11px; line-height: 14px; color: var(--faint); }
-.mark.hit { color: var(--success); font-weight: 700; }
-.mark.miss { color: var(--danger); font-weight: 700; }
-.mark.call { color: var(--text); }
+.mark { height: 18px; font-size: 11px; line-height: 18px; color: var(--faint); }
 .tape-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--muted); margin-top: 6px; }
 .tape-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
-.tape-legend i.u { background: var(--up); } .tape-legend i.d { background: var(--down); }
-.tape-legend i.f { background: var(--up); opacity: .38; }
+.tape-legend i.u { background: var(--move); }
+.tape-legend i.f { background: var(--move); opacity: .38; }
+.tape-legend i.cg { display: inline-grid; width: 16px; height: 16px; border-radius: 4px; font-style: normal; font-size: 9px;
+  vertical-align: -3px; margin-right: 3px; }
+.tape-legend i.cg:last-of-type { margin-right: 6px; }
 .tape-legend i.p { border: 2px dashed var(--border-strong); }
 
 /* ── The last 24 hours: drawn after the price page's flow chart ─────── */
@@ -338,7 +350,7 @@ body { background: var(--bg); }
 .day-head h2 { margin: 0; }
 .day-svg .dc-focus { pointer-events: none; }
 .day-sum { margin: 0; }
-.day-sum b.pos { color: var(--up); } .day-sum b.neg { color: var(--down); }
+.day-sum b.pos, .day-sum b.neg { color: var(--text); }
 .day-sum .day-n { color: var(--faint); font-size: 12px; margin-left: 4px; }
 @media (max-width: 600px) {
   .day-sum { flex: 1 0 100%; gap: 6px; flex-wrap: nowrap; }
@@ -361,13 +373,11 @@ body { background: var(--bg); }
 .day-legend { margin-top: 10px; }
 .day-legend i.dt { width: 8px; height: 8px; border-radius: 50%; vertical-align: 0; background: var(--text); }
 .day-legend i.sg { width: 12px; height: 3px; border-radius: 2px; vertical-align: 3px; margin-right: 2px; }
-.day-legend i.sg.ok { background: var(--success); } .day-legend i.sg.bad { background: var(--danger); }
+.day-legend i.sg.ok { background: var(--hit); } .day-legend i.sg.bad { background: var(--miss); }
 .day-legend i.sg.none { background: var(--muted); opacity: .6; margin-right: 5px; }
 .day-desc { margin-top: 8px; }
-.day-legend i.u + i.d { margin-left: -3px; }
 .day-legend i.hz { border: 1px dashed var(--border-strong);
   background: repeating-linear-gradient(45deg, transparent 0 3px, color-mix(in srgb, var(--muted) 35%, transparent) 3px 4px); }
-.day-legend b { font-weight: 700; margin-right: 3px; } .day-legend b.ok { color: var(--success); } .day-legend b.bad { color: var(--danger); margin-right: 6px; }
 @media (prefers-reduced-motion: reduce) { .day-svg .dc-line.draw, .day-svg .dc-area.draw, .day-svg .dc-ahead { animation: none; stroke-dasharray: none; } }
 
 /* ── Colony pulse ──────────────────────────────────────────────────── */
@@ -388,10 +398,14 @@ body { background: var(--bg); }
 .week .d { color: var(--faint); align-self: center; white-space: nowrap; }
 .week .h { color: var(--faint); text-align: center; }
 .week .c { height: 16px; border-radius: 3px; display: grid; place-items: center; color: var(--cell-ink); font-size: 8px; }
-.week .c.up { background: var(--up); } .week .c.down { background: var(--down); }
+/* A cell with a call is the call icon (verdict colour, called direction);
+   an hour without one shows Bitcoin's move in the neutral --move. */
+.week .c.move { background: var(--move); }
+.week .c.open { background: var(--open); }
+.week .c.hit  { background: var(--hit); }
+.week .c.miss { background: var(--miss); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .65); }
+.week .c.unsure { background: transparent; color: var(--warn); box-shadow: inset 0 0 0 1px var(--warn); }
 .week .c.none { background: transparent; border: 1px solid var(--border); }
-.week .c.hit  { box-shadow: inset 0 0 0 2px var(--success); }
-.week .c.miss { box-shadow: inset 0 0 0 2px var(--danger); }
 
 .note { font-size: 13px; color: var(--faint); line-height: 1.5; margin: 8px 0 0; }
 .note.verdict { color: var(--muted); font-size: 13.5px; }
@@ -555,8 +569,7 @@ body { background: var(--bg); }
     <div class="tape-legend day-legend">
       <span><i class="dt"></i><span data-i18n="dayLgLine">price at the full hour</span></span>
       <span><i class="sg ok"></i><i class="sg bad"></i><i class="sg none"></i><span data-i18n="dayLgSeg">stretch: call hit / missed / no call</span></span>
-      <span><i class="u"></i><i class="d"></i><span data-i18n="dayLgCall">colony's call ▲ / ▼</span></span>
-      <span><b class="ok">✓</b><b class="bad">✗</b><span data-i18n="dayLgHit">hit / missed</span></span>
+      <span><i class="cg hit">▲</i><i class="cg miss">▼</i><i class="cg">▲</i><span data-i18n="dayLgCall">colony's call: hit / missed / not judged yet — the arrow is the direction it called</span></span>
       <span><i class="hz"></i><span data-i18n="dayLgAhead">hours ahead, call already fixed</span></span>
     </div>
     <p class="note day-desc" data-i18n="dayDesc">BTC/USDT at each full hour, as Qubic's Price oracle stored it on-chain.</p>
@@ -573,20 +586,20 @@ body { background: var(--bg); }
   <!-- ── The tape ─────────────────────────────────────────────────────── -->
   <section class="card">
     <h2 data-i18n="tapeTitle">Hour by hour</h2>
-    <p class="desc" data-i18n="tapeDesc">Each cell is one hour: ▲ closed level or higher than the hour before (in whole USDT), ▼ lower. Pale: the last hours of the year-long frame the epoch started with. Bright: hours stored live during this epoch — the ones the colony could not know in advance. Dashed: the hour still to come.</p>
+    <p class="desc" data-i18n="tapeDesc">Each cell is one hour: ▲ closed level or higher than the hour before (in whole USDT), ▼ lower. Pale: the last hours of the year-long frame the epoch started with. Bright: hours stored live during this epoch — the ones the colony could not know in advance. Dashed: the hour still to come. The cells show only what Bitcoin did, so they stay neutral; the colony's call sits below each live hour.</p>
     <div class="tape-wrap" id="tape-wrap"><div class="shards" id="tape"></div></div>
     <div class="tape-legend">
-      <span><i class="u"></i><span data-i18n="lgUp">▲ up or level</span></span>
-      <span><i class="d"></i><span data-i18n="lgDown">▼ down</span></span>
+      <span><i class="u"></i><span data-i18n="lgMove">Bitcoin's hour ▲ up or level / ▼ down</span></span>
       <span><i class="f"></i><span data-i18n="lgFrame">frame (known at epoch start)</span></span>
       <span><i class="p"></i><span data-i18n="lgPending">next hour</span></span>
+      <span><i class="cg hit">▲</i><i class="cg miss">▼</i><i class="cg">▲</i><span data-i18n="lgCall">colony's call: hit / missed / not judged yet</span></span>
     </div>
   </section>
 
   <!-- ── Track record ─────────────────────────────────────────────────── -->
   <section class="card">
     <h2 data-i18n="recTitle">Record</h2>
-    <p class="desc" data-i18n="recDesc">Every live hour this server has recorded, one week per epoch (one row per day, one column per hour of the day, UTC). A node only answers for the running epoch, so the record starts with this server's first reading — earlier hours are not filled in afterwards.</p>
+    <p class="desc" data-i18n="recDesc">Every live hour this server has recorded, one week per epoch (one row per day, one column per hour of the day, UTC). A node only answers for the running epoch, so the record starts with this server's first reading — earlier hours are not filled in afterwards. A cell with a call is the call icon: green hit, red missed, grey open, the arrow the direction called. A blue cell had no call and shows which way Bitcoin went.</p>
     <div id="record"><div class="skel head"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
   </section>
 
@@ -733,7 +746,7 @@ body { background: var(--bg); }
       rAnchor: "No node served the tick data a rebuild needs; retried every minute.",
       rOther: "No call for this hour (tracker: {s}).",
       rFailed: "The replayer stopped on this server; no call until it runs again.",
-      kLast: "Last hour", kLastUp: "Up", kLastDown: "Down", kLastCall: "call {c} {v}",
+      kLast: "Last hour", kLastUp: "Up", kLastDown: "Down", kLastCall: "call",
       kToday: "Hit rate today", kEpochRate: "Hit rate this epoch",
       kRateS: "{hits} of {calls} calls · coin toss 50 %", kRateNone: "no call judged yet",
       kTodayS: "{hits} of {calls} calls (UTC day)",
@@ -750,25 +763,25 @@ body { background: var(--bg); }
       kDir: "Up / Down so far", kDirS: "of the live hours",
       kColony: "Colony", kColonyS: "solutions · threshold {th} errors",
       tapeTitle: "Hour by hour",
-      tapeDesc: "Each cell is one hour: ▲ closed level or higher than the hour before (in whole USDT), ▼ lower. Pale: the last hours of the year-long frame the epoch started with. Bright: hours stored live during this epoch — the ones the colony could not know in advance. Dashed: the hour still to come. Below each live hour: the colony's call, ✓ when it matched, ✗ when not.",
-      lgUp: "▲ Up or level", lgDown: "▼ Down", lgFrame: "frame (known at epoch start)", lgPending: "next hour",
+      tapeDesc: "Each cell is one hour: ▲ closed level or higher than the hour before (in whole USDT), ▼ lower. Pale: the last hours of the year-long frame the epoch started with. Bright: hours stored live during this epoch — the ones the colony could not know in advance. Dashed: the hour still to come. The cells show only what Bitcoin did, so they stay neutral. Below each live hour: the colony's call as an icon — the white arrow is the direction it called, green when it hit, red with a white inner ring when it missed, grey while the hour is not judged yet.",
+      lgMove: "Bitcoin's hour ▲ up or level / ▼ down", lgCall: "colony's call: hit / missed / not judged yet", lgFrame: "frame (known at epoch start)", lgPending: "next hour",
       cellTip: "{from} – {to} · {dir}", cellLive: "stored live in tick {tick}", cellFrame: "part of the frame", cellFilled: "oracle failed for 24 h, previous price reused (counts as ▲)",
       dirUp: "▲ Up or level", dirDown: "▼ Down", pendTip: "{from} – {to} · not on the network yet",
       dayTitle: "Bitcoin, last 24 hours",
-      dayDesc: "BTC/USDT at each full hour, as Qubic's Price oracle stored it on-chain. Each stretch of the line is one hour: green where the colony's call for it hit, red where it missed, grey without a call. Under each hour the call itself, fixed before the hour began. Hatched on the right: the hour under way and the one after, with the call that already stands for each. The arrows show a direction, never a price target.",
+      dayDesc: "BTC/USDT at each full hour, as Qubic's Price oracle stored it on-chain. Each stretch of the line is one hour: green where the colony's call for it hit, red where it missed, grey without a call. Under each hour the call itself, fixed before the hour began: the white arrow is the direction called, the colour the verdict — green hit, red (with a white inner ring) missed, grey not judged yet. Hatched on the right: the hour under way and the one after, with the call that already stands for each. The arrows show a direction, never a price target.",
       daySumMove: "BTC {h} h", daySumRate: "Colony", daySumN: "{hits} of {calls}",
       dayEmpty: "Not enough hours with a price recorded yet.",
       dayAria: "Bitcoin price over the last 24 hours with the colony's call for each hour",
       dayAhead: "calls ahead", dayCallLbl: "Call", dayRun: "Running", dayNext: "Next",
-      dayTipCall: "call {c}", dayTipNone: "no call yet",      dayLgLine: "price at the full hour", dayLgSeg: "stretch: call hit / missed / no call", dayLgCall: "colony's call ▲ / ▼",
-      dayLgHit: "hit / missed", dayLgAhead: "hours ahead, call already fixed",
+      dayTipCall: "call {c}", dayTipNone: "no call yet",      dayLgLine: "price at the full hour", dayLgSeg: "stretch: call hit / missed / no call", dayLgCall: "colony's call: hit / missed / not judged yet — the arrow is the direction it called",
+      dayLgAhead: "hours ahead, call already fixed",
       pulseTitle: "Colony pulse",
       pulseDesc: "Mining solutions per tick, live from the tick stream. Each one is a network that beat its parent; the node logs whether it was accepted and how many errors it made over the year-long frame.",
       pulseWait: "Waiting for ticks …",
       pulseMeta: "last {n} ticks: {ok} accepted · {bad} rejected · lowest error {best}",
       pulseNone: "last {n} ticks: no solution — the miners may still be switching to the live task",
       recTitle: "Record",
-      recDesc: "Every live hour this server has recorded, one week per epoch (one row per day, one column per hour of the day, UTC). A node only answers for the running epoch, so the record starts with this server's first reading — earlier hours are not filled in afterwards.",
+      recDesc: "Every live hour this server has recorded, one week per epoch (one row per day, one column per hour of the day, UTC). A node only answers for the running epoch, so the record starts with this server's first reading — earlier hours are not filled in afterwards. A cell with a call is the call icon: green hit, red missed, grey open, the arrow the direction called. A blue cell had no call and shows which way Bitcoin went.",
       recEmpty: "No hour recorded yet.",
       recShardTip: "Epoch {ep}: {n} of 168 live hours recorded · {hits} of {calls} calls hit",
       recEpoch: "Epoch {ep}", recSum: "{n} hours · {up} % ▲ · {filled} filled",
@@ -840,7 +853,7 @@ body { background: var(--bg); }
       rAnchor: "Keine Node lieferte die Tick-Daten für den Nachbau; neuer Versuch jede Minute.",
       rOther: "Kein Tipp für diese Stunde (Tracker: {s}).",
       rFailed: "Der Nachbau ist auf diesem Server abgebrochen; kein Tipp, bis er wieder läuft.",
-      kLast: "Letzte Stunde", kLastUp: "Up", kLastDown: "Down", kLastCall: "Tipp {c} {v}",
+      kLast: "Letzte Stunde", kLastUp: "Up", kLastDown: "Down", kLastCall: "Tipp",
       kToday: "Treffer heute", kEpochRate: "Treffer diese Epoche",
       kRateS: "{hits} von {calls} Tipps · Münzwurf 50 %", kRateNone: "noch kein Tipp ausgewertet",
       kTodayS: "{hits} von {calls} Tipps (UTC-Tag)",
@@ -857,25 +870,25 @@ body { background: var(--bg); }
       kDir: "Up / Down bisher", kDirS: "der Live-Stunden",
       kColony: "Kolonie", kColonyS: "Lösungen · Schwelle {th} Fehler",
       tapeTitle: "Stunde für Stunde",
-      tapeDesc: "Jede Zelle ist eine Stunde: ▲ gleich oder höher geschlossen als die Stunde davor (in ganzen USDT), ▼ tiefer. Blass: die letzten Stunden des Jahresrahmens, mit dem die Epoche begann. Kräftig: Stunden, die während dieser Epoche live gespeichert wurden — die die Kolonie vorher nicht kennen konnte. Gestrichelt: die Stunde, die noch kommt. Unter jeder Live-Stunde: der Tipp der Kolonie, ✓ wenn er traf, ✗ wenn nicht.",
-      lgUp: "▲ Up oder gleich", lgDown: "▼ Down", lgFrame: "Rahmen (bei Epochenstart bekannt)", lgPending: "nächste Stunde",
+      tapeDesc: "Jede Zelle ist eine Stunde: ▲ gleich oder höher geschlossen als die Stunde davor (in ganzen USDT), ▼ tiefer. Blass: die letzten Stunden des Jahresrahmens, mit dem die Epoche begann. Kräftig: Stunden, die während dieser Epoche live gespeichert wurden — die die Kolonie vorher nicht kennen konnte. Gestrichelt: die Stunde, die noch kommt. Die Zellen zeigen nur, was Bitcoin getan hat, und bleiben deshalb neutral. Unter jeder Live-Stunde: der Tipp der Kolonie als Icon — der weiße Pfeil ist die getippte Richtung, grün wenn er traf, rot mit weißem Innenrand wenn nicht, grau solange die Stunde noch nicht ausgewertet ist.",
+      lgMove: "Bitcoins Stunde ▲ Up oder gleich / ▼ Down", lgCall: "Tipp der Kolonie: getroffen / verfehlt / noch offen", lgFrame: "Rahmen (bei Epochenstart bekannt)", lgPending: "nächste Stunde",
       cellTip: "{from} – {to} · {dir}", cellLive: "live gespeichert in Tick {tick}", cellFrame: "Teil des Rahmens", cellFilled: "Oracle 24 h ausgefallen, Vorstundenkurs übernommen (zählt als ▲)",
       dirUp: "▲ Up oder gleich", dirDown: "▼ Down", pendTip: "{from} – {to} · noch nicht im Netz",
       dayTitle: "Bitcoin, letzte 24 Stunden",
-      dayDesc: "BTC/USDT zu jeder vollen Stunde, wie Qubics Preis-Oracle ihn on-chain gespeichert hat. Jeder Abschnitt der Linie ist eine Stunde: grün, wo der Tipp der Kolonie für sie traf, rot, wo er danebenlag, grau ohne Tipp. Unter jeder Stunde der Tipp selbst, festgelegt bevor die Stunde begann. Rechts schraffiert: die laufende und die nächste Stunde mit dem Tipp, der für sie schon feststeht. Die Pfeile zeigen eine Richtung, nie ein Kursziel.",
+      dayDesc: "BTC/USDT zu jeder vollen Stunde, wie Qubics Preis-Oracle ihn on-chain gespeichert hat. Jeder Abschnitt der Linie ist eine Stunde: grün, wo der Tipp der Kolonie für sie traf, rot, wo er danebenlag, grau ohne Tipp. Unter jeder Stunde der Tipp selbst, festgelegt bevor die Stunde begann: der weiße Pfeil ist die getippte Richtung, die Farbe das Urteil — grün getroffen, rot (mit weißem Innenrand) verfehlt, grau noch offen. Rechts schraffiert: die laufende und die nächste Stunde mit dem Tipp, der für sie schon feststeht. Die Pfeile zeigen eine Richtung, nie ein Kursziel.",
       daySumMove: "BTC {h} h", daySumRate: "Kolonie", daySumN: "{hits} von {calls}",
       dayEmpty: "Noch nicht genug Stunden mit Kurs aufgezeichnet.",
       dayAria: "Bitcoin-Kurs der letzten 24 Stunden mit dem Tipp der Kolonie für jede Stunde",
       dayAhead: "kommende Tipps", dayCallLbl: "Tipp", dayRun: "Läuft", dayNext: "Als Nächstes",
-      dayTipCall: "Tipp {c}", dayTipNone: "noch kein Tipp",      dayLgLine: "Kurs zur vollen Stunde", dayLgSeg: "Abschnitt: Tipp getroffen / verfehlt / kein Tipp", dayLgCall: "Tipp der Kolonie ▲ / ▼",
-      dayLgHit: "getroffen / verfehlt", dayLgAhead: "kommende Stunden, Tipp steht schon",
+      dayTipCall: "Tipp {c}", dayTipNone: "noch kein Tipp",      dayLgLine: "Kurs zur vollen Stunde", dayLgSeg: "Abschnitt: Tipp getroffen / verfehlt / kein Tipp", dayLgCall: "Tipp der Kolonie: getroffen / verfehlt / noch offen — der Pfeil ist die getippte Richtung",
+      dayLgAhead: "kommende Stunden, Tipp steht schon",
       pulseTitle: "Kolonie-Puls",
       pulseDesc: "Mining-Lösungen pro Tick, live aus dem Tick-Stream. Jede ist ein Netz, das seinen Elternknoten geschlagen hat; die Node protokolliert, ob es angenommen wurde und wie viele Fehler es über den Jahresrahmen gemacht hat.",
       pulseWait: "Warte auf Ticks …",
       pulseMeta: "letzte {n} Ticks: {ok} angenommen · {bad} abgelehnt · geringster Fehler {best}",
       pulseNone: "letzte {n} Ticks: keine Lösung — die Miner stellen womöglich noch auf die Live-Aufgabe um",
       recTitle: "Aufzeichnung",
-      recDesc: "Jede Live-Stunde, die dieser Server aufgezeichnet hat, eine Woche je Epoche (eine Zeile je Tag, eine Spalte je Stunde des Tages, UTC). Eine Node antwortet nur für die laufende Epoche; die Aufzeichnung beginnt deshalb mit der ersten Messung dieses Servers — frühere Stunden werden nicht nachgetragen.",
+      recDesc: "Jede Live-Stunde, die dieser Server aufgezeichnet hat, eine Woche je Epoche (eine Zeile je Tag, eine Spalte je Stunde des Tages, UTC). Eine Node antwortet nur für die laufende Epoche; die Aufzeichnung beginnt deshalb mit der ersten Messung dieses Servers — frühere Stunden werden nicht nachgetragen. Eine Zelle mit Tipp ist das Tipp-Icon: grün getroffen, rot verfehlt, grau offen, der Pfeil die getippte Richtung. Eine blaue Zelle hatte keinen Tipp und zeigt, wohin Bitcoin ging.",
       recEmpty: "Noch keine Stunde aufgezeichnet.",
       recShardTip: "Epoche {ep}: {n} von 168 Live-Stunden aufgezeichnet · {hits} von {calls} Tipps getroffen",
       recEpoch: "Epoche {ep}", recSum: "{n} Stunden · {up} % ▲ · {filled} aufgefüllt",
@@ -964,9 +977,9 @@ body { background: var(--bg); }
     if (last) {
       $("k-last").innerHTML = '<span class="dir ' + (last.up ? "up" : "down") + '">' + (last.up ? "▲" : "▼") + "</span>" +
         esc(t(last.up ? "kLastUp" : "kLastDown"));
-      $("k-last-s").textContent = hm(last.at - 3600) + "–" + hm(last.at) +
-        (last.price != null ? " · " + fmtUsd(last.price) + (last.change_pct != null ? " (" + fmtChg(last.change_pct) + ")" : "") : "") +
-        (last.call != null ? " · " + t("kLastCall", { c: GLYPH[last.call], v: last.hit === true ? "✓" : last.hit === false ? "✗" : "" }) : "");
+      $("k-last-s").innerHTML = esc(hm(last.at - 3600) + "–" + hm(last.at) +
+        (last.price != null ? " · " + fmtUsd(last.price) + (last.change_pct != null ? " (" + fmtChg(last.change_pct) + ")" : "") : "")) +
+        (last.call != null ? " · " + esc(t("kLastCall")) + " " + callBadge(last.call, last.hit) : "");
     }
     $("k-live").textContent = ok ? fmtInt(task.shift_limit) : "–";
     $("k-live-s").textContent = ok ? t("kLiveS", { cap: fmtInt(task.shift_cap) }) : "";
@@ -1006,11 +1019,23 @@ body { background: var(--bg); }
   }
 
   var GLYPH = { 0: "▼", 1: "▲", 2: "?" };
-  function markHtml(h) {
+  // One call, one icon: the arrow is the direction called (white), the fill the
+  // verdict -- green hit, red miss (plus an inner ring), grey not judged yet.
+  // The words stay in title and aria-label, for colour-blind readers too.
+  function verdictCls(c, hit) {
+    return c === 2 ? "unsure" : hit === true ? "hit" : hit === false ? "miss" : "open";
+  }
+  function callTip(c, hit) {
+    return word(c) + (hit === true ? " · " + t("markHit") : hit === false ? " · " + t("markMiss") : "");
+  }
+  function callBadge(c, hit, ahead) {
+    var tip = callTip(c, hit);
+    return '<span class="cg ' + verdictCls(c, hit) + (ahead ? " ahead" : "") + '" role="img" title="' + esc(tip) +
+      '" aria-label="' + esc(tip) + '">' + GLYPH[c] + "</span>";
+  }
+  function markHtml(h, ahead) {
     if (h.call == null) return '<div class="mark">·</div>';
-    if (h.hit === true) return '<div class="mark hit" title="' + esc(t("markHit")) + '">' + GLYPH[h.call] + "✓</div>";
-    if (h.hit === false) return '<div class="mark miss" title="' + esc(t("markMiss")) + '">' + GLYPH[h.call] + "✗</div>";
-    return '<div class="mark call">' + GLYPH[h.call] + "</div>";
+    return '<div class="mark">' + callBadge(h.call, h.hit, ahead) + "</div>";
   }
 
   function renderTape() {
@@ -1027,8 +1052,7 @@ body { background: var(--bg); }
       if (h.live && !cutDone) { html += '<div class="shard-cut" aria-hidden="true"></div>'; cutDone = true; }
       var cls = "shard " + (h.up ? "up" : "down") + (h.live ? " live" : " frame") + (h.filled ? " filled" : "") +
         (h.hour === newest ? " newest" : "");
-      var tip = cellTitle(h) + (h.call != null ? " · " + t(h.call === 1 ? "callUp" : h.call === 0 ? "callDown" : "callUnsure") +
-        (h.hit === true ? " ✓" : h.hit === false ? " ✗" : "") : "");
+      var tip = cellTitle(h) + (h.call != null ? " · " + callTip(h.call, h.hit) : "");
       // Rise in once; later redraws keep still unless the hour is new.
       var delay = firstDraw ? (Math.min(i, 60) * 18) : (shownLive[h.hour] || !h.live ? -1 : 0);
       if (h.live) shownLive[h.hour] = true;
@@ -1046,8 +1070,8 @@ body { background: var(--bg); }
     if (o && o.next_at && (task.shift_cap == null || task.shift_limit < task.shift_cap)) {
       var mine = call.running && call.running.hour === o.next_hour ? call.running.call : null;
       html += '<div class="col"><div class="shard pending" title="' + esc(t("pendTip", { from: dayHm(o.next_at - 3600), to: hm(o.next_at) })) + '">' +
-        '<span class="gl">' + (mine == null ? "?" : GLYPH[mine]) + '</span><span class="num">' + esc(hm(o.next_at - 3600).slice(0, 2)) + "</span></div>" +
-        markHtml({ call: mine }) + "</div>";
+        '<span class="gl">?</span><span class="num">' + esc(hm(o.next_at - 3600).slice(0, 2)) + "</span></div>" +
+        markHtml({ call: mine }, true) + "</div>";
     }
     tape.innerHTML = html;
     firstDraw = false;
@@ -1306,10 +1330,12 @@ body { background: var(--bg); }
           var hour = Math.round((d + hh * 3600 - HOUR_ZERO) / 3600) + 1;
           var h = byStart[hour];
           if (h) {
-            var verdict = h.hit === true ? " hit" : h.hit === false ? " miss" : "";
+            // With a call: the call icon. Without: Bitcoin's move, in neutral blue.
             var ctip = cellTitle({ at: (h.hour) * 3600 + HOUR_ZERO, up: !!h.up, live: true, append_tick: h.append_tick, filled: !!h.filled }) +
-              (h.call != null ? " · " + t(h.call === 1 ? "callUp" : h.call === 0 ? "callDown" : "callUnsure") + (h.hit === true ? " ✓" : h.hit === false ? " ✗" : "") : "");
-            html += '<div class="c ' + (h.up ? "up" : "down") + verdict + '" title="' + esc(ctip) + '">' + (h.up ? "▲" : "▼") + "</div>";
+              (h.call != null ? " · " + callTip(h.call, h.hit) : "");
+            var ccls = h.call != null ? verdictCls(h.call, h.hit) : "move";
+            var cgl = h.call != null ? GLYPH[h.call] : (h.up ? "▲" : "▼");
+            html += '<div class="c ' + ccls + '" title="' + esc(ctip) + '">' + cgl + "</div>";
           }
           else html += '<div class="c none"></div>';
         }
@@ -1415,8 +1441,8 @@ body { background: var(--bg); }
 
     var W = Math.max(300, Math.round(box.clientWidth || 640)), narrow = W < 560;
     DayChart.w = W;
-    var upC = cssVar("--up") || "#1597b8", dnC = cssVar("--down") || "#7e6fff",
-        okC = cssVar("--success") || "#22c55e", badC = cssVar("--danger") || "#ef4444",
+    var moveC = cssVar("--move") || "#4b6584", openC = cssVar("--open") || "#6b7280",
+        okC = cssVar("--hit") || "#15803d", badC = cssVar("--miss") || "#dc2626",
         mutedC = cssVar("--muted") || "#9aa4b2", gridC = cssVar("--border") || "rgba(128,128,128,.2)",
         warnC = cssVar("--warn") || "#f59e0b", halo = cssVar("--chart-halo") || "#0b0f14";
     var o = D.oracle || {}, call = D.call || {}, verified = D.task && D.task.hash_verified === true;
@@ -1441,7 +1467,7 @@ body { background: var(--bg); }
     var pad = Math.max((pMax - pMin) * 0.16, pMax * 0.0015), lo = pMin - pad, hi = pMax + pad;
     var Y = function (p) { return padT + (hi - p) / (hi - lo) * plotH; };
     var axisY = bottom + 16, s = Math.max(6, Math.min(22, hourW - 3)), stripY = axisY + 10;
-    var H = stripY + s + 16;
+    var H = stripY + s + 6;
 
     var svg = sv(null, "svg", { viewBox: "0 0 " + W + " " + H, class: "day-svg", role: "img", "aria-label": t("dayAria") });
     var defs = sv(svg, "defs");
@@ -1510,7 +1536,7 @@ body { background: var(--bg); }
     });
 
     // The newest price: a tag on the axis, and the end of the line.
-    var lastCol = last.price >= first.price ? upC : dnC;
+    var lastCol = moveC;
     sv(svg, "rect", { x: W - padR + 3, y: lastY - 9.5, width: padR - 5, height: 19, rx: 5, fill: lastCol });
     sv(svg, "text", { x: W - padR + 3 + (padR - 5) / 2, y: lastY + 4, "text-anchor": "middle", "font-size": narrow ? 10 : 11,
       "font-weight": 700, fill: inkC, style: "font-family:var(--mono)" }, fmtNum(last.price));
@@ -1521,7 +1547,7 @@ body { background: var(--bg); }
     var hiP = pts[0], loP = pts[0];
     pts.forEach(function (p) { if (p.price > hiP.price) hiP = p; if (p.price < loP.price) loP = p; });
     if (hiP.price !== loP.price) [[hiP, true], [loP, false]].forEach(function (e) {
-      var p = e[0], above = e[1], x = X(p.at), y = Y(p.price), col = above ? upC : dnC;
+      var p = e[0], above = e[1], x = X(p.at), y = Y(p.price), col = moveC;
       var label = (above ? "▲ " : "▼ ") + fmtNum(p.price);
       var ty = above ? y - 10 : y + 19;
       if (ty < padT + 10) ty = y + 19; if (ty > bottom - 3) ty = y - 10;
@@ -1562,7 +1588,7 @@ body { background: var(--bg); }
         sv(g, "text", { x: cx, y: lastY + 4, "text-anchor": "middle", "font-size": 12, "font-weight": 700, fill: f.call === 2 ? warnC : mutedC }, "?");
         return;
       }
-      var dir = f.call === 1 ? -1 : 1, len = Math.min(36, plotH * 0.22), col = f.call === 1 ? upC : dnC;
+      var dir = f.call === 1 ? -1 : 1, len = Math.min(36, plotH * 0.22), col = openC;
       var y0 = Math.max(padT + 2 + (dir < 0 ? len : 0), Math.min(bottom - 2 - (dir > 0 ? len : 0), lastY));
       var tip = y0 + dir * len, hw = Math.max(3, Math.min(6, hourW / 2 - 1)), base = tip - dir * 8;
       sv(g, "line", { x1: cx, y1: y0, x2: cx, y2: base, stroke: col, "stroke-width": 2.2, "stroke-dasharray": "3 3", "stroke-linecap": "round" });
@@ -1580,16 +1606,20 @@ body { background: var(--bg); }
 
     // The call strip: one tile per hour, under the hour it called.
     sv(svg, "text", { x: W - padR + 8, y: stripY + s / 2 + 4, "font-size": 11, fill: mutedC }, t("dayCallLbl"));
+    // The call icon: white arrow = direction called, fill = verdict (grey until judged).
     function tile(cx, c, future, hit) {
-      var col = c === 1 ? upC : c === 0 ? dnC : null;
-      sv(svg, "rect", { x: cx - s / 2, y: stripY, width: s, height: s, rx: Math.min(5, s / 4),
-        fill: col || "none", "fill-opacity": future ? .28 : 1,
+      var dirCall = c === 1 || c === 0;
+      var col = !dirCall ? null : hit === true ? okC : hit === false ? badC : openC;
+      var g = sv(svg, "g", { class: future ? "dc-ahead" : null });
+      sv(g, "rect", { x: cx - s / 2, y: stripY, width: s, height: s, rx: Math.min(5, s / 4),
+        fill: col || "none", "fill-opacity": future ? .3 : 1,
         stroke: future ? (col || mutedC) : (c === 2 ? warnC : "none"), "stroke-width": future || c === 2 ? 1.4 : 0,
-        "stroke-dasharray": future ? "3 2" : null, class: future ? "dc-ahead" : null });
-      if (s >= 15) sv(svg, "text", { x: cx, y: stripY + s / 2 + 4, "text-anchor": "middle", "font-size": 11, "font-weight": 700,
-        fill: col ? (future ? col : inkC) : (c === 2 ? warnC : mutedC) }, c == null ? "?" : GLYPH[c]);
-      if (hit === true || hit === false) sv(svg, "text", { x: cx, y: stripY + s + 12, "text-anchor": "middle",
-        "font-size": s >= 15 ? 11 : 9, "font-weight": 700, fill: hit ? okC : badC }, hit ? "✓" : "✗");
+        "stroke-dasharray": future ? "3 2" : null });
+      // A miss also carries a white inner ring: the verdict is never colour alone.
+      if (hit === false && s >= 9) sv(g, "rect", { x: cx - s / 2 + 1.6, y: stripY + 1.6, width: s - 3.2, height: s - 3.2,
+        rx: Math.max(1, Math.min(5, s / 4) - 1.2), fill: "none", stroke: "#fff", "stroke-opacity": .65, "stroke-width": 1.4 });
+      if (s >= 15) sv(g, "text", { x: cx, y: stripY + s / 2 + 4, "text-anchor": "middle", "font-size": 11, "font-weight": 700,
+        fill: col ? (future ? textC : "#fff") : (c === 2 ? warnC : mutedC) }, c == null ? "?" : GLYPH[c]);
     }
     pts.forEach(function (p) {
       if (p.at - 3600 < tMin) return;
@@ -1626,7 +1656,7 @@ body { background: var(--bg); }
       var prev = pts[i - 1] && pts[i - 1].hour === p.hour - 1 ? pts[i - 1] : null;
       col(X(p.at - 3600), hourW, dayHm(p.at - 3600) + "–" + hm(p.at) + " · " + fmtUsd(p.price) +
         (prev ? " (" + fmtChg((p.price / prev.price - 1) * 100) + ")" : "") + " · " + t(p.up ? "dirUp" : "dirDown") +
-        (p.call != null ? " · " + t("dayTipCall", { c: word(p.call) }) + (p.hit === true ? " ✓" : p.hit === false ? " ✗" : "") : ""), p, prev);
+        (p.call != null ? " · " + t("dayTipCall", { c: callTip(p.call, p.hit) }) : ""), p, prev);
       if (DayChart.sel === p.hour) showFocus(p, prev);
     });
     svg.addEventListener("mouseleave", function () { DayChart.sel = null; showFocus(null); });
@@ -1710,7 +1740,7 @@ body { background: var(--bg); }
       h += "<thead><tr><th>" + esc(t("ovColHour")) + "</th><th>" + esc(t("ovColPrev")) + "</th><th>" + esc(t("ovColAfter")) +
         "</th><th>" + esc(t("ovColChange")) + "</th><th>" + esc(t("ovColDir")) + "</th><th>" + esc(t("ovColCall")) + "</th></tr></thead><tbody>";
       rows.forEach(function (r) {
-        var v = r.call == null ? "–" : GLYPH[r.call] + (r.hit === true ? ' <span class="vd hit">✓</span>' : r.hit === false ? ' <span class="vd miss">✗</span>' : "");
+        var v = r.call == null ? "–" : callBadge(r.call, r.hit);
         h += "<tr><td>" + esc(hm(r.from)) + '<span class="hto">–' + esc(hm(r.to)) + "</span></td>" +
           priceCell(r.prev_price, "prev") + priceCell(r.price) + chgCell(r.change_pct, maxAbs) +
           dirCell(r.up) + '<td class="callc">' + v + "</td></tr>";

@@ -135,7 +135,7 @@ means something. Three layers, unlocked one after the other.
 │  HOUR BAND (moves left as soon as an hour arrives)                           │
 │  … ▲ ▲ ▼ ▼ ▲ ▼ ▲ ▲ │ ▼  ▼  ▼  ▼  │ ?                                         │
 │     previous year (frame) │ live since 08:00 │ open                          │
-│                    call:  ✓  ✗  ✓  ✓     ← stage 2: hits green, misses red    │
+│                    call:  ▼  ▲  ▼  ▼     ← stage 2: icon green = hit, red miss│
 │                                                                              │
 │  HIT RATE      ━━━━━━━━━━━━━━━━━ 50 % coin toss ┈┈┈┈┈┈┈┈┈┈┈┈  ← stage 2      │
 │  (rolling, per epoch, with confidence band)                                  │
@@ -148,11 +148,21 @@ means something. Three layers, unlocked one after the other.
 
 **Animation with meaning:**
 - **Countdown ring** to the next oracle hour (full hour + ≥ 300 s). When the hour arrives, the
-  band moves one cell to the left and the cell is revealed green or red.
+  band moves one cell to the left and the call below it is revealed green or red.
 - **Pulse** for every accepted solution (from the `ANT_SOLU` logs over the existing tick stream),
   dimmed for rejected ones.
 - **Growing frame**: a bar shows `shiftLimit`, i.e. how far into the "future" the colony may be
   graded (0 → 168).
+
+**Colour language (since v0.17.4):** green and red mean only one thing on the page: whether a
+call hit. A call is the same icon everywhere. The white arrow is the direction called (▲ up or
+level, ▼ down), the fill is the verdict: **green** hit, **red** missed, **grey** not judged yet
+(the hour under way and the ones ahead, with a dashed edge while the hour is still to come). A
+"?" (abstention) has a yellow edge and no fill. A missed call also carries a white inner ring, so
+the verdict stays readable with red-green colour blindness; tooltip and screen reader say it in
+words. What Bitcoin itself did can be neither right nor wrong, so it is drawn in a neutral slate
+blue: the cells of the hour band, hours without a call in the record, the direction and the price
+bar in the overview.
 
 **History:** one record per hour (hour, up/down, the best network's call, swarm distribution,
 hit). From these come the hit rate per epoch and an archive of the epochs. The oracle hours can

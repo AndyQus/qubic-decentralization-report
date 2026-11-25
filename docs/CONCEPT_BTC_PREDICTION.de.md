@@ -139,7 +139,7 @@ Bewegung, die etwas bedeutet. Drei Ebenen, die nacheinander freigeschaltet werde
 │  STUNDENBAND (läuft nach links, sobald eine Stunde einläuft)                 │
 │  … ▲ ▲ ▼ ▼ ▲ ▼ ▲ ▲ │ ▼  ▼  ▼  ▼  │ ?                                         │
 │      Vorjahr (Rahmen)  │ live seit 08:00 │ offen                             │
-│                    Tipp:  ✓  ✗  ✓  ✓     ← Stufe 2: Treffer grün, Fehler rot  │
+│                    Tipp:  ▼  ▲  ▼  ▼     ← Stufe 2: Icon grün = Treffer, rot  │
 │                                                                              │
 │  TREFFERQUOTE   ━━━━━━━━━━━━━━━━━ 50 % Münzwurf ┈┈┈┈┈┈┈┈┈┈┈┈  ← Stufe 2      │
 │  (rollierend, je Epoche, mit Konfidenzband)                                  │
@@ -152,12 +152,23 @@ Bewegung, die etwas bedeutet. Drei Ebenen, die nacheinander freigeschaltet werde
 
 **Animation mit Bedeutung:**
 - **Countdown-Ring** bis zur nächsten Oracle-Stunde (volle Stunde + ≥ 300 s). Läuft die
-  Stunde ein, rutscht das Band eine Zelle nach links, und die Zelle wird grün oder rot
-  aufgedeckt.
+  Stunde ein, rutscht das Band eine Zelle nach links, und der Tipp darunter wird grün
+  oder rot aufgedeckt.
 - **Puls** für jede angenommene Lösung (aus den `ANT_SOLU`-Logs über den vorhandenen
   Tick-Stream), gedimmt für abgelehnte.
 - **Wachsender Rahmen**: Ein Balken zeigt `shiftLimit`, also wie weit die Kolonie in die
   „Zukunft“ gewertet werden darf (0 → 168).
+
+**Farbsprache (seit v0.17.4):** Grün und Rot bedeuten auf der Seite nur noch eines: ob ein
+Tipp getroffen hat. Ein Tipp ist überall dasselbe Icon. Der weiße Pfeil ist die getippte
+Richtung (▲ rauf oder gleich, ▼ runter), die Füllung das Urteil: **grün** getroffen, **rot**
+verfehlt, **grau** noch nicht ausgewertet (laufende und kommende Stunden, gestrichelt umrandet,
+wenn die Stunde noch bevorsteht). Ein „?“ (Enthaltung) ist gelb umrandet und ohne Füllung. Ein
+verfehlter Tipp trägt zusätzlich einen weißen Innenrand, damit das Urteil auch bei
+Rot-Grün-Sehschwäche lesbar bleibt; Tooltip und Screenreader nennen es in Worten. Was Bitcoin
+selbst getan hat, kann weder richtig noch falsch sein und erscheint deshalb in einem neutralen
+Schieferblau: die Zellen im Stundenband, Stunden ohne Tipp in der Aufzeichnung, die Richtung und
+der Kursbalken in der Übersicht.
 
 **Historie:** je Stunde ein Datensatz (Stunde, rauf/runter, Tipp des besten Netzes,
 Schwarmverteilung, Treffer). Daraus ergeben sich die Trefferquote pro Epoche und ein Archiv der
