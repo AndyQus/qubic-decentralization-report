@@ -168,7 +168,9 @@ verfehlter Tipp trägt zusätzlich einen weißen Innenrand, damit das Urteil auc
 Rot-Grün-Sehschwäche lesbar bleibt; Tooltip und Screenreader nennen es in Worten. Was Bitcoin
 selbst getan hat, kann weder richtig noch falsch sein und erscheint deshalb in einem neutralen
 Schieferblau: die Zellen im Stundenband, Stunden ohne Tipp in der Aufzeichnung, die Richtung und
-der Kursbalken in der Übersicht.
+der Kursbalken in der Übersicht. Einzige Ausnahme ist die Karte „Die Tipps der Kolonie“: Dort
+steht ein noch nicht ausgewerteter Tipp als leeres Feld, und nur der Pfeil ist grün (rauf) oder
+rot (runter), damit er nicht wie ein schon getroffener Tipp aussieht.
 
 **Historie:** je Stunde ein Datensatz (Stunde, rauf/runter, Tipp des besten Netzes,
 Schwarmverteilung, Treffer). Daraus ergeben sich die Trefferquote pro Epoche und ein Archiv der

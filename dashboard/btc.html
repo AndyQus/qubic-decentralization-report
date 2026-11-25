@@ -51,11 +51,13 @@
 
 <style>
 /* Green and red mean one thing on this page: whether the colony's call hit.
-   A call is one icon -- the arrow is the direction it called, always white;
+   A judged call is one icon -- the arrow is the direction it called, always white;
    the fill is the verdict: --hit, --miss, or --open while the hour is not
    judged yet. A miss also carries a white inner ring, so the verdict is never
    colour alone (red-green colour blindness). Bitcoin's own move -- which no
    one can get right or wrong -- is drawn in --move, a calm slate blue.
+   One exception, in the call card: a call still running or ahead shows only
+   its arrow in green (up) or red (down), inside an empty box.
    All four fills are deep enough to carry a white glyph in both themes. */
 :root {
   --hit:   #15803d;
@@ -142,7 +144,10 @@ body { background: var(--bg); }
 .slot .lbl b { display: block; font-family: var(--display); font-size: 15px; color: var(--text); text-transform: none; letter-spacing: 0; }
 .slot .g { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; font-size: 18px; font-weight: 700;
   color: var(--faint); border: 2px solid var(--border-strong); }
-.slot .g.up, .slot .g.down { background: var(--open); color: #fff; border-color: transparent; }
+/* A call not yet judged: the arrow alone takes the direction's colour, the box
+   stays empty -- a filled green or red icon is reserved for the verdict. */
+.slot .g.up   { color: var(--hit); }
+.slot .g.down { color: var(--miss); }
 .slot .g.unsure { color: var(--warn); border-color: var(--warn); }
 .slot .txt { font-size: 14px; color: var(--muted); line-height: 1.4; }
 .status.phase { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; margin-top: 2px; }
@@ -167,7 +172,8 @@ body { background: var(--bg); }
 .call b { display: block; margin-bottom: 2px; }
 .call p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
 .call a { color: var(--accent); }
-.call .q.up, .call .q.down { background: var(--open); color: #fff; border-color: transparent; }
+.call .q.up   { color: var(--hit); }
+.call .q.down { color: var(--miss); }
 .call .q.unsure { color: var(--warn); border-color: var(--warn); }
 .call .verdict { font-family: var(--display); font-size: 20px; margin: 2px 0 6px; }
 .call .meta { font-size: 12px; color: var(--faint); margin-top: 6px; }
@@ -236,18 +242,16 @@ body { background: var(--bg); }
 /* ── Key figures: the shared .qs-stat tiles from theme.css, as on Burn and
    Price. `themed` tiles (the hit rates) carry this page's Bitcoin orange; the
    others cycle through the house hues. Six tiles: 6 / 3 / 2 per row. */
-.kpis { --stat-accent: var(--btc); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.kpis { --stat-accent: var(--btc); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
 @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .kpis > :last-child { grid-column: 1 / -1; }   /* five tiles: the last one spans the row */
   .kpis .qs-stat { padding: 12px 12px; }
   .kpis .qs-stat .s-label { font-size: 10.5px; letter-spacing: .03em; }
 }
 .kpis .qs-stat { min-width: 0; }
 .kpis .s-val { font-family: var(--mono); }
-.kpis .s-val .dir { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px;
-  color: var(--cell-ink); font-size: 13px; vertical-align: -3px; margin-right: 6px; }
-.kpis .s-val .dir.up { background: var(--move); } .kpis .s-val .dir.down { background: var(--move); }
 
 /* ── Hit rate per day: one bar per UTC day, the dashed line is a coin toss ── */
 .dr-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 8px; }
@@ -353,7 +357,8 @@ body { background: var(--bg); }
 .day-sum b.pos, .day-sum b.neg { color: var(--text); }
 .day-sum .day-n { color: var(--faint); font-size: 12px; margin-left: 4px; }
 @media (max-width: 600px) {
-  .day-sum { flex: 1 0 100%; gap: 6px; flex-wrap: nowrap; }
+  /* Wraps: on a narrow phone the colony chip moves to its own line instead of overflowing. */
+  .day-sum { flex: 1 0 100%; gap: 6px; flex-wrap: wrap; }
   .day-sum .ov-chip { font-size: 12px; padding: 3px 9px; white-space: nowrap; }
   .day-sum .day-n { font-size: 11px; }
 }
@@ -393,19 +398,21 @@ body { background: var(--bg); }
 .ep-head { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; margin-bottom: 6px; }
 .ep-head b { font-family: var(--display); font-size: 15px; }
 .ep-head span { color: var(--muted); font-size: 13px; }
-.week { display: grid; grid-template-columns: 54px repeat(24, minmax(0, 1fr)); gap: 2px; font-size: 10.5px; }
-@media (max-width: 600px) { .week { grid-template-columns: 38px repeat(24, minmax(0, 1fr)); gap: 1px; font-size: 9px; } .week .c { font-size: 0; height: 13px; } }
+.week { display: grid; grid-template-columns: 54px repeat(24, minmax(0, 1fr)); gap: 4px 2px; font-size: 10.5px; }
+@media (max-width: 600px) { .week { grid-template-columns: 38px repeat(24, minmax(0, 1fr)); gap: 2px 1px; font-size: 9px; } .week .c { font-size: 0; border-radius: 3px; } }
 .week .d { color: var(--faint); align-self: center; white-space: nowrap; }
 .week .h { color: var(--faint); text-align: center; }
-.week .c { height: 16px; border-radius: 3px; display: grid; place-items: center; color: var(--cell-ink); font-size: 8px; }
+/* Each hour is a square icon, as in the day chart's call strip -- never a bar. */
+.week .c { width: min(100%, 20px); aspect-ratio: 1; justify-self: center; border-radius: 5px; display: grid; place-items: center;
+  color: #fff; font-size: 10px; font-weight: 700; line-height: 1; }
 /* A cell with a call is the call icon (verdict colour, called direction);
    an hour without one shows Bitcoin's move in the neutral --move. */
 .week .c.move { background: var(--move); }
 .week .c.open { background: var(--open); }
 .week .c.hit  { background: var(--hit); }
-.week .c.miss { background: var(--miss); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .65); }
+.week .c.miss { background: var(--miss); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .65); }
 .week .c.unsure { background: transparent; color: var(--warn); box-shadow: inset 0 0 0 1px var(--warn); }
-.week .c.none { background: transparent; border: 1px solid var(--border); }
+.week .c.none { background: transparent; box-shadow: inset 0 0 0 1px var(--border); }
 
 .note { font-size: 13px; color: var(--faint); line-height: 1.5; margin: 8px 0 0; }
 .note.verdict { color: var(--muted); font-size: 13.5px; }
@@ -526,11 +533,6 @@ body { background: var(--bg); }
 
   <!-- ── Key figures ──────────────────────────────────────────────────── -->
   <div class="kpis">
-    <div class="qs-stat glass-card">
-      <div class="s-label" data-i18n="kLast">Last hour</div>
-      <div class="s-val small" id="k-last">–</div>
-      <div class="s-sub" id="k-last-s"></div>
-    </div>
     <div class="qs-stat glass-card themed">
       <div class="s-label" data-i18n="kToday">Hit rate today</div>
       <div class="s-val small" id="k-today">–</div>
@@ -746,7 +748,6 @@ body { background: var(--bg); }
       rAnchor: "No node served the tick data a rebuild needs; retried every minute.",
       rOther: "No call for this hour (tracker: {s}).",
       rFailed: "The replayer stopped on this server; no call until it runs again.",
-      kLast: "Last hour", kLastUp: "Up", kLastDown: "Down", kLastCall: "call",
       kToday: "Hit rate today", kEpochRate: "Hit rate this epoch",
       kRateS: "{hits} of {calls} calls · coin toss 50 %", kRateNone: "no call judged yet",
       kTodayS: "{hits} of {calls} calls (UTC day)",
@@ -853,7 +854,6 @@ body { background: var(--bg); }
       rAnchor: "Keine Node lieferte die Tick-Daten für den Nachbau; neuer Versuch jede Minute.",
       rOther: "Kein Tipp für diese Stunde (Tracker: {s}).",
       rFailed: "Der Nachbau ist auf diesem Server abgebrochen; kein Tipp, bis er wieder läuft.",
-      kLast: "Letzte Stunde", kLastUp: "Up", kLastDown: "Down", kLastCall: "Tipp",
       kToday: "Treffer heute", kEpochRate: "Treffer diese Epoche",
       kRateS: "{hits} von {calls} Tipps · Münzwurf 50 %", kRateNone: "noch kein Tipp ausgewertet",
       kTodayS: "{hits} von {calls} Tipps (UTC-Tag)",
@@ -972,15 +972,6 @@ body { background: var(--bg); }
   function renderKpis() {
     var task = (D && D.task) || {}, ok = task.hash_verified === true;
     var live = liveHours();
-    // The newest stored hour: which way BTC went, when, and how the colony called it.
-    var hs = (D && D.hours) || [], last = ok && hs.length ? hs[hs.length - 1] : null;
-    if (last) {
-      $("k-last").innerHTML = '<span class="dir ' + (last.up ? "up" : "down") + '">' + (last.up ? "▲" : "▼") + "</span>" +
-        esc(t(last.up ? "kLastUp" : "kLastDown"));
-      $("k-last-s").innerHTML = esc(hm(last.at - 3600) + "–" + hm(last.at) +
-        (last.price != null ? " · " + fmtUsd(last.price) + (last.change_pct != null ? " (" + fmtChg(last.change_pct) + ")" : "") : "")) +
-        (last.call != null ? " · " + esc(t("kLastCall")) + " " + callBadge(last.call, last.hit) : "");
-    }
     $("k-live").textContent = ok ? fmtInt(task.shift_limit) : "–";
     $("k-live-s").textContent = ok ? t("kLiveS", { cap: fmtInt(task.shift_cap) }) : "";
     $("k-live-bar").style.width = ok && task.shift_cap ? (100 * task.shift_limit / task.shift_cap).toFixed(1) + "%" : "0";

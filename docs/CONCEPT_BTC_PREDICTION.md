@@ -162,7 +162,9 @@ level, ▼ down), the fill is the verdict: **green** hit, **red** missed, **grey
 the verdict stays readable with red-green colour blindness; tooltip and screen reader say it in
 words. What Bitcoin itself did can be neither right nor wrong, so it is drawn in a neutral slate
 blue: the cells of the hour band, hours without a call in the record, the direction and the price
-bar in the overview.
+bar in the overview. The one exception is the "colony's calls" card: a call not yet judged sits
+in an empty box, and only its arrow is green (up) or red (down), so it never looks like a call
+that already hit.
 
 **History:** one record per hour (hour, up/down, the best network's call, swarm distribution,
 hit). From these come the hit rate per epoch and an archive of the epochs. The oracle hours can
