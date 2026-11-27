@@ -346,3 +346,35 @@ gewollt? (Im Discord-Antwortvorschlag vom 25.11. gestellt.)
 4. **„?“ angleichen:** In unserer Quote „?“ wie der Core als falsch zählen oder beide Zahlen
    zeigen. Das widerspricht CFBs Aussage vom 24.11.; sie war vor dem Core-Code. Mit Schritt 3
    entscheiden.
+
+## 10. „Die besten Computoren“ auf der Seite (v0.17.6, 2026-11-27)
+
+**Anlass:** Ein User schrieb, einige Computoren lägen über 70 %, und schlug vor, die besten ins
+Dashboard zu holen. Die Zahl stimmte: das beste Netz stand bei 34 von 48 = 70,8 % (Wilson-Untergrenze
+56,8 %). Zwei Einschränkungen gehören aber dazu, und die Seite zeigt beide:
+
+- **Rückblick ist keine Vorhersage.** Unsere eigenen Tipps, jeder vom Netz mit der jeweils besten
+  Bilanz und vor seiner Stunde festgelegt, trafen über dieselbe Zeit deutlich weniger (Stand
+  27.11.: 24 von 48 laut `stats.rules.measured`; die Epochenquote aller Tipps 20 von 46). Wer über
+  48 Stunden der Beste war, ist es danach oft nicht mehr: Regression zur Mitte.
+- **Wir sehen nur wenige Computoren.** Die alte Rangliste zeigte zehn Netze, alle von derselben
+  Identität. Wir bauen nur `QDR_COLONY_LINES` = 4 Linien nach, nicht alle 676 Computoren.
+
+**Umsetzung:**
+
+- `colony.board()` hält **eine Zeile pro Identität** (ihr bestes Netz nach `rank_key`, also nach
+  derselben Regel, nach der gewählt wird), mit `strip` – dem Urteil pro Stunde des Fensters
+  (`1` richtig, `0` falsch, `?` Enthaltung, `.` nicht gezählt, aus `net_strip()`, das dieselbe
+  Regel wie `net_record()` nutzt) –, `wilson`/`wilson_high` (95-%-Spanne) und der 60-stelligen
+  Identität (`antask.identity_from_pubkey`, geprüft an der Null-Adresse `…FXIB`).
+- Der Worker legt das in den Status, `/v1/btc` liefert es unter `call.selection.board`, zusammen
+  mit den Stunden des Fensters und `always_up` auf genau diesen Stunden.
+- Die Seite zeigt den Bereich als eigenes Panel unter dem Kolonie-Puls: oben vier Chips (beste Bilanz ·
+  tatsächlich getippt · immer hoch · Münzwurf), dann pro Computor den Stundenstreifen und ein
+  Punktdiagramm der Quote mit Spanne, gegen 50 % und „immer hoch“. Die Farben sind die der
+  Tipp-Icons. Die alte Netz-Tabelle im Info-Bereich bleibt als Detail.
+
+**Offen (Stufe 2):** die offizielle Zählung des Cores daneben. Die Phase läuft (seit Tick
+92.275.481, 612 qualifiziert), aber Nachricht 84 beantwortete am 27.11. die Identität unseres
+besten Netzes nicht. Zu klären: Request-Format, und ob der Core Computor- statt Miner-Identitäten
+zählt. Dann alle Identitäten abfragen und als eigene Zeilen bzw. eigene Box zeigen.

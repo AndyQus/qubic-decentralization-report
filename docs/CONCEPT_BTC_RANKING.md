@@ -338,3 +338,35 @@ reply drafted on 25 Nov.)
    handed in up to :30.
 4. **Align "?":** count "?" as wrong in our rate like the core, or show both numbers. That goes
    against CFB's word of 24 Nov, which came before the core code. Decide with step 3.
+
+## 10. "The best computors" on the page (v0.17.6, 2026-11-27)
+
+**Occasion:** a user wrote that some computors are above 70 % and suggested putting the best ones on
+the dashboard. The number was right: the best network stood at 34 of 48 = 70.8 % (Wilson lower bound
+56.8 %). Two caveats belong with it, and the page shows both:
+
+- **Hindsight is not a forecast.** Our own calls, each made by the network with the best record at
+  that moment and fixed before its hour, hit clearly less over the same time (as of 27 Nov: 24 of 48
+  per `stats.rules.measured`; the epoch rate of all calls 20 of 46). Whoever was best over 48 hours
+  often is not afterwards: regression to the mean.
+- **We see only a few computors.** The old ranking showed ten networks, all from the same identity.
+  We rebuild only `QDR_COLONY_LINES` = 4 lineages, not all 676 computors.
+
+**Implementation:**
+
+- `colony.board()` keeps **one row per identity** (its best network by `rank_key`, the same rule
+  that chooses), with `strip` – the verdict per hour of the window (`1` right, `0` wrong, `?`
+  abstention, `.` not counted, from `net_strip()`, which uses the same rule as `net_record()`) –,
+  `wilson`/`wilson_high` (95 % range) and the 60-letter identity (`antask.identity_from_pubkey`,
+  checked against the null address `…FXIB`).
+- The worker puts it into its status; `/v1/btc` delivers it under `call.selection.board`, with the
+  window's hours and `always_up` on exactly those hours.
+- The page shows the section as a panel of its own below the colony pulse: four chips on top (best record ·
+  actually called · always up · coin toss), then per computor the hour strip and a dot plot of the
+  rate with its range, against 50 % and "always up". The colours are those of the call icons. The
+  old network table in the info section stays as detail.
+
+**Open (stage 2):** the core's official count beside it. The phase is running (since tick
+92,275,481, 612 qualified), but on 27 Nov message 84 did not answer for our best network's
+identity. To clarify: the request format, and whether the core counts computor rather than miner
+identities. Then query every identity and show them as rows or a box of their own.

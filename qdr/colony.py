@@ -111,6 +111,7 @@ SIDE_WALKS_PER_STEP = int(os.environ.get("QDR_COLONY_SIDE_WALKS", "10"))
 RECORD_WINDOW_H = int(os.environ.get("QDR_COLONY_WINDOW_H", "48"))
 RECORD_MIN_DECIDED = int(os.environ.get("QDR_COLONY_MIN_DECIDED", "12"))
 RANKING_SHOWN = 10
+BOARD_SHOWN = 10          # computors in the page's board (one row per identity)
 SIDE_PEERS = 5
 
 
@@ -300,24 +301,33 @@ def net_record(trits: str, born_tick: int, hours: list[dict], window_h: int = RE
     anchor is never after the network's own tick). A "?" or a missing output
     is an abstention: neither a hit nor a miss (CFB, 2026-11-24).
     """
-    hits = misses = abstained = 0
-    if hours:
-        last = hours[-1]["hour"]
-        stored = {h["hour"]: h["append_tick"] for h in hours}
-        for h in hours:
-            if h["hour"] <= last - window_h:
-                continue
-            prior = stored.get(h["hour"] - 2)
-            if not prior or int(born_tick) >= prior:
-                continue
-            c = trits[h["j"]] if h["j"] < len(trits) else "2"
-            if c not in "01":
-                abstained += 1
-            elif int(c) == h["up"]:
-                hits += 1
-            else:
-                misses += 1
+    s = net_strip(trits, born_tick, hours, window_h)
+    hits, misses, abstained = s.count("1"), s.count("0"), s.count("?")
     return {"hits": hits, "misses": misses, "abstained": abstained, "decided": hits + misses}
+
+
+def window_hours(hours: list[dict], window_h: int = RECORD_WINDOW_H) -> list[dict]:
+    """The live hours inside the rolling window, oldest first."""
+    if not hours:
+        return []
+    last = hours[-1]["hour"]
+    return [h for h in hours if h["hour"] > last - window_h]
+
+
+def net_strip(trits: str, born_tick: int, hours: list[dict], window_h: int = RECORD_WINDOW_H) -> str:
+    """The network's verdict for each hour of the window, oldest first, one
+    character each: "1" hit, "0" miss, "?" abstention, "." not counted (the
+    network could have known the hour -- see net_record)."""
+    stored = {h["hour"]: h["append_tick"] for h in hours}
+    out = []
+    for h in window_hours(hours, window_h):
+        prior = stored.get(h["hour"] - 2)
+        if not prior or int(born_tick) >= prior:
+            out.append(".")
+            continue
+        c = trits[h["j"]] if h["j"] < len(trits) else "2"
+        out.append("?" if c not in "01" else "1" if int(c) == h["up"] else "0")
+    return "".join(out)
 
 
 def wilson_low(k: int, n: int, z: float = 1.96) -> float:
@@ -330,6 +340,41 @@ def wilson_low(k: int, n: int, z: float = 1.96) -> float:
     centre = p + z * z / (2 * n)
     margin = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5)
     return (centre - margin) / d
+
+
+def wilson_high(k: int, n: int, z: float = 1.96) -> float:
+    """Upper bound of the same interval: what the hit rate is at most."""
+    if n <= 0:
+        return 1.0
+    return 1.0 - wilson_low(n - k, n, z)
+
+
+def board(cands: list[dict], hours: list[dict], chosen: Optional[dict] = None,
+          window_h: int = RECORD_WINDOW_H, shown: Optional[int] = None) -> dict:
+    """The best computors: one row per identity -- its best network by the
+    ranking rule, as the list the accuracy rule chooses from -- with the
+    network's verdict per hour of the window and the 95 % interval of its hit
+    rate. `cands` must be sorted best first. The window's hours carry Bitcoin's
+    direction, so the page can draw the strip and the "always up" line."""
+    shown = BOARD_SHOWN if shown is None else shown
+    wh = window_hours(hours, window_h)
+    rows, seen = [], set()
+    for c in cands:
+        if c["pubkey"] in seen or not c["decided"]:
+            continue
+        seen.add(c["pubkey"])
+        row = _public_net(c)
+        row.update(identity=antask.identity_from_pubkey(c["pubkey"]),
+                   wilson_high=round(wilson_high(c["hits"], c["decided"]), 4),
+                   strip=net_strip(c["trits"], c["tick"], hours, window_h),
+                   calls=bool(chosen) and c["tick"] == chosen["tick"] and c["tx_index"] == chosen["tx_index"])
+        rows.append(row)
+        if len(rows) >= shown:
+            break
+    ups = sum(h["up"] for h in wh)
+    return {"window_h": window_h, "line_count": LINES,
+            "hours": [{"hour": h["hour"], "up": h["up"], "at": antask.hour_at(h["hour"])} for h in wh],
+            "always_up": round(ups / len(wh), 4) if wh else None, "rows": rows}
 
 
 def rank_key(c: dict, min_decided: Optional[int] = None) -> tuple:
@@ -598,7 +643,7 @@ class Tracker:
         return self.status(state="tracking" if complete else "catching-up",
                            depth=i + 1, lineage=len(chain), walked=walked, scanned=scanned,
                            call=call.get("score"), call_accuracy=call.get("accuracy"),
-                           selection=sel, ranking=ranking, lines=lines,
+                           selection=sel, ranking=ranking, lines=lines, board=self.board,
                            walk_s=round(getattr(self, "walk_s", 15.0), 1))
 
     # -- rebuilding --------------------------------------------------------------
@@ -728,7 +773,9 @@ class Tracker:
             rec = net_record(r["trits"], r["tick"], hours)
             cands.append(dict(r, **rec, wilson=round(wilson_low(rec["hits"], rec["decided"]), 4)))
         cands.sort(key=rank_key)
-        return [_public_net(c) for c in cands[:RANKING_SHOWN]], select_network(cands)
+        chosen = select_network(cands)
+        self.board = board(cands, hours, chosen)
+        return [_public_net(c) for c in cands[:RANKING_SHOWN]], chosen
 
     def _call(self, epoch: int, task: dict, series: dict, score_net: Optional[dict],
               chosen: Optional[dict]) -> dict:

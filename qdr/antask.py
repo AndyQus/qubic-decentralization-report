@@ -98,6 +98,25 @@ def k12_hex(data: bytes) -> str:
     return KangarooTwelve.new(data=data).read(32).hex()
 
 
+def identity_from_pubkey(pubkey_hex: str) -> str:
+    """The 60-letter Qubic identity of a 32-byte public key (the core's
+    getIdentity, upper case): four 14-letter base-26 groups, least significant
+    letter first, one per little-endian 64-bit word, then 4 checksum letters
+    from the low 18 bits of K12(pubkey)."""
+    pk = bytes.fromhex(pubkey_hex)
+    out = []
+    for i in range(4):
+        v = int.from_bytes(pk[i * 8:i * 8 + 8], "little")
+        for _ in range(14):
+            out.append(chr(ord("A") + v % 26))
+            v //= 26
+    check = int.from_bytes(bytes.fromhex(k12_hex(pk))[:3], "little") & 0x3FFFF
+    for _ in range(4):
+        out.append(chr(ord("A") + check % 26))
+        check //= 26
+    return "".join(out)
+
+
 def _http_get(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": "qubic-report"})
     with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT_S) as resp:

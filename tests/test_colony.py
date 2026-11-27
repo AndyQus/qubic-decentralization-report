@@ -411,6 +411,50 @@ def test_unsure_and_missing_outputs_are_abstentions_and_the_window_rolls():
                                                                 "decided": 2}
 
 
+def test_the_strip_marks_every_window_hour_and_matches_the_record():
+    hours = _hours_pts([1, 0, 1, 0, 1, 0])
+    # Born in tick 1015: j0..j3 not counted (h-2 stored before birth or no h-2).
+    assert colony.net_strip("000102", 1015, hours, window_h=48) == "....0?"   # j4 up, called down
+    s = colony.net_strip("1012", 1, hours, window_h=48)
+    assert s == "..1???"
+    rec = colony.net_record("1012", 1, hours, window_h=48)
+    assert (rec["hits"], rec["misses"], rec["abstained"]) == (s.count("1"), s.count("0"), s.count("?"))
+    assert colony.net_strip("101010", 1, hours, window_h=2) == "11"
+
+
+def test_wilson_high_mirrors_the_low_bound():
+    assert colony.wilson_high(0, 0) == 1.0
+    assert round(colony.wilson_high(0, 5), 2) == 0.43
+    lo, hi = colony.wilson_low(34, 48), colony.wilson_high(34, 48)
+    assert lo < 34 / 48 < hi and round(lo, 4) == 0.5682
+
+
+def test_the_board_keeps_one_row_per_identity_best_first():
+    hours = _hours_pts([1, 1, 0, 1, 1, 0])
+    a, b = "aa" * 32, "bb" * 32
+
+    def cand(tick, pk, trits):
+        rec = colony.net_record(trits, tick, hours)
+        return dict(tick=tick, tx_index=0, pubkey=pk, trits=trits, error=4000, shift=0, depth=1,
+                    **rec, wilson=colony.wilson_low(rec["hits"], rec["decided"]))
+    cands = sorted([cand(1, a, "110110"), cand(2, a, "110111"), cand(3, b, "001001")], key=colony.rank_key)
+    bd = colony.board(cands, hours, chosen=cands[0], window_h=48)
+    assert [r["pubkey"] for r in bd["rows"]] == [a, b]
+    assert bd["rows"][0]["tick"] == 1 and bd["rows"][0]["calls"] and not bd["rows"][1]["calls"]
+    assert bd["rows"][0]["strip"] == "..1111" and bd["rows"][1]["strip"] == "..0000"
+    assert len(bd["rows"][0]["identity"]) == 60 and bd["rows"][0]["wilson_high"] > bd["rows"][0]["wilson"]
+    assert [h["up"] for h in bd["hours"]] == [1, 1, 0, 1, 1, 0] and bd["always_up"] == round(4 / 6, 4)
+    assert len(colony.board(cands, hours, shown=1)["rows"]) == 1
+
+
+def test_identity_from_pubkey_matches_the_core():
+    from qdr import antask
+    assert antask.identity_from_pubkey("00" * 32) == "A" * 56 + "FXIB"
+    assert antask.identity_from_pubkey(
+        "9c271162af232a5b5b7fb4d064dd631ba10202e3b6a402d0e1277281ab2b6729"
+    ) == "MAMWBDOEAGUVQCNLOHATRBJBTRUAJWPKJREGPETBBGPDLVRNSOOVVGFBCVRB"
+
+
 def test_wilson_punishes_small_samples():
     assert colony.wilson_low(0, 0) == 0.0
     assert round(colony.wilson_low(5, 5), 2) == 0.57

@@ -617,6 +617,11 @@ def btc(compact: bool = Query(False, description="Only the epoch's live hours, t
     the hours and the rates follow the accuracy rule where it has a call;
     `call.rules` shows both, `call.selection` the ranking, `stats.rules` both
     rates on the same hours. A "?" call is an abstention: `hit` stays null.
+    `call.selection.board` is the best computors: one row per rebuilt identity
+    (its best network), with its verdict per hour of the window in `strip`
+    ("1" hit, "0" miss, "?" abstention, "." not counted) and the 95 % interval
+    of its hit rate (`wilson`, `wilson_high`); `hours` and `always_up` are the
+    window's hours and what always calling up scored on them.
 
     `prediction` is the network's own phase since v1.314.0 (epoch 241): in
     `training` until 226 computors have qualified, then `prediction`, when the
@@ -929,7 +934,7 @@ def _current_call(store, view: dict, next_hour) -> dict:
                     "upcoming": _call_row(src.get(int(next_hour) + 1)) if next_hour else None}
              for name, src in (("score", view["by_score"]), ("accuracy", view["by_acc"]))}
     selection = dict(status.get("selection") or {}, ranking=status.get("ranking") or [],
-                     lines=status.get("lines") or []) if status.get("selection") else None
+                     lines=status.get("lines") or [], board=status.get("board")) if status.get("selection") else None
     network = None
     if status.get("network"):
         n = status["network"]

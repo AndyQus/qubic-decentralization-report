@@ -252,6 +252,10 @@ body { background: var(--bg); }
 }
 .kpis .qs-stat { min-width: 0; }
 .kpis .s-val { font-family: var(--mono); }
+/* Value and its sub-line on one line (live hours): the bar then sits where the
+   other tiles have their second line, so all tiles line up. */
+.kpis .s-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+.kpis .s-row .s-sub { margin-top: 0; }
 
 /* ── Hit rate per day: one bar per UTC day, the dashed line is a coin toss ── */
 .dr-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 8px; }
@@ -384,6 +388,56 @@ body { background: var(--bg); }
 .day-legend i.hz { border: 1px dashed var(--border-strong);
   background: repeating-linear-gradient(45deg, transparent 0 3px, color-mix(in srgb, var(--muted) 35%, transparent) 3px 4px); }
 @media (prefers-reduced-motion: reduce) { .day-svg .dc-line.draw, .day-svg .dc-area.draw, .day-svg .dc-ahead { animation: none; stroke-dasharray: none; } }
+
+/* ── The best computors: id · hour strip · rate with its range ──────── */
+.bd-row { display: grid; grid-template-columns: 190px minmax(0, 1fr) minmax(150px, 24%) 64px;
+  grid-template-areas: "id strip iv pct"; gap: 0 16px; align-items: center; padding: 7px 0; }
+.bd-row + .bd-row { border-top: 1px solid var(--border); }
+.bd-id { grid-area: id; } .bd-strip { grid-area: strip; } .bd-iv, .bd-ax { grid-area: iv; } .bd-pct { grid-area: pct; }
+.bd-row.head { padding: 0 0 6px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+.bd-row.head .bd-pct { font-size: 11px; font-weight: 600; font-family: var(--sans); }
+.bd-row.axis { padding: 0; border-top: 0; }
+.bd-id { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
+.bd-id .rk { color: var(--faint); font-family: var(--mono); width: 18px; text-align: right; flex: none; }
+.bd-id a { font-family: var(--mono); color: var(--text); text-decoration: none; white-space: nowrap; }
+.bd-id a:hover { text-decoration: underline; }
+.bd-id .now { font-size: 11px; color: var(--accent); border: 1px solid currentColor; border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+.bd-strip { display: flex; gap: 2px; min-width: 0; }
+.bq { flex: 1 1 0; max-width: 14px; aspect-ratio: 1; border-radius: 3px; }
+.bq.h { background: var(--hit); }
+.bq.m { background: var(--miss); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .6); }
+.bq.a { box-shadow: inset 0 0 0 1.5px var(--warn); }
+.bq.n { box-shadow: inset 0 0 0 1px var(--border-strong); opacity: .6; }
+.bd-iv { position: relative; height: 22px; }
+.bd-iv .tr { position: absolute; left: 0; right: 0; top: 10px; height: 2px; border-radius: 2px; background: var(--border); }
+.bd-iv .rng { position: absolute; top: 7px; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.bd-iv .dot { position: absolute; top: 4px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--chart-halo); }
+.bd-iv .ref { position: absolute; top: 0; bottom: 0; width: 0; }
+.bd-iv .ref.coin { border-left: 1.5px dashed var(--muted); }
+.bd-iv .ref.up { border-left: 2px solid var(--btc); top: 3px; bottom: 3px; }
+.bd-ax { position: relative; height: 14px; font-size: 10.5px; color: var(--faint); font-family: var(--mono); }
+.bd-ax span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.bd-pct { text-align: right; font-family: var(--mono); font-size: 13.5px; font-weight: 700; }
+.bd-pct small { display: block; font-weight: 400; font-size: 11px; color: var(--faint); }
+.bd-row-me .bd-id a { color: var(--accent); font-weight: 700; }
+.bd-legend i.bq { display: inline-block; width: 12px; height: 12px; flex: none; margin-right: 2px; }
+.bd-legend i.bq.n { margin-right: 5px; }
+.bd-legend i.bl-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); margin-right: 2px; }
+.bd-legend i.bl-rng { width: 18px; height: 6px; border-radius: 3px; vertical-align: 1px; background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.bd-legend i.bl-coin { width: 0; height: 12px; border-radius: 0; border-left: 1.5px dashed var(--muted); }
+.bd-legend i.bl-up { width: 0; height: 12px; border-radius: 0; border-left: 2px solid var(--btc); }
+.bd-sum b { color: var(--text); font-family: var(--mono); }
+.bd-sum .ov-chip.key { border-color: var(--accent); }
+.bd-empty { color: var(--muted); font-size: 13.5px; padding: 8px 0; }
+@media (max-width: 700px) {
+  /* Phones: the identity and the rate on one line, the strip and the range each full width below. */
+  .bd-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "id pct" "strip strip" "iv iv"; gap: 6px 10px; padding: 10px 0; }
+  .bd-row.head { display: none; }
+  .bd-row.axis { grid-template-areas: "iv iv"; padding: 0 0 4px; }
+  .bd-strip { gap: 1px; }
+  .bq { border-radius: 2px; }
+}
 
 /* ── Colony pulse ──────────────────────────────────────────────────── */
 .pulse { display: flex; gap: 2px; align-items: flex-end; height: 60px; border-bottom: 1px solid var(--border-strong); overflow: hidden; }
@@ -559,8 +613,10 @@ body { background: var(--bg); }
     </div>
     <div class="qs-stat glass-card">
       <div class="s-label" data-i18n="kLive">Live hours</div>
-      <div class="s-val small" id="k-live">–</div>
-      <div class="s-sub" id="k-live-s"></div>
+      <div class="s-row">
+        <div class="s-val small" id="k-live">–</div>
+        <div class="s-sub" id="k-live-s"></div>
+      </div>
       <div class="bar"><i id="k-live-bar"></i></div>
     </div>
     <div class="qs-stat glass-card">
@@ -597,6 +653,21 @@ body { background: var(--bg); }
     <p class="desc" data-i18n="pulseDesc">Mining solutions per tick, live from the tick stream. Each one is a network that beat its parent; the node logs whether it was accepted and how many errors it made over the year-long frame.</p>
     <div class="pulse" id="pulse" role="img" aria-label="Accepted solutions per tick"></div>
     <div class="pulse-meta" id="pulse-meta"><span data-i18n="pulseWait">Waiting for ticks …</span></div>
+  </section>
+
+  <!-- ── The best computors: each one's hits per hour and how sure its rate is ── -->
+  <section class="card" id="board-card">
+    <h2 data-i18n="bdTitle">The best computors</h2>
+    <p class="desc" data-i18n="bdDesc">Every computor whose networks this page rebuilds, with its best network: one square per hour it could not have known, and how sure its hit rate is.</p>
+    <div class="ov-sum bd-sum" id="bd-sum"></div>
+    <div id="board"><div class="skel head"></div><div class="skel"></div><div class="skel"></div></div>
+    <div class="tape-legend bd-legend">
+      <span><i class="bq h"></i><i class="bq m"></i><i class="bq a"></i><i class="bq n"></i><span data-i18n="bdLgStrip">hour: right / wrong / abstained / not counted</span></span>
+      <span><i class="bl-dot"></i><i class="bl-rng"></i><span data-i18n="bdLgRate">hit rate and its 95 % range</span></span>
+      <span><i class="bl-coin"></i><span data-i18n="bdLgCoin">coin toss 50 %</span></span>
+      <span><i class="bl-up"></i><span data-i18n="bdLgUp">always up, same hours</span></span>
+    </div>
+    <p class="note" id="bd-note"></p>
   </section>
 
   <!-- ── The tape ─────────────────────────────────────────────────────── -->
@@ -733,6 +804,22 @@ body { background: var(--bg); }
       callUp: "▲ Up or level", callDown: "▼ Down", callUnsure: "? unsure",
       callText: "Each call is the output of one network of the colony for its hour, rebuilt from public data with qubic/core's own reference scorer; every rebuilt network reproduces the error the node logged. Which network speaks is decided by how well it predicts, not by its score: the score only measures how well a network fits hours it already knew. So every rebuilt network is judged on the recent hours it could not have known when it was made, and the one whose hit rate is highest even allowing for luck makes the call. Until a network has enough judged hours, the best-score network calls. The call is fixed before the hour exists on-chain.",
       rankConcept: "How the network is chosen (concept) →",
+      bdTitle: "The best computors",
+      bdDesc: "Every computor whose networks this page rebuilds, with its best network: one square per recent hour it could not have known, and how sure its hit rate is.",
+      bdHId: "Computor", bdHStrip: "Last {w} hours · old → new", bdHIv: "Hit rate · 95 % range", bdHPct: "Rate",
+      bdNow: "calls now",
+      bdLgStrip: "hour: right / wrong / abstained / not counted", bdLgRate: "hit rate and its 95 % range",
+      bdLgCoin: "coin toss 50 %", bdLgUp: "always up, same hours",
+      bdBest: "Best record: {p}", bdLive: "Actually called: {p} ({h} of {n})", bdUpChip: "Always up: {p}", bdCoin: "Coin toss: 50 %",
+      bdBestTip: "The top computor's hit rate on the last {w} hours — looking back.",
+      bdLiveTip: "The page's own calls since v0.17.0, each made by the network with the best record at that moment, before its hour began. This is the forecast; the record above is hindsight.",
+      bdUpTip: "What calling \"up\" every hour would have scored on the same {w} hours.",
+      bdCell: "{t} · Bitcoin {b} · called {c} — {v}", bdCellN: "{t} · Bitcoin {b} — not counted: the network could have known this hour",
+      bdRight: "right", bdWrong: "wrong", bdAbst: "abstained",
+      bdIvTip: "{h} of {n} right ({a} abstained) · {p} · with 95 % certainty between {lo} and {hi}",
+      bdIdTip: "{id}\nBest network: tick {tick} · {err} errors over the year frame\nOpens the identity in the Qubic explorer",
+      bdEmpty: "No computor has a record yet: a network needs hours it could not have known — the first ones after it was mined.",
+      bdNote: "Looking back, single networks reach over 70 % — but a short record says little about the next hours: whoever was best over {w} hours often is not afterwards (regression to the mean). That is why the range matters more than the dot, and why the actual calls are shown beside it. This page rebuilds the lineages of {n} identities only, not all 676 computors; the network's own official count per computor will be shown as soon as the core publishes it.",
       netPicked: "Right now the network from tick {tick} calls: {hits} of {dec} right on the last {w} hours it could not have known ({ab} abstained) — at least {lo} % allowing for luck. Over the year frame it has {err} errors, shift {shift}.",
       netFallback: "No network has {m} judged hours yet, so the best-score network calls: {err} errors over the year frame ({pct} % right on the hours it was mined against — a fit, not a forecast), shift {shift}.",
       rankTitle: "Rebuilt networks by record · last {w} hours", rankNet: "Network (tick)", rankRight: "Right",
@@ -841,6 +928,22 @@ body { background: var(--bg); }
       callUp: "▲ Up oder gleich", callDown: "▼ Down", callUnsure: "? unsicher",
       callText: "Jeder Tipp ist die Ausgabe eines Netzes der Kolonie für seine Stunde, nachgebaut aus öffentlichen Daten mit dem Referenz-Scorer von qubic/core; jedes nachgebaute Netz trifft den Fehler, den die Node protokolliert hat. Welches Netz spricht, entscheidet seine Vorhersage, nicht sein Score: Der Score misst nur, wie gut ein Netz Stunden nachbildet, die es schon kannte. Deshalb wird jedes nachgebaute Netz an den letzten Stunden gemessen, die es bei seiner Entstehung nicht kennen konnte, und das Netz mit der höchsten Trefferquote, auch nach Abzug von Glück, gibt den Tipp. Solange kein Netz genug ausgewertete Stunden hat, tippt das Netz mit dem besten Score. Der Tipp steht fest, bevor die Stunde on-chain existiert.",
       rankConcept: "Wie das Netz gewählt wird (Konzept) →",
+      bdTitle: "Die besten Computoren",
+      bdDesc: "Jeder Computor, dessen Netze diese Seite nachbaut, mit seinem besten Netz: ein Quadrat pro zurückliegender Stunde, die es nicht kennen konnte, und wie sicher seine Trefferquote ist.",
+      bdHId: "Computor", bdHStrip: "Letzte {w} Stunden · alt → neu", bdHIv: "Trefferquote · 95-%-Spanne", bdHPct: "Quote",
+      bdNow: "tippt gerade",
+      bdLgStrip: "Stunde: richtig / falsch / Enthaltung / nicht gezählt", bdLgRate: "Trefferquote und ihre 95-%-Spanne",
+      bdLgCoin: "Münzwurf 50 %", bdLgUp: "immer hoch, gleiche Stunden",
+      bdBest: "Beste Bilanz: {p}", bdLive: "Tatsächlich getippt: {p} ({h} von {n})", bdUpChip: "Immer hoch: {p}", bdCoin: "Münzwurf: 50 %",
+      bdBestTip: "Die Trefferquote des besten Computors auf den letzten {w} Stunden — im Rückblick.",
+      bdLiveTip: "Die eigenen Tipps dieser Seite seit v0.17.0, jeder vom Netz mit der jeweils besten Bilanz, festgelegt bevor seine Stunde begann. Das ist die Vorhersage; die Bilanz oben ist der Rückblick.",
+      bdUpTip: "Was „jede Stunde hoch“ auf denselben {w} Stunden erreicht hätte.",
+      bdCell: "{t} · Bitcoin {b} · getippt {c} — {v}", bdCellN: "{t} · Bitcoin {b} — nicht gezählt: das Netz konnte diese Stunde kennen",
+      bdRight: "richtig", bdWrong: "falsch", bdAbst: "Enthaltung",
+      bdIvTip: "{h} von {n} richtig ({a} Enthaltungen) · {p} · mit 95 % Sicherheit zwischen {lo} und {hi}",
+      bdIdTip: "{id}\nBestes Netz: Tick {tick} · {err} Fehler über den Jahresrahmen\nÖffnet die Identität im Qubic-Explorer",
+      bdEmpty: "Noch hat kein Computor eine Bilanz: ein Netz braucht Stunden, die es nicht kennen konnte — die ersten nach seinem Mining.",
+      bdNote: "Im Rückblick kommen einzelne Netze auf über 70 % — aber eine kurze Bilanz sagt wenig über die nächsten Stunden: wer über {w} Stunden der Beste war, ist es danach oft nicht mehr (Regression zur Mitte). Deshalb zählt die Spanne mehr als der Punkt, und deshalb stehen die tatsächlichen Tipps daneben. Diese Seite baut nur die Linien von {n} Identitäten nach, nicht alle 676 Computoren; die offizielle Zählung des Netzwerks pro Computor kommt dazu, sobald der Core sie veröffentlicht.",
       netPicked: "Gerade tippt das Netz aus Tick {tick}: {hits} von {dec} richtig auf den letzten {w} Stunden, die es nicht kennen konnte ({ab} Enthaltungen) — nach Abzug von Glück mindestens {lo} %. Über den Jahresrahmen hat es {err} Fehler, Shift {shift}.",
       netFallback: "Noch hat kein Netz {m} ausgewertete Stunden, deshalb tippt das Netz mit dem besten Score: {err} Fehler über den Jahresrahmen ({pct} % richtig auf den Stunden, gegen die es gemined wurde — eine Anpassung, keine Prognose), Shift {shift}.",
       rankTitle: "Nachgebaute Netze nach Bilanz · letzte {w} Stunden", rankNet: "Netz (Tick)", rankRight: "Richtig",
@@ -882,7 +985,7 @@ body { background: var(--bg); }
       ovSrc: "Kurse: {s}. Tage und Monate in UTC, Stunden in deiner Ortszeit.",
       ovSumMove: "Bitcoin {chg}", ovSumRate: "Kolonie {hits} von {calls} richtig", ovSumHours: "{n} Stunden",
       ovEpochN: "Epoche {ep}",
-      kLive: "Live-Stunden", kLiveS: "von {cap} möglichen in dieser Epoche",
+      kLive: "Live-Stunden", kLiveS: "von {cap} möglichen der Epoche",
       kDir: "Up / Down bisher", kDirS: "der Live-Stunden",
       kColony: "Kolonie", kColonyS: "Lösungen · Schwelle {th} Fehler",
       tapeTitle: "Stunde für Stunde",
@@ -1371,7 +1474,72 @@ body { background: var(--bg); }
     renderStatus();
     if (!D) return;
     setLoading(false);
-    renderKpis(); renderNext(); renderDay(); renderTape(); renderRecord(); renderHits();
+    renderKpis(); renderNext(); renderDay(); renderBoard(); renderTape(); renderRecord(); renderHits();
+  }
+
+  /* ── The best computors ────────────────────────────────────────────
+     One row per rebuilt identity (its best network, as the accuracy rule
+     ranks them): a square per hour of the window -- the verdict, coloured
+     like every call on this page -- and a dot plot of its hit rate with the
+     95 % Wilson range, against a coin toss and "always up" on the same hours.
+     Above it, hindsight next to the page's actual calls. */
+  var BD_LO = 0.3, BD_HI = 1;
+  function bdP(v) { return 100 * (Math.min(BD_HI, Math.max(BD_LO, v)) - BD_LO) / (BD_HI - BD_LO); }
+  function bdX(v) { return bdP(v).toFixed(2) + "%"; }
+  function renderBoard() {
+    var sel = (D && D.call && D.call.selection) || {}, bd = sel.board || null;
+    var w = (bd && bd.window_h) || sel.window_h || 48;
+    var pc = function (v) { return v == null ? "–" : (Math.round(v * 1000) / 10).toLocaleString(locale()) + " %"; };
+    var rows = (bd && bd.rows) || [], box = $("board");
+    if (!rows.length) {
+      $("bd-sum").innerHTML = "";
+      box.innerHTML = '<div class="bd-empty">' + esc(t("bdEmpty")) + "</div>";
+      $("bd-note").textContent = "";
+      return;
+    }
+    // Hindsight beside the forecast: the top record, the calls actually made
+    // from records (not the score fallback), and the two naive rules.
+    var live = ((D.stats || {}).rules || {}).measured || {};
+    var chip = function (txt, tip, key) {
+      return '<span class="ov-chip' + (key ? " key" : "") + '" title="' + esc(tip) + '">' + txt + "</span>";
+    };
+    var b = function (s) { return "<b>" + esc(s) + "</b>"; };
+    $("bd-sum").innerHTML =
+      chip(esc(t("bdBest", { p: "\u0000" })).replace("\u0000", b(pc(rows[0].rate))), t("bdBestTip", { w: fmtInt(w) })) +
+      (live.calls ? chip(esc(t("bdLive", { p: "\u0000", h: fmtInt(live.hits), n: fmtInt(live.calls) })).replace("\u0000", b(pc(live.rate))),
+        t("bdLiveTip"), true) : "") +
+      (bd.always_up != null ? chip(esc(t("bdUpChip", { p: "\u0000" })).replace("\u0000", b(pc(bd.always_up))), t("bdUpTip", { w: fmtInt(w) })) : "") +
+      chip(esc(t("bdCoin")), t("bdCoin"));
+
+    var hrs = bd.hours || [], up = bd.always_up;
+    var refs = '<i class="ref coin" style="left:' + bdX(0.5) + '"></i>' + (up != null ? '<i class="ref up" style="left:' + bdX(up) + '"></i>' : "");
+    var ax = [0.5, 0.7, 0.9].map(function (v) { return '<span style="left:' + bdX(v) + '">' + Math.round(v * 100) + " %</span>"; }).join("");
+    var h = '<div class="bd-row head"><div class="bd-id">' + esc(t("bdHId")) + '</div><div class="bd-strip">' + esc(t("bdHStrip", { w: fmtInt(hrs.length || w) })) +
+      '</div><div class="bd-iv" style="height:auto">' + esc(t("bdHIv")) + '</div><div class="bd-pct">' + esc(t("bdHPct")) + "</div></div>" +
+      '<div class="bd-row axis"><div class="bd-ax">' + ax + "</div></div>";
+    rows.forEach(function (r, i) {
+      var id = r.identity || "", short = id ? id.slice(0, 5) + "…" + id.slice(-4) : r.pubkey.slice(0, 8);
+      var cells = (r.strip || "").split("").map(function (c, k) {
+        var hr = hrs[k] || {}, when = hr.at ? dayHm(hr.at - 3600) + "–" + hm(hr.at) : "", bit = GLYPH[hr.up ? 1 : 0];
+        if (c === ".") return '<i class="bq n" title="' + esc(t("bdCellN", { t: when, b: bit })) + '"></i>';
+        var called = c === "?" ? "?" : GLYPH[c === "1" ? (hr.up ? 1 : 0) : (hr.up ? 0 : 1)];
+        var cls = c === "1" ? "h" : c === "0" ? "m" : "a", v = t(c === "1" ? "bdRight" : c === "0" ? "bdWrong" : "bdAbst");
+        return '<i class="bq ' + cls + '" title="' + esc(t("bdCell", { t: when, b: bit, c: called, v: v })) + '"></i>';
+      }).join("");
+      var lo = r.wilson, hi = r.wilson_high != null ? r.wilson_high : r.rate;
+      h += '<div class="bd-row' + (r.calls ? " bd-row-me" : "") + '"><div class="bd-id"><span class="rk">' + (i + 1) + "</span>" +
+        (id ? '<a href="https://explorer.qubic.org/network/address/' + esc(id) + '" target="_blank" rel="noreferrer" title="' +
+          esc(t("bdIdTip", { id: id, tick: fmtInt(r.tick), err: fmtInt(r.error) })) + '">' + esc(short) + "</a>" : esc(short)) +
+        (r.calls ? '<span class="now">◉ ' + esc(t("bdNow")) + "</span>" : "") + "</div>" +
+        '<div class="bd-strip">' + cells + "</div>" +
+        '<div class="bd-iv" title="' + esc(t("bdIvTip", { h: fmtInt(r.hits), n: fmtInt(r.decided), a: fmtInt(r.abstained || 0),
+          p: pc(r.rate), lo: pc(lo), hi: pc(hi) })) + '"><i class="tr"></i>' + refs +
+        '<i class="rng" style="left:' + bdX(lo) + ";width:" + (bdP(hi) - bdP(lo)).toFixed(2) + '%"></i>' +
+        '<i class="dot" style="left:' + bdX(r.rate) + '"></i></div>' +
+        '<div class="bd-pct">' + pc(r.rate) + "<small>" + fmtInt(r.hits) + "/" + fmtInt(r.decided) + "</small></div></div>";
+    });
+    box.innerHTML = h;
+    $("bd-note").textContent = t("bdNote", { w: fmtInt(w), n: fmtInt(bd.line_count || sel.line_count || 4) });
   }
 
   /* ── The last 24 hours ─────────────────────────────────────────────
