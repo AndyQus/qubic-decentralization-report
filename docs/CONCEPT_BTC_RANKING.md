@@ -349,8 +349,10 @@ the dashboard. The number was right: the best network stood at 34 of 48 = 70.8 %
   that moment and fixed before its hour, hit clearly less over the same time (as of 27 Nov: 24 of 48
   per `stats.rules.measured`; the epoch rate of all calls 20 of 46). Whoever was best over 48 hours
   often is not afterwards: regression to the mean.
-- **We see only a few computors.** The old ranking showed ten networks, all from the same identity.
-  We rebuild only `QDR_COLONY_LINES` = 4 lineages, not all 676 computors.
+- **We do not see every computor.** The old ranking showed ten networks, all from the same identity.
+  We rebuild `QDR_COLONY_LINES` = 4 lineages at a time and move on through the identities over the
+  epoch; every rebuilt network stays stored. On 27 Nov that gathered ten computors (first live
+  state after the deploy: 70.8 % down to 50.0 %), but never all 676.
 
 **Implementation:**
 

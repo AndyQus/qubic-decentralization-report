@@ -357,8 +357,10 @@ Dashboard zu holen. Die Zahl stimmte: das beste Netz stand bei 34 von 48 = 70,8 
   Bilanz und vor seiner Stunde festgelegt, trafen über dieselbe Zeit deutlich weniger (Stand
   27.11.: 24 von 48 laut `stats.rules.measured`; die Epochenquote aller Tipps 20 von 46). Wer über
   48 Stunden der Beste war, ist es danach oft nicht mehr: Regression zur Mitte.
-- **Wir sehen nur wenige Computoren.** Die alte Rangliste zeigte zehn Netze, alle von derselben
-  Identität. Wir bauen nur `QDR_COLONY_LINES` = 4 Linien nach, nicht alle 676 Computoren.
+- **Wir sehen nicht alle Computoren.** Die alte Rangliste zeigte zehn Netze, alle von derselben
+  Identität. Wir bauen gleichzeitig `QDR_COLONY_LINES` = 4 Linien nach und wechseln im Lauf der
+  Epoche zwischen den Identitäten; jedes nachgebaute Netz bleibt gespeichert. So kamen am 27.11.
+  zehn Computoren zusammen (erster Live-Stand nach dem Deploy: 70,8 % bis 50,0 %), aber nie alle 676.
 
 **Umsetzung:**
 
