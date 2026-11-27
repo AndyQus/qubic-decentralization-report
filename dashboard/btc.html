@@ -459,6 +459,16 @@ body { background: var(--bg); }
   .cell.arrive, .cell.pending, .ring.waiting .big { animation: none; }
   .skel, .sk-cell, .pulse:empty, .page.is-loading *, .status.loading::before { animation: none !important; }
 }
+/* Warning bar under the header: the calls are network data, not advice.
+   Deliberately loud and not dismissible -- the owner wants every visitor to
+   read it. Deep red with white text clears 4.5:1 in both themes. */
+:root { --warn-bg: #b91c1c; --warn-ink: #ffffff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --warn-bg: #991b1b; } }
+:root[data-theme="dark"] { --warn-bg: #991b1b; }
+.warn-bar { position: relative; z-index: 2; background: var(--warn-bg); color: var(--warn-ink); }
+.warn-bar p { max-width: var(--content-width); margin: 0 auto; padding: 7px var(--gutter); font-size: 13px; line-height: 1.4; }
+.warn-bar b { font-weight: 700; margin-right: 4px; }
+@media (max-width: 700px) { .warn-bar p { padding: 7px var(--gutter-mobile); font-size: 12px; } }
 </style>
 </head>
 <body>
@@ -492,6 +502,10 @@ body { background: var(--bg); }
     </div>
   </div>
 </header>
+
+<div class="warn-bar" role="note">
+  <p><b data-i18n="warnHead">⚠ Not financial advice.</b> <span data-i18n="warnText">This page only analyses and displays publicly available data from the Qubic network. I make no guarantee that the data is complete, current or correct. Any decision based on it is at your own risk.</span></p>
+</div>
 
 <main class="page is-loading" id="page" aria-busy="true">
   <div class="hero">
@@ -803,6 +817,8 @@ body { background: var(--bg); }
       discData: "All data is read live from Qubic nodes and the tick stream; nothing on this page is estimated.",
       discNoGuarantee: "We do not guarantee the completeness, accuracy, or availability of the data.",
       discDemo: "Use it for analysis purposes only — not as a basis for investment decisions.",
+      warnHead: "⚠ Not financial advice.",
+      warnText: "This page only analyses and displays publicly available data from the Qubic network. I make no guarantee that the data is complete, current or correct. Any decision based on it is at your own risk.",
       sponsored: "Qubic – Sponsored by AndyQus", tos: "Terms of Service", privacy: "Privacy Policy", codeVersion: "code"
     },
     de: {
@@ -909,6 +925,8 @@ body { background: var(--bg); }
       discData: "Alle Daten werden live von Qubic-Nodes und aus dem Tick-Stream gelesen; auf dieser Seite wird nichts geschätzt.",
       discNoGuarantee: "Wir übernehmen keine Gewähr für Vollständigkeit, Richtigkeit oder Verfügbarkeit der Daten.",
       discDemo: "Nur zu Analysezwecken — keine Grundlage für Anlageentscheidungen.",
+      warnHead: "⚠ Keine Kaufempfehlung.",
+      warnText: "Diese Seite wertet nur öffentlich verfügbare Daten des Qubic-Netzes aus und zeigt sie an. Ich übernehme keine Gewähr dafür, dass die Daten vollständig, aktuell und richtig sind. Wer auf dieser Grundlage handelt, tut das auf eigenes Risiko.",
       sponsored: "Qubic – Sponsored by AndyQus", tos: "Nutzungsbedingungen", privacy: "Datenschutz", codeVersion: "Code"
     }
   };
